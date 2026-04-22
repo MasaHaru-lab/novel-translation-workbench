@@ -1,0 +1,384 @@
+#!/usr/bin/env python3
+"""
+CLI for novel translation workbench.
+"""
+import argparse
+import sys
+from pathlib import Path
+from typing import Callable, Optional
+
+from app.chapter.manifest import RunManifest
+from app.chapter.orchestrator import ChapterOrchestrator
+from app.chapter.models import ChapterResult
+from app.segment.segmenter import create_segments
+from app.translate.translator import (
+    ASSETS_MODES,
+    DEFAULT_ASSETS_MODE,
+    AssetsMode,
+    _validate_assets_mode,
+    build_translation_input,
+    mock_glossary,
+    polish_translation,
+    translate_draft,
+)
+from app.translate.schema import TranslationInput, TranslationOutput
+
+
+def read_source_file(source_path: Path) -> str:
+    """Read the source text file."""
+    if not source_path.exists():
+        raise FileNotFoundError(f"Source file not found: {source_path}")
+    return source_path.read_text(encoding='utf-8')
+
+
+def write_markdown(output_path: Path, segments, translation_outputs):
+    """Write the markdown file with segments, drafts, polished translations, and notes."""
+    with output_path.open('w', encoding='utf-8') as f:
+        f.write("# Chapter 1\n\n")
+        f.write("---\n\n")
+        for seg, out in zip(segments, translation_outputs):
+            f.write(f"## Segment {seg.segment_id}\n\n")
+            f.write("### Draft\n")
+            f.write(out.draft_translation + "\n\n")
+            f.write("### Polished\n")
+            f.write(out.polished_translation + "\n\n")
+            if out.notes:
+                f.write("### Notes\n")
+                for note in out.notes:
+                    f.write(f"- {note}\n")
+                f.write("\n")
+            f.write("---\n\n")
+
+
+def run_pipeline(
+    source_path: Path,
+    output_path: Path,
+    service_url: Optional[str] = None,
+    allow_mock_fallback: bool = False,
+    assets_mode: AssetsMode = DEFAULT_ASSETS_MODE,
+):
+    """Run the translation pipeline.
+
+    ``assets_mode`` is threaded through to the translation-call layer. The
+    default ("full") preserves existing behavior; the CLI exposes this via
+    ``--assets-mode``. See ``translator.build_project_assets_block`` for
+    semantics.
+    """
+    _validate_assets_mode(assets_mode)
+    print(f"Reading source from {source_path}")
+    text = read_source_file(source_path)
+    print(f"Loaded {len(text)} characters.")
+
+    print("Segmenting text...")
+    segments = create_segments(text)
+    print(f"Created {len(segments)} segments.")
+
+    glossary = mock_glossary()
+    translation_outputs = []
+
+    # Choose translation method
+    http_translate_fn = None
+    if service_url:
+        print(f"Using translation service at {service_url}")
+        # Try to import HTTP client
+        try:
+            from app.service.client import TranslationServiceClient
+            # Create client with explicit base_url
+            client = TranslationServiceClient(base_url=service_url)
+            http_translate_fn = client.translate_draft
+            print("  Service client imported successfully.")
+        except Exception as e:
+            print(f"  Warning: Could not import translation service client: {e}")
+            if not allow_mock_fallback:
+                print("  Falling back to local mock translation is not allowed (--allow-mock-fallback not set).")
+                print(f"  Error: Service unavailable. Exiting.")
+                sys.exit(1)
+            else:
+                print("  Falling back to local mock translation (--allow-mock-fallback enabled).")
+                http_translate_fn = None
+
+    # Local mock translation function. Wrap so assets_mode is threaded through
+    # whenever the pipeline falls back to (or starts on) local translation.
+    # HTTP service path intentionally keeps its existing single-arg contract.
+    from app.translate.translator import translate_draft as local_translate_draft
+
+    def local_translate_fn(inp):
+        return local_translate_draft(inp, assets_mode=assets_mode)
+
+    # Decide which function to use
+    if service_url and http_translate_fn is not None:
+        translate_draft_fn = http_translate_fn
+        translation_mode = "service"
+    else:
+        translate_draft_fn = local_translate_fn
+        translation_mode = "local mock"
+
+    print(f"Translating using {translation_mode}...")
+    service_failed = False
+    for seg in segments:
+        print(f"  Segment {seg.segment_id}...")
+        # Build structured input
+        input = build_translation_input(seg, glossary)
+        # Draft translation
+        try:
+            draft_out = translate_draft_fn(input)
+        except Exception as e:
+            if not allow_mock_fallback:
+                print(f"  Error: Translation service call failed: {e}")
+                print(f"  Service URL: {service_url}")
+                print(f"  Falling back to local mock translation is not allowed (--allow-mock-fallback not set).")
+                sys.exit(1)
+            else:
+                print(f"  Warning: Translation service call failed: {e}")
+                print(f"  Service URL: {service_url}")
+                print(f"  Falling back to local mock translation (--allow-mock-fallback enabled).")
+                # Switch to local translation for this and subsequent segments
+                translate_draft_fn = local_translate_fn
+                translation_mode = "local mock"
+                service_failed = True
+                # Retry with local translation
+                draft_out = translate_draft_fn(input)
+        # Polish translation (always local mock for now)
+        final_out = polish_translation(input, draft_out, assets_mode=assets_mode)
+        translation_outputs.append(final_out)
+
+    print(f"Writing output to {output_path}")
+    write_markdown(output_path, segments, translation_outputs)
+    print("Done.")
+
+
+def _resolve_translate_fn(
+    service_url: Optional[str],
+    allow_mock_fallback: bool,
+    assets_mode: AssetsMode,
+) -> tuple[Optional[Callable[[TranslationInput], TranslationOutput]], str]:
+    """Resolve which translate function to use: service client or local.
+
+    Returns (translate_fn, mode_label).
+    ``translate_fn`` is None when neither service nor local is available.
+    """
+    _validate_assets_mode(assets_mode)
+    from app.translate.translator import translate_draft as local_translate_draft
+
+    def local_fn(inp):
+        return local_translate_draft(inp, assets_mode=assets_mode)
+
+    http_fn = None
+    if service_url:
+        try:
+            from app.service.client import TranslationServiceClient
+            client = TranslationServiceClient(base_url=service_url)
+            http_fn = client.translate_draft
+        except Exception as e:
+            print(f"  Warning: Could not import translation service client: {e}")
+            if not allow_mock_fallback:
+                print("  Falling back to local mock translation is not allowed (--allow-mock-fallback not set).")
+                return None, "error"
+            print("  Falling back to local mock translation (--allow-mock-fallback enabled).")
+
+    if http_fn is not None:
+        return http_fn, "service"
+    return local_fn, "local mock"
+
+
+def run_chapter_pipeline(
+    source_path: Path,
+    output_path: Path,
+    service_url: Optional[str] = None,
+    allow_mock_fallback: bool = False,
+    assets_mode: AssetsMode = DEFAULT_ASSETS_MODE,
+    resume: bool = False,
+):
+    """Run the chapter-level translation pipeline.
+
+    Reads a full chapter, auto-segments, auto-translates each segment,
+    and aggregates into a complete chapter-level English output file.
+
+    When ``resume=True``, attempts to load a saved run manifest for the
+    output path and continue from where a previous run left off.
+    """
+    _validate_assets_mode(assets_mode)
+    print(f"Reading source from {source_path}")
+    text = read_source_file(source_path)
+    print(f"Loaded {len(text)} characters.")
+
+    translate_fn, mode = _resolve_translate_fn(service_url, allow_mock_fallback, assets_mode)
+    if translate_fn is None:
+        print(f"  Error: Service unavailable. Exiting.")
+        sys.exit(1)
+
+    manifest_path = RunManifest.default_manifest_path(str(output_path))
+    orchestrator = ChapterOrchestrator()
+
+    # ── Resume path ──────────────────────────────────────────────────────
+    if resume:
+        manifest = orchestrator.load_manifest(manifest_path)
+        if manifest is not None:
+            summary = manifest.get_summary()
+            print(f"\nFound existing run manifest:")
+            print(f"  Run ID:      {summary['run_id']}")
+            print(f"  Status:      {summary['status']}")
+            print(f"  Completed:   {summary['completed']}/{summary['total_segments']} segments")
+            print(f"  Failed:      {summary['failed']}")
+            print(f"  Pending:     {summary['pending']}")
+            if summary['resumable']:
+                print("Resuming from saved progress...")
+                result = orchestrator.resume(
+                    text,
+                    manifest_path,
+                    translate_draft_fn=translate_fn,
+                    assets_mode=assets_mode,
+                )
+                if result is None:
+                    print("  Error: Could not resume. Falling back to full run.")
+                else:
+                    _report_chapter_result(result, output_path)
+                    return
+            else:
+                print("Run is not resumable (already complete or in terminal state).")
+                print("Falling back to fresh run.")
+        else:
+            print("No existing manifest found. Starting fresh run.")
+
+    # ── Fresh run path ───────────────────────────────────────────────────
+    print(f"\nTranslating using {mode}...")
+    result = orchestrator.run_with_manifest(
+        text,
+        translate_draft_fn=translate_fn,
+        assets_mode=assets_mode,
+        manifest_path=manifest_path,
+    )
+
+    _report_chapter_result(result, output_path)
+
+
+def _report_chapter_result(result: ChapterResult, output_path: Path) -> None:
+    """Print a status summary and write output for a chapter run result.
+
+    Batch 3 addition: reports consistency audit findings and correction
+    summary when available.
+    """
+    status_label = result.chapter_status.value
+    print(f"\nChapter '{result.chapter_title}' result:")
+    print(f"  Status:      {status_label}")
+    print(f"  Completed:   {result.success_count}/{result.segment_count} segments")
+    if result.failed_segment_ids:
+        print(f"  Failed:      {len(result.failed_segment_ids)} segments")
+        for fid in result.failed_segment_ids:
+            rec = result.manifest.segments.get(fid) if result.manifest else None
+            err = f" ({rec.error_message})" if rec and rec.error_message else ""
+            print(f"    - Segment {fid}{err}")
+    print(f"  Resumable:   {result.resumable}")
+    print(f"  Aggregated:  {len(result.aggregated_translation)} chars")
+
+    # Batch 3: consistency report
+    audit = result.consistency_audit
+    correction = result.correction_summary
+    if audit:
+        print(f"  Consistency audit:")
+        print(f"    Issues:      {audit['total_issues']}")
+        if audit['total_issues'] > 0:
+            by_cat = audit['by_category']
+            for cat, count in sorted(by_cat.items()):
+                print(f"      {cat}: {count}")
+            print(f"    Auto-fixable: {audit['auto_fixable']}")
+            if audit['auto_fixed'] > 0:
+                print(f"    Auto-fixed:   {audit['auto_fixed']}")
+    if correction and correction['total_corrections'] > 0:
+        print(f"  Corrections applied:")
+        print(f"    Actions:      {correction['total_corrections']}")
+        print(f"    Replacements: {correction['total_replacements']}")
+        by_cat = correction['by_category']
+        for cat, count in sorted(by_cat.items()):
+            print(f"      {cat}: {count}")
+    if result.corrected_translation is not None:
+        print(f"  Corrected:   {len(result.corrected_translation)} chars (post-consistency)")
+
+    # Write output — prefer corrected version when available
+    output_text = result.final_translation
+    if result.is_complete or result.is_partial:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        if output_text:
+            output_path.write_text(output_text, encoding='utf-8')
+            print(f"  Written to:  {output_path}")
+        else:
+            print(f"  No output written: translation is empty.")
+    else:
+        print(f"  No output written: chapter status is '{status_label}'.")
+
+    if result.resumable:
+        manifest_path = result.manifest.manifest_path if result.manifest else None
+        if manifest_path:
+            print(f"  Manifest:    {manifest_path}")
+            print(f"  To resume:   pass --resume to the chapter run command")
+    print("Done.")
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Novel translation workbench MVP")
+    subparsers = parser.add_subparsers(dest='command', required=True)
+
+    run_parser = subparsers.add_parser('run', help='Run translation pipeline')
+    # Optional arguments for input/output paths
+    run_parser.add_argument('--source', type=Path, default=Path('data/source/chapter1.txt'),
+                            help='Path to source text file')
+    run_parser.add_argument('--output', type=Path, default=Path('data/exports/chapter1_en.md'),
+                            help='Path to output markdown file')
+    run_parser.add_argument('--service-url', type=str, default=None,
+                            help='URL of translation service (e.g., http://localhost:8000). If not provided, use local mock.')
+    run_parser.add_argument('--allow-mock-fallback', action='store_true',
+                            help='If service fails, allow falling back to local mock translation.')
+    run_parser.add_argument('--assets-mode', dest='assets_mode',
+                            choices=list(ASSETS_MODES), default=DEFAULT_ASSETS_MODE,
+                            help='Project-asset injection mode. "full" (default) injects '
+                                 'the project memory block into translation prompts; "none" '
+                                 'suppresses it entirely.')
+
+    chapter_parser = subparsers.add_parser('chapter', help='Translate a full chapter (auto-segment -> auto-translate -> aggregate)')
+    chapter_sub = chapter_parser.add_subparsers(dest='chapter_command', required=True)
+    chapter_run_parser = chapter_sub.add_parser('run', help='Run chapter-level translation pipeline')
+    chapter_run_parser.add_argument('--source', type=Path, default=Path('data/source/chapter1.txt'),
+                                    help='Path to full chapter source text file')
+    chapter_run_parser.add_argument('--output', type=Path, default=Path('data/exports/chapter1_en.md'),
+                                    help='Path to aggregated chapter-level output file')
+    chapter_run_parser.add_argument('--service-url', type=str, default=None,
+                                    help='URL of translation service (e.g., http://localhost:8000). If not provided, use local mock.')
+    chapter_run_parser.add_argument('--allow-mock-fallback', action='store_true',
+                                    help='If service fails, allow falling back to local mock translation.')
+    chapter_run_parser.add_argument('--assets-mode', dest='assets_mode',
+                                    choices=list(ASSETS_MODES), default=DEFAULT_ASSETS_MODE,
+                                    help='Project-asset injection mode. "full" (default) injects '
+                                         'the project memory block into translation prompts; "none" '
+                                         'suppresses it entirely.')
+    chapter_run_parser.add_argument('--resume', action='store_true',
+                                    help='Resume a previously interrupted chapter run from saved progress. '
+                                         'Looks for a manifest file at <output>.manifest.json.')
+
+    args = parser.parse_args()
+
+    if args.command == 'run':
+        # Ensure output directory exists
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        run_pipeline(
+            args.source,
+            args.output,
+            args.service_url,
+            args.allow_mock_fallback,
+            assets_mode=args.assets_mode,
+        )
+    elif args.command == 'chapter':
+        if args.chapter_command == 'run':
+            run_chapter_pipeline(
+                args.source,
+                args.output,
+                args.service_url,
+                args.allow_mock_fallback,
+                assets_mode=args.assets_mode,
+                resume=args.resume,
+            )
+    else:
+        parser.print_help()
+
+
+if __name__ == '__main__':
+    main()
