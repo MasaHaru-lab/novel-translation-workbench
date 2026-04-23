@@ -10,6 +10,7 @@ This project uses a layered document structure:
 - `WORKFLOW.md` defines the default execution workflow for translation.
 - `CLAUDE.md` acts as the project entry document for agent behavior and document priority.
 - `prompts/prompt_a.md` and `prompts/prompt_b.md` are the executable prompt-layer files for translation and review.
+- `ORCHESTRATION.md` describes the chapter-level orchestrator kernel and its current capabilities.
 
 If there is ever a conflict, follow:
 
@@ -28,6 +29,25 @@ Relevant project assets include:
 - `project_assets/glossary.md`
 - `project_assets/style_notes.md`
 - `project_assets/unresolved_decisions.md`
+
+## Chapter-level orchestration
+
+The project includes a chapter-level orchestrator kernel (`app/chapter/orchestrator.py`) that reuses the existing segment-level translation functions.
+
+**Current state (Batch 4B completed):**
+- Chapter plan generation with pre-execution strategy assessment
+- Segment-level execution via the existing translation engine
+- Aggregation of segment results into full chapter output
+- Basic manifest/resume support for interrupted runs
+- Limited consistency audit/correction pass
+- Strategy enactment minimal closed loop (budget, consistency intensity, enactment record)
+
+**Next batch:** chapter-level CLI/HTTP integration (expose orchestrator as user entry point).
+
+**Orchestrator relationship to WORKFLOW.md:**
+The orchestrator invokes the segment-level workflow defined in `WORKFLOW.md` for each segment. `WORKFLOW.md` remains the segment-level execution protocol.
+
+For orchestrator design and current capabilities, see `ORCHESTRATION.md`.
 
 ## Goal
 
@@ -181,8 +201,11 @@ or directly:
 python app/tests/test_segmenter.py
 ```
 
-## Next Steps (Beyond MVP)
+## Next Steps
 
+**Immediate (Batch 5):** chapter-level CLI/HTTP integration — expose the orchestrator as the main user entry point.
+
+**Beyond current batch:**
 - Replace mock translation with actual translation models (e.g., locally hosted LLM).
 - Add configuration for segment size, model parameters.
 - Support multiple chapters and batch processing.

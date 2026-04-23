@@ -73,3 +73,22 @@ Each chapter should strengthen later consistency rather than restarting from zer
 
 For workflow details, see `WORKFLOW.md`.
 For translation quality bar and style constraints, see `SKILL.md`.
+
+## Chapter-level orchestration
+
+The project includes a chapter-level orchestrator kernel (`app/chapter/orchestrator.py`) that reuses the existing segment-level translation functions.
+
+**Current state (Batch 4B completed):**
+- Chapter plan generation with pre-execution strategy assessment
+- Segment-level execution via the existing translation engine
+- Aggregation of segment results into full chapter output
+- Basic manifest/resume support for interrupted runs
+- Limited consistency audit/correction pass
+- Strategy enactment minimal closed loop (budget, consistency intensity, enactment record)
+
+**Next batch:** chapter-level CLI/HTTP integration (expose orchestrator as user entry point).
+
+**Orchestrator relationship to WORKFLOW.md:**
+The orchestrator invokes the segment-level workflow defined in `WORKFLOW.md` for each segment. `WORKFLOW.md` remains the segment-level execution protocol.
+
+For orchestrator design and current capabilities, see `ORCHESTRATION.md`.

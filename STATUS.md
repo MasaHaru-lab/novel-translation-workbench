@@ -228,3 +228,11 @@ Completes the minimal closed loop from strategy decisions → orchestrator → d
 ### Next natural step
 
 Use the enactment record to drive post‑run reporting or adaptive behavior in later batches (out of scope for this minimal loop).
+
+## Batch status summary
+
+**Batch 4B completed (2026-04-23):** Strategy enactment minimal closed loop. All existing chapter-level tests pass (37 tests). Enactment record is attached to `ChapterResult`.
+
+**Next batch (Batch 5):** chapter-level CLI/HTTP integration — expose the orchestrator as the main user entry point, keeping segment-level workflow as the execution layer.
+
+**Current focus:** improve the chapter-level path within Phase A only. Do not expand into Phase B/C/D yet.

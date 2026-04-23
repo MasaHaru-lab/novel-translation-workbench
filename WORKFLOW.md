@@ -20,6 +20,12 @@ When the user provides Chinese source text and asks to translate, the system sho
 
 The user should not need to manually choose between drafting, polishing, or review steps in the normal path.
 
+## Chapter-level orchestration context
+
+This workflow is invoked per segment by the chapter-level orchestrator (`app/chapter/orchestrator.py`). The orchestrator handles full-chapter segmentation, strategy planning, execution coordination, aggregation, and consistency passes.
+
+For chapter-level translation, the orchestrator calls this segment-level workflow for each segment, then combines the results into a complete chapter output.
+
 ## Default user action
 
 The following user actions should all trigger the same default workflow:
