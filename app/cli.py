@@ -172,7 +172,7 @@ def _resolve_translate_fn(
         except Exception as e:
             print(f"  Warning: Could not import translation service client: {e}")
             if not allow_mock_fallback:
-                print("  Falling back to local mock translation is not allowed (--allow-mock-fallback not set).")
+                print("  Service client unavailable. Use --allow-mock-fallback to fall back to local translation.")
                 return None, "error"
             print("  Falling back to local mock translation (--allow-mock-fallback enabled).")
 
@@ -214,8 +214,11 @@ def run_chapter_pipeline(
         auto_retry_on_resume=auto_retry_on_resume,
     )
 
-    print(f"Reading source from {source_path}")
-    text = read_source_file(source_path)
+    try:
+        text = read_source_file(source_path)
+    except FileNotFoundError as e:
+        print(f"  Error: {e}")
+        sys.exit(1)
     print(f"Loaded {len(text)} characters.")
 
     translate_fn, mode = _resolve_translate_fn(service_url, allow_mock_fallback, assets_mode)
@@ -228,44 +231,67 @@ def run_chapter_pipeline(
 
     # ── Resume path ──────────────────────────────────────────────────────
     if resume:
-        manifest = orchestrator.load_manifest(manifest_path)
+        try:
+            manifest = orchestrator.load_manifest(manifest_path)
+        except Exception:
+            manifest = None
+
         if manifest is not None:
             summary = manifest.get_summary()
-            print(f"\nFound existing run manifest:")
-            print(f"  Run ID:      {summary['run_id']}")
+            print(f"\nFound saved manifest for run {summary['run_id']}:")
             print(f"  Status:      {summary['status']}")
             print(f"  Completed:   {summary['completed']}/{summary['total_segments']} segments")
             print(f"  Failed:      {summary['failed']}")
             print(f"  Pending:     {summary['pending']}")
+            print(f"  Manifest:    {manifest_path}")
             if summary['resumable']:
-                print("Resuming from saved progress...")
-                result = orchestrator.resume(
-                    text,
-                    manifest_path,
-                    translate_draft_fn=translate_fn,
-                    assets_mode=assets_mode,
-                    resume_config=resume_config,
-                )
-                if result is None:
-                    print("  Error: Could not resume. Falling back to full run.")
-                else:
+                completed = summary['completed']
+                pending = summary['pending']
+                failed = summary['failed']
+                print(f"  → Completed segments ({completed}) will be reused.")
+                if pending:
+                    print(f"  → Pending segments ({pending}) will be translated now.")
+                if failed:
+                    print(f"  → Failed segments ({failed}) will be retried (up to {max_retries} attempts each).")
+                print(f"\nContinuing the chapter run from saved progress...")
+                try:
+                    result = orchestrator.resume(
+                        text,
+                        manifest_path,
+                        translate_draft_fn=translate_fn,
+                        assets_mode=assets_mode,
+                        resume_config=resume_config,
+                    )
+                except Exception as e:
+                    print(f"  Error: Resume failed: {e}")
+                    print("  Starting a fresh run instead.")
+                    result = None
+                if result is not None:
                     _report_chapter_result(result, output_path)
                     return
+                else:
+                    print("  Could not resume. Starting a fresh run.")
             else:
-                print("Run is not resumable (already complete or in terminal state).")
-                print("Falling back to fresh run.")
+                print("  The saved run cannot be resumed because it is already complete or no longer resumable.")
+                print("  Starting a fresh run.")
         else:
-            print("No existing manifest found. Starting fresh run.")
+            print(f"No manifest found at {manifest_path}.")
+            print(f"  (The manifest is created automatically when a chapter run starts.)")
+            print(f"  Starting a fresh run.")
 
     # ── Fresh run path ───────────────────────────────────────────────────
     print(f"\nTranslating using {mode}...")
-    result = orchestrator.run_with_manifest(
-        text,
-        translate_draft_fn=translate_fn,
-        assets_mode=assets_mode,
-        resume_config=resume_config,
-        manifest_path=manifest_path,
-    )
+    try:
+        result = orchestrator.run_with_manifest(
+            text,
+            translate_draft_fn=translate_fn,
+            assets_mode=assets_mode,
+            resume_config=resume_config,
+            manifest_path=manifest_path,
+        )
+    except Exception as e:
+        print(f"  Error: Chapter translation pipeline failed: {e}")
+        sys.exit(1)
 
     _report_chapter_result(result, output_path)
 
@@ -281,13 +307,26 @@ def _report_chapter_result(result: ChapterResult, output_path: Path) -> None:
     print(f"  Status:      {status_label}")
     print(f"  Completed:   {result.success_count}/{result.segment_count} segments")
     if result.failed_segment_ids:
-        print(f"  Failed:      {len(result.failed_segment_ids)} segments")
-        for fid in result.failed_segment_ids:
-            rec = result.manifest.segments.get(fid) if result.manifest else None
-            err = f" ({rec.error_message})" if rec and rec.error_message else ""
-            print(f"    - Segment {fid}{err}")
-    print(f"  Resumable:   {result.resumable}")
-    print(f"  Aggregated:  {len(result.aggregated_translation)} chars")
+        if result.success_count == 0:
+            # All segments failed — compact summary avoids noise
+            print(f"  Failed:      all {len(result.failed_segment_ids)} segments")
+        else:
+            # Mixed result: individual failures are actionable
+            print(f"  Failed:      {len(result.failed_segment_ids)} segments")
+            for fid in result.failed_segment_ids:
+                rec = result.manifest.segments.get(fid) if result.manifest else None
+                err = f" ({rec.error_message})" if rec and rec.error_message else ""
+                print(f"    - Segment {fid}{err}")
+    if result.resumable:
+        remaining = result.segment_count - result.success_count
+        if remaining > 0:
+            print(f"  Remaining:   {remaining} segment(s) to complete")
+            print("  Next step:   Continue this run with --resume.")
+        else:
+            print("  Next step:   You can retry failed segments with --resume.")
+    if result.aggregated_translation:
+        agg_suffix = " (pre-consistency)" if result.corrected_translation is not None else ""
+        print(f"  Aggregated:  {len(result.aggregated_translation)} chars{agg_suffix}")
 
     # Batch 3: consistency report
     audit = result.consistency_audit
@@ -318,17 +357,36 @@ def _report_chapter_result(result: ChapterResult, output_path: Path) -> None:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         if output_text:
             output_path.write_text(output_text, encoding='utf-8')
-            print(f"  Written to:  {output_path}")
+            labels = []
+            if result.corrected_translation is not None:
+                labels.append("post-consistency")
+            if result.is_partial:
+                labels.append(f"partial — {result.success_count}/{result.segment_count} segments")
+            suffix = f" ({', '.join(labels)})" if labels else ""
+            print(f"  Written to:  {output_path}{suffix}")
         else:
             print(f"  No output written: translation is empty.")
     else:
-        print(f"  No output written: chapter status is '{status_label}'.")
+        if result.failed_segment_ids and result.success_count == 0:
+            print(f"  No output written: all segments failed.")
+        else:
+            print(f"  No output written: chapter status is '{status_label}'.")
 
-    if result.resumable:
-        manifest_path = result.manifest.manifest_path if result.manifest else None
-        if manifest_path:
-            print(f"  Manifest:    {manifest_path}")
-            print(f"  To resume:   pass --resume to the chapter run command")
+    manifest_path = result.manifest.manifest_path if result.manifest else None
+    if result.is_partial and manifest_path:
+        completed = result.success_count
+        pending_failed = result.segment_count - completed
+        print(f"  Manifest:    {manifest_path}")
+        print(f"  Next step:   run with --resume to continue")
+        print(f"               (reuses {completed} completed segments; "
+              f"processes {pending_failed} remaining segments, subject to retry limits)")
+    elif result.resumable and manifest_path:
+        # All segments failed — still resumable
+        print(f"  Manifest:    {manifest_path}")
+        print(f"  Next step:   run with --resume to retry all segments")
+    elif manifest_path:
+        # Completed or terminal — manifest is a run record
+        print(f"  Manifest:    {manifest_path}")
     print("Done.")
 
 
@@ -377,7 +435,7 @@ def run_chapter_stream(
     # Output final translation text to stdout
     output_text = result.final_translation
     if output_text:
-        sys.stdout.write(output_text)
+        sys.stdout.write(output_text + "\n")
     else:
         sys.stderr.write("ERROR: No translation output produced.\n")
         sys.exit(1)
@@ -403,13 +461,13 @@ def main():
                                  'the project memory block into translation prompts; "none" '
                                  'suppresses it entirely.')
 
-    chapter_parser = subparsers.add_parser('chapter', help='Translate a full chapter (auto-segment -> auto-translate -> aggregate)')
+    chapter_parser = subparsers.add_parser('chapter', help='Translate a full chapter (auto-segment -> auto-translate -> aggregate -> consistency)')
     chapter_sub = chapter_parser.add_subparsers(dest='chapter_command', required=True)
     chapter_run_parser = chapter_sub.add_parser('run', help='Run chapter-level translation pipeline')
     chapter_run_parser.add_argument('--source', type=Path, default=Path('data/source/chapter1.txt'),
                                     help='Path to full chapter source text file')
     chapter_run_parser.add_argument('--output', type=Path, default=Path('data/exports/chapter1_en.md'),
-                                    help='Path to aggregated chapter-level output file')
+                                    help='Path to final chapter-level output file (post-consistency corrected when applicable)')
     chapter_run_parser.add_argument('--service-url', type=str, default=None,
                                     help='URL of translation service (e.g., http://localhost:8000). If not provided, use local mock.')
     chapter_run_parser.add_argument('--allow-mock-fallback', action='store_true',
@@ -420,8 +478,11 @@ def main():
                                          'the project memory block into translation prompts; "none" '
                                          'suppresses it entirely.')
     chapter_run_parser.add_argument('--resume', action='store_true',
-                                    help='Resume a previously interrupted chapter run from saved progress. '
-                                         'Looks for a manifest file at <output>.manifest.json.')
+                                    help='Resume an incomplete chapter run from its saved manifest. '
+                                         'Completed segments are reused; pending and failed segments '
+                                         'are processed again subject to retry limits. The manifest '
+                                         'file lives at <output>.manifest.json. Use this to continue '
+                                         'a partial or interrupted chapter run.')
     chapter_run_parser.add_argument('--max-retries', type=int, default=2,
                                     help='Maximum number of retry attempts per segment before marking it failed (default: 2).')
     chapter_run_parser.add_argument('--retry-delay-seconds', type=float, default=1.0,
@@ -429,7 +490,7 @@ def main():
     chapter_run_parser.add_argument('--no-auto-retry-on-resume', action='store_false', dest='auto_retry_on_resume',
                                     help='Disable automatic retry of failed segments on resume (default: auto-retry enabled).')
 
-    chapter_stream_parser = chapter_sub.add_parser('stream', help='Stream chapter translation: read source, translate, output to stdout')
+    chapter_stream_parser = chapter_sub.add_parser('stream', help='Stream chapter translation: read source, translate, output final translation to stdout')
     chapter_stream_parser.add_argument('--source', type=Path, default=None,
                                        help='Path to full chapter source text file (if omitted, read from stdin)')
     chapter_stream_parser.add_argument('--service-url', type=str, default=None,

@@ -100,16 +100,26 @@ novel-translation-workbench/
 └── STATUS.md
 ```
 
-## Installation & Running
+## Quick start
 
-1. Clone or create the project directory.
-2. Ensure Python 3.7+ is installed.
-3. Place your Chinese chapter as `data/source/chapter1.txt`.
-4. Run the pipeline:
+Always use the project venv (`venv/bin/python`) — not system `python3`.
 
 ```bash
+# 1. Create and activate the venv (first time only)
+python3 -m venv venv
+source venv/bin/activate
+
+# 2. Install dependencies
+pip install -r requirements.txt
+
+# 3. Run tests
+python -m pytest app/tests/
+
+# 4. Run the translation pipeline (requires data/source/chapter1.txt)
 python -m app.cli run
 ```
+
+To skip activation, use `venv/bin/python` directly instead of bare `python`.
 
 You can specify custom input/output paths:
 
@@ -117,7 +127,68 @@ You can specify custom input/output paths:
 python -m app.cli run --source path/to/source.txt --output path/to/output.md
 ```
 
-5. The output will be written to `data/exports/chapter1_en.md` (by default).
+Output defaults to `data/exports/chapter1_en.md`.
+
+### Chapter-level translation
+
+The preferred path for full-chapter translation. Auto-segments, translates each segment, aggregates into full chapter text, then runs a consistency pass (name/title/term variant correction).
+
+#### Output artifacts
+
+- **`chapter run --output`** writes the **final translation** to a file. When the consistency pass detects and corrects issues, the file contains the post-consistency corrected text. In partial runs (some segments failed), the file still contains what was completed — labeled accordingly in the run summary.
+- **`chapter stream`** writes the same final translation to **stdout**. The output is the same artifact as `chapter run --output`.
+- **Aggregated** translation is the raw concatenation of all segment translations (pre-consistency).
+- **Corrected** (post-consistency) is the aggregated text with consistency fixes applied. This is the best usable output when available.
+- When some segments fail, output is **partial** — only successfully translated segments are included. The run summary shows the count (e.g., `partial — 2/5 segments`).
+
+```bash
+# Run chapter translation (auto-segment → auto-translate → aggregate → consistency)
+python -m app.cli chapter run --source data/source/chapter1.txt --output data/exports/chapter1_en.txt
+```
+
+#### Run lifecycle
+
+Each `chapter run` creates two files alongside the output path:
+
+- **`<output>`** — the final translation text. After a partial run (some segments failed), this file still contains what was completed. Use this as your best available result.
+- **`<output>.manifest.json`** — the run progress record. This file tracks which segments completed, failed, or are still pending. It is created automatically and updated after each segment.
+
+**If a run is interrupted or finishes partially:**
+- The output file contains the text from all successfully translated segments.
+- The manifest file records what was done and what remains.
+- Pass `--resume` to continue from where it left off. Completed segments are reused; pending and failed segments are processed again (subject to retry limits).
+
+```bash
+# Resume an interrupted or partial chapter run
+python -m app.cli chapter run --resume --source data/source/chapter1.txt --output data/exports/chapter1_en.txt
+```
+
+**If a run completes successfully:**
+- The output file contains the full translated chapter.
+- The manifest file is a record of the run. You do not need it unless you re-run with the same output path.
+
+```bash
+# Stream mode: read from file, output final translation to stdout
+python -m app.cli chapter stream --source data/source/chapter1.txt > chapter1_en.txt
+```
+
+Stream mode also reads from stdin when `--source` is omitted:
+
+```bash
+cat data/source/chapter1.txt | python -m app.cli chapter stream > chapter1_en.txt
+```
+
+### Canonical commands
+
+| Action | Command |
+|--------|---------|
+| Run tests | `python -m pytest app/tests/` |
+| Run segment-level pipeline (legacy) | `python -m app.cli run` |
+| Run chapter-level pipeline | `python -m app.cli chapter run` |
+| Stream chapter translation to stdout | `python -m app.cli chapter stream` |
+| Start translation service | `python run_translation_service.py` |
+
+> Commands above assume an activated venv. Without activation, prefix each with `venv/bin/` (e.g., `venv/bin/python -m pytest app/tests/`).
 
 ## Translation Service (Optional)
 
@@ -125,7 +196,7 @@ The project includes an HTTP translation service that can be used instead of the
 
 ### Using the Service
 
-1. Install optional dependencies:
+1. Ensure the venv is activated (see [Quick start](#quick-start)), then install optional dependencies:
 
 ```bash
 pip install -r requirements.txt
@@ -189,16 +260,16 @@ The prompt is constructed to request faithful draft translation, includes glossa
 
 ## Testing
 
-Run the segmentation tests:
+Run all tests:
 
 ```bash
 python -m pytest app/tests/
 ```
 
-or directly:
+Run a specific test file:
 
 ```bash
-python app/tests/test_segmenter.py
+python -m pytest app/tests/test_segmenter.py
 ```
 
 ## Next Steps

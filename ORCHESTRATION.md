@@ -47,6 +47,7 @@ The orchestrator invokes the segment-level workflow defined in `WORKFLOW.md` for
 - Segment-level failure isolation (one failure does not abort the chapter)
 - Resume capability for interrupted runs
 - Conservative retry/discipline (bounded, no infinite loops)
+- When running via CLI (`chapter run`), the manifest is written alongside the output file as `<output>.manifest.json`. Pass `--resume` to continue a partial or interrupted run.
 
 ### 6. Strategy enactment minimal closed loop
 - Budget configuration resolved from plan's strategy_plan
