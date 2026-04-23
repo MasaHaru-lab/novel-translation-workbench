@@ -13,6 +13,8 @@ try:
     from fastapi.testclient import TestClient
     from app.service.draft_service import app
     from app.translate.schema import GlossaryTerm, TranslationInput, TranslationOutput
+    from app.chapter.models import ChapterResult
+    from app.chapter.manifest import ChapterStatus
     from app.config import config
     FASTAPI_AVAILABLE = True
 except ImportError:
@@ -142,6 +144,69 @@ def test_health_endpoint():
     assert data["status"] == "healthy"
 
 
+@patch('app.service.draft_service.ChapterOrchestrator')
+def test_translate_chapter_endpoint_basic(mock_orchestrator_class):
+    """Test the /translate/chapter endpoint with minimal input."""
+    # Mock orchestrator instance and its run_with_manifest method
+    mock_orchestrator = MagicMock()
+    mock_orchestrator_class.return_value = mock_orchestrator
+
+    # Create a mock ChapterResult with expected fields
+    mock_result = ChapterResult(
+        chapter_title="Test Chapter",
+        source_text="测试章节内容",
+        aggregated_translation="# Test Chapter\n\nTranslated content.",
+        corrected_translation=None,
+        chapter_status=ChapterStatus.COMPLETED,
+        consistency_audit=None,
+        correction_summary=None,
+        strategy_plan_summary={"complexity_level": "low"},
+        enactment={"consistent": True},
+        segment_count=1,
+        success_count=1,
+        failed_segment_ids=[],
+        resumable=False,
+    )
+    mock_orchestrator.run_with_manifest.return_value = mock_result
+
+    payload = {
+        "source_text": "测试章节内容"
+    }
+    response = client.post("/translate/chapter", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+
+    # Verify response structure
+    assert data["chapter_title"] == "Test Chapter"
+    assert data["aggregated_translation"] == "# Test Chapter\n\nTranslated content."
+    assert data["corrected_translation"] is None
+    assert data["chapter_status"] == "COMPLETED"
+    assert data["consistency_audit"] is None
+    assert data["correction_summary"] is None
+    assert data["strategy_plan_summary"] == {"complexity_level": "low"}
+    assert data["enactment"] == {"consistent": True}
+    assert data["segment_count"] == 1
+    assert data["success_count"] == 1
+    assert data["failed_segment_ids"] == []
+    assert data["resumable"] is False
+
+    # Verify orchestrator was called correctly
+    mock_orchestrator_class.assert_called_once()
+    mock_orchestrator.run_with_manifest.assert_called_once_with(source_text="测试章节内容")
+
+
+def test_translate_chapter_endpoint_empty_source():
+    """Test /translate/chapter returns 400 when source_text is empty."""
+    payload = {
+        "source_text": "   "
+    }
+    response = client.post("/translate/chapter", json=payload)
+    assert response.status_code == 400
+    data = response.json()
+    assert "detail" in data
+    assert "source_text cannot be empty" in data["detail"]
+
+
 if __name__ == "__main__":
     # Run tests with patches manually
     with patch('app.service.draft_service.translate_draft_with_backend'):
@@ -150,4 +215,7 @@ if __name__ == "__main__":
         test_translate_draft_endpoint_with_glossary()
     test_translate_draft_endpoint_missing_field()
     test_health_endpoint()
+    with patch('app.service.draft_service.ChapterOrchestrator'):
+        test_translate_chapter_endpoint_basic()
+    test_translate_chapter_endpoint_empty_source()
     print("All draft service tests passed.")

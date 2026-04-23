@@ -4,13 +4,15 @@ FastAPI service for draft translation.
 Exposes a single endpoint POST /translate/draft that calls a local model backend.
 """
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-from typing import List, Optional
+from pydantic import BaseModel, Field
+from typing import List, Optional, Dict, Any
 import uvicorn
 
 from app.translate.schema import TranslationInput, TranslationOutput, GlossaryTerm
 from app.translate.backend_adapter import translate_draft_with_backend
 from app.config import config
+from app.chapter.orchestrator import ChapterOrchestrator
+from app.chapter.models import ChapterResult
 
 
 app = FastAPI(
@@ -46,6 +48,31 @@ class TranslationOutputModel(BaseModel):
     draft_translation: str
     polished_translation: str
     notes: List[str] = []
+
+    class Config:
+        from_attributes = True
+
+
+class ChapterRequestModel(BaseModel):
+    """Request model for chapter translation endpoint."""
+    source_text: str
+    # Additional parameters could be added later (e.g., glossary, custom strategy)
+
+
+class ChapterResponseModel(BaseModel):
+    """Response model for chapter translation endpoint."""
+    chapter_title: str
+    aggregated_translation: str
+    corrected_translation: Optional[str] = None
+    chapter_status: str
+    consistency_audit: Optional[Dict[str, Any]] = None
+    correction_summary: Optional[Dict[str, Any]] = None
+    strategy_plan_summary: Optional[Dict[str, Any]] = None
+    enactment: Optional[Dict[str, Any]] = None
+    segment_count: int
+    success_count: int
+    failed_segment_ids: List[str] = Field(default_factory=list)
+    resumable: bool
 
     class Config:
         from_attributes = True
@@ -88,6 +115,45 @@ async def post_translate_draft(input: TranslationInputModel) -> TranslationOutpu
         draft_translation=output.draft_translation,
         polished_translation=output.polished_translation,
         notes=output.notes
+    )
+
+
+@app.post("/translate/chapter", response_model=ChapterResponseModel)
+async def post_translate_chapter(request: ChapterRequestModel) -> ChapterResponseModel:
+    """Translate a full chapter using the chapter-level orchestrator."""
+    # Validate input
+    if not request.source_text.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="source_text cannot be empty"
+        )
+
+    try:
+        orchestrator = ChapterOrchestrator()
+        # Use default parameters for glossary, translate_draft_fn, assets_mode, etc.
+        result = orchestrator.run_with_manifest(source_text=request.source_text)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal server error during chapter translation: {str(e)}"
+        )
+
+    # Map ChapterResult to ChapterResponseModel
+    return ChapterResponseModel(
+        chapter_title=result.chapter_title,
+        aggregated_translation=result.aggregated_translation,
+        corrected_translation=result.corrected_translation,
+        chapter_status=result.chapter_status.value,  # enum to string
+        consistency_audit=result.consistency_audit,
+        correction_summary=result.correction_summary,
+        strategy_plan_summary=result.strategy_plan_summary,
+        enactment=result.enactment,
+        segment_count=result.segment_count,
+        success_count=result.success_count,
+        failed_segment_ids=result.failed_segment_ids,
+        resumable=result.resumable,
     )
 
 

@@ -314,6 +314,57 @@ def _report_chapter_result(result: ChapterResult, output_path: Path) -> None:
     print("Done.")
 
 
+def run_chapter_stream(
+    source_path: Optional[Path] = None,
+    service_url: Optional[str] = None,
+    allow_mock_fallback: bool = False,
+    assets_mode: AssetsMode = DEFAULT_ASSETS_MODE,
+) -> None:
+    """Stream chapter translation: read source, translate, output final text to stdout.
+
+    If source_path is None, read from stdin.
+    """
+    _validate_assets_mode(assets_mode)
+
+    # Read source text
+    if source_path is not None:
+        text = read_source_file(source_path)
+    else:
+        # Read from stdin
+        text = sys.stdin.read()
+
+    if not text.strip():
+        sys.stderr.write("ERROR: source text cannot be empty.\n")
+        sys.exit(1)
+
+    # Resolve translation function (same logic as chapter pipeline)
+    translate_fn, mode = _resolve_translate_fn(service_url, allow_mock_fallback, assets_mode)
+    if translate_fn is None:
+        sys.stderr.write("ERROR: Service unavailable and fallback not allowed.\n")
+        sys.exit(1)
+
+    # Run chapter translation
+    try:
+        orchestrator = ChapterOrchestrator()
+        result = orchestrator.run_with_manifest(
+            text,
+            translate_draft_fn=translate_fn,
+            assets_mode=assets_mode,
+            manifest_path=None,  # No persistent manifest for stream mode
+        )
+    except Exception as e:
+        sys.stderr.write(f"Chapter translation failed: {e}\n")
+        sys.exit(1)
+
+    # Output final translation text to stdout
+    output_text = result.final_translation
+    if output_text:
+        sys.stdout.write(output_text)
+    else:
+        sys.stderr.write("ERROR: No translation output produced.\n")
+        sys.exit(1)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Novel translation workbench MVP")
     subparsers = parser.add_subparsers(dest='command', required=True)
@@ -354,6 +405,19 @@ def main():
                                     help='Resume a previously interrupted chapter run from saved progress. '
                                          'Looks for a manifest file at <output>.manifest.json.')
 
+    chapter_stream_parser = chapter_sub.add_parser('stream', help='Stream chapter translation: read source, translate, output to stdout')
+    chapter_stream_parser.add_argument('--source', type=Path, default=None,
+                                       help='Path to full chapter source text file (if omitted, read from stdin)')
+    chapter_stream_parser.add_argument('--service-url', type=str, default=None,
+                                       help='URL of translation service (e.g., http://localhost:8000). If not provided, use local mock.')
+    chapter_stream_parser.add_argument('--allow-mock-fallback', action='store_true',
+                                       help='If service fails, allow falling back to local mock translation.')
+    chapter_stream_parser.add_argument('--assets-mode', dest='assets_mode',
+                                       choices=list(ASSETS_MODES), default=DEFAULT_ASSETS_MODE,
+                                       help='Project-asset injection mode. "full" (default) injects '
+                                            'the project memory block into translation prompts; "none" '
+                                            'suppresses it entirely.')
+
     args = parser.parse_args()
 
     if args.command == 'run':
@@ -375,6 +439,13 @@ def main():
                 args.allow_mock_fallback,
                 assets_mode=args.assets_mode,
                 resume=args.resume,
+            )
+        elif args.chapter_command == 'stream':
+            run_chapter_stream(
+                source_path=args.source,
+                service_url=args.service_url,
+                allow_mock_fallback=args.allow_mock_fallback,
+                assets_mode=args.assets_mode,
             )
     else:
         parser.print_help()
