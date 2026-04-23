@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 from typing import Callable, Optional
 
-from app.chapter.manifest import RunManifest
+from app.chapter.manifest import RunManifest, ResumeConfig
 from app.chapter.orchestrator import ChapterOrchestrator
 from app.chapter.models import ChapterResult
 from app.segment.segmenter import create_segments
@@ -188,6 +188,9 @@ def run_chapter_pipeline(
     allow_mock_fallback: bool = False,
     assets_mode: AssetsMode = DEFAULT_ASSETS_MODE,
     resume: bool = False,
+    max_retries: int = 2,
+    retry_delay_seconds: float = 1.0,
+    auto_retry_on_resume: bool = True,
 ):
     """Run the chapter-level translation pipeline.
 
@@ -198,6 +201,19 @@ def run_chapter_pipeline(
     output path and continue from where a previous run left off.
     """
     _validate_assets_mode(assets_mode)
+    # Validate resume configuration parameters
+    if max_retries < 0:
+        raise ValueError(f"max_retries must be >= 0, got {max_retries}")
+    if retry_delay_seconds < 0:
+        raise ValueError(f"retry_delay_seconds must be >= 0, got {retry_delay_seconds}")
+
+    # Create ResumeConfig instance
+    resume_config = ResumeConfig(
+        max_retries=max_retries,
+        retry_delay_seconds=retry_delay_seconds,
+        auto_retry_on_resume=auto_retry_on_resume,
+    )
+
     print(f"Reading source from {source_path}")
     text = read_source_file(source_path)
     print(f"Loaded {len(text)} characters.")
@@ -228,6 +244,7 @@ def run_chapter_pipeline(
                     manifest_path,
                     translate_draft_fn=translate_fn,
                     assets_mode=assets_mode,
+                    resume_config=resume_config,
                 )
                 if result is None:
                     print("  Error: Could not resume. Falling back to full run.")
@@ -246,6 +263,7 @@ def run_chapter_pipeline(
         text,
         translate_draft_fn=translate_fn,
         assets_mode=assets_mode,
+        resume_config=resume_config,
         manifest_path=manifest_path,
     )
 
@@ -404,6 +422,12 @@ def main():
     chapter_run_parser.add_argument('--resume', action='store_true',
                                     help='Resume a previously interrupted chapter run from saved progress. '
                                          'Looks for a manifest file at <output>.manifest.json.')
+    chapter_run_parser.add_argument('--max-retries', type=int, default=2,
+                                    help='Maximum number of retry attempts per segment before marking it failed (default: 2).')
+    chapter_run_parser.add_argument('--retry-delay-seconds', type=float, default=1.0,
+                                    help='Base delay between retry attempts in seconds (default: 1.0).')
+    chapter_run_parser.add_argument('--no-auto-retry-on-resume', action='store_false', dest='auto_retry_on_resume',
+                                    help='Disable automatic retry of failed segments on resume (default: auto-retry enabled).')
 
     chapter_stream_parser = chapter_sub.add_parser('stream', help='Stream chapter translation: read source, translate, output to stdout')
     chapter_stream_parser.add_argument('--source', type=Path, default=None,
@@ -439,6 +463,9 @@ def main():
                 args.allow_mock_fallback,
                 assets_mode=args.assets_mode,
                 resume=args.resume,
+                max_retries=args.max_retries,
+                retry_delay_seconds=args.retry_delay_seconds,
+                auto_retry_on_resume=args.auto_retry_on_resume,
             )
         elif args.chapter_command == 'stream':
             run_chapter_stream(
