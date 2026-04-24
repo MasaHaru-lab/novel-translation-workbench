@@ -289,6 +289,198 @@ def test_translate_chapter_endpoint_with_consistency_audit(mock_orchestrator_cla
     assert data["corrected_translation"] == "Corrected content."
 
 
+# ── readable_summary field ────────────────────────────────────────────────
+
+
+@patch('app.service.draft_service.ChapterOrchestrator')
+def test_chapter_readable_summary_completed(mock_orchestrator_class):
+    """readable_summary should show completed status with segment counts."""
+    mock_orchestrator = MagicMock()
+    mock_orchestrator_class.return_value = mock_orchestrator
+
+    seg = TranslationOutput(segment_id="1", draft_translation="", polished_translation="# Test\n\nContent.")
+    mock_result = ChapterResult(
+        chapter_title="Test",
+        source_text="source",
+        segment_results=[seg],
+        aggregated_translation="# Test\n\nContent.",
+        chapter_status=ChapterStatus.COMPLETED,
+        segment_statuses={"1": SegmentStatus.COMPLETED},
+        failed_segment_ids=[],
+        resumable=False,
+    )
+    mock_orchestrator.run_with_manifest.return_value = mock_result
+
+    response = client.post("/translate/chapter", json={"source_text": "source"})
+    assert response.status_code == 200
+    data = response.json()
+
+    summary = data["readable_summary"]
+    assert "completed" in summary
+    assert "1/1 segments completed" in summary
+    assert "Failed:" not in summary
+    assert "Remaining:" not in summary
+    assert "Next step" not in summary
+
+
+@patch('app.service.draft_service.ChapterOrchestrator')
+def test_chapter_readable_summary_partial(mock_orchestrator_class):
+    """Partial run should show failed segments, remaining count, and resume guidance."""
+    mock_orchestrator = MagicMock()
+    mock_orchestrator_class.return_value = mock_orchestrator
+    mock_manifest = MagicMock()
+    mock_manifest.manifest_path = "/tmp/test.manifest.json"
+    mock_manifest.segments = {}
+
+    segs = [
+        TranslationOutput(segment_id="1", draft_translation="", polished_translation="Seg 1"),
+        TranslationOutput(segment_id="2", draft_translation="", polished_translation=""),
+        TranslationOutput(segment_id="3", draft_translation="", polished_translation=""),
+    ]
+    mock_result = ChapterResult(
+        chapter_title="Partial",
+        source_text="source",
+        segment_results=segs,
+        aggregated_translation="Seg 1",
+        chapter_status=ChapterStatus.PARTIAL,
+        segment_statuses={"1": SegmentStatus.COMPLETED, "2": SegmentStatus.FAILED, "3": SegmentStatus.PENDING},
+        failed_segment_ids=["2"],
+        manifest=mock_manifest,
+        resumable=True,
+    )
+    mock_orchestrator.run_with_manifest.return_value = mock_result
+
+    response = client.post("/translate/chapter", json={"source_text": "source"})
+    assert response.status_code == 200
+    data = response.json()
+
+    summary = data["readable_summary"]
+    assert "partial" in summary
+    assert "1/3 segments completed" in summary
+    assert "2 segment(s) to complete" in summary
+    assert "reuses 1 completed" in summary
+    assert "processes 2 remaining" in summary
+    assert "Manifest:" in summary
+    assert "/tmp/test.manifest.json" in summary
+
+
+@patch('app.service.draft_service.ChapterOrchestrator')
+def test_chapter_readable_summary_all_failed(mock_orchestrator_class):
+    """All-failed run should show failure count and retry guidance."""
+    mock_orchestrator = MagicMock()
+    mock_orchestrator_class.return_value = mock_orchestrator
+    mock_manifest = MagicMock()
+    mock_manifest.manifest_path = "/tmp/failed.manifest.json"
+    mock_manifest.segments = {}
+
+    seg = TranslationOutput(segment_id="1", draft_translation="", polished_translation="")
+    mock_result = ChapterResult(
+        chapter_title="Failed",
+        source_text="source",
+        segment_results=[seg],
+        aggregated_translation="",
+        chapter_status=ChapterStatus.FAILED,
+        segment_statuses={"1": SegmentStatus.FAILED},
+        failed_segment_ids=["1"],
+        manifest=mock_manifest,
+        resumable=True,
+    )
+    mock_orchestrator.run_with_manifest.return_value = mock_result
+
+    response = client.post("/translate/chapter", json={"source_text": "source"})
+    assert response.status_code == 200
+    data = response.json()
+
+    summary = data["readable_summary"]
+    assert "failed" in summary
+    assert "0/1 segments completed" in summary
+    assert "all 1 segments" in summary or "all segments" in summary
+    assert "processes 1 remaining" in summary
+
+
+@patch('app.service.draft_service.ChapterOrchestrator')
+def test_chapter_readable_summary_consistency_found(mock_orchestrator_class):
+    """readable_summary should include consistency audit and correction details when present."""
+    mock_orchestrator = MagicMock()
+    mock_orchestrator_class.return_value = mock_orchestrator
+
+    seg = TranslationOutput(segment_id="1", draft_translation="", polished_translation="Content.")
+    mock_result = ChapterResult(
+        chapter_title="Test",
+        source_text="source",
+        segment_results=[seg],
+        aggregated_translation="Content.",
+        chapter_status=ChapterStatus.COMPLETED,
+        segment_statuses={"1": SegmentStatus.COMPLETED},
+        consistency_audit={
+            "total_issues": 3,
+            "by_category": {"name_variant": 2, "term_variant": 1},
+            "auto_fixable": 2,
+            "auto_fixed": 2,
+        },
+        correction_summary={
+            "total_corrections": 2,
+            "total_replacements": 3,
+            "by_category": {"name_variant": 1, "term_variant": 1},
+        },
+        corrected_translation="Corrected content.",
+    )
+    mock_orchestrator.run_with_manifest.return_value = mock_result
+
+    response = client.post("/translate/chapter", json={"source_text": "source"})
+    assert response.status_code == 200
+    data = response.json()
+
+    summary = data["readable_summary"]
+    assert "completed" in summary
+    assert "3 issues" in summary
+    assert "2 auto-fixed" in summary
+    assert "name_variant" in summary
+    assert "term_variant" in summary
+    assert "Corrections:" in summary
+    assert "Corrected:" in summary or "corrected" in summary.lower() or "post-consistency" in summary
+    # Pre-consistency label should appear since corrected_translation is set
+    assert "pre-consistency" in summary
+
+
+@patch('app.service.draft_service.ChapterOrchestrator')
+def test_chapter_readable_summary_strategy(mock_orchestrator_class):
+    """readable_summary should include strategy overview when strategy_plan_summary is present."""
+    mock_orchestrator = MagicMock()
+    mock_orchestrator_class.return_value = mock_orchestrator
+
+    seg = TranslationOutput(segment_id="1", draft_translation="", polished_translation="Content.")
+    mock_result = ChapterResult(
+        chapter_title="Test",
+        source_text="source",
+        segment_results=[seg],
+        aggregated_translation="Content.",
+        chapter_status=ChapterStatus.COMPLETED,
+        segment_statuses={"1": SegmentStatus.COMPLETED},
+        strategy_plan_summary={
+            "complexity": {"level": "medium", "score": 0.45},
+            "overall_strategy": {
+                "processing_mode": "standard",
+                "budget_profile": "conservative",
+                "consistency_intensity": "enhanced",
+            },
+        },
+    )
+    mock_orchestrator.run_with_manifest.return_value = mock_result
+
+    response = client.post("/translate/chapter", json={"source_text": "source"})
+    assert response.status_code == 200
+    data = response.json()
+
+    summary = data["readable_summary"]
+    assert "completed" in summary
+    assert "Strategy:" in summary
+    assert "complexity=medium" in summary
+    assert "mode=standard" in summary
+    assert "budget=conservative" in summary
+    assert "consistency=enhanced" in summary
+
+
 def test_translate_chapter_endpoint_missing_source_text_field():
     """Missing source_text field should return 422."""
     payload = {}

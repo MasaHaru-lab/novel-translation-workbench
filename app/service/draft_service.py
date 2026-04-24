@@ -73,6 +73,7 @@ class ChapterResponseModel(BaseModel):
     success_count: int
     failed_segment_ids: List[str] = Field(default_factory=list)
     resumable: bool
+    readable_summary: str = ""
 
     class Config:
         from_attributes = True
@@ -118,6 +119,104 @@ async def post_translate_draft(input: TranslationInputModel) -> TranslationOutpu
     )
 
 
+def _format_chapter_summary(result: ChapterResult) -> str:
+    """Build a human-readable summary string from a ChapterResult.
+
+    Complements the structured ChapterResponseModel fields with a concise,
+    operator-facing summary similar to what the CLI prints after a chapter run.
+    """
+    lines = []
+
+    status = result.chapter_status.value
+    lines.append(f"Status: {status} — {result.success_count}/{result.segment_count} segments completed")
+
+    # Failed segments
+    if result.failed_segment_ids:
+        if result.success_count == 0:
+            lines.append(f"Failed: all {len(result.failed_segment_ids)} segments")
+        else:
+            lines.append(f"Failed: {len(result.failed_segment_ids)} segments")
+            for fid in result.failed_segment_ids:
+                rec = result.manifest.segments.get(fid) if result.manifest else None
+                err = f" ({rec.error_message})" if rec and rec.error_message else ""
+                lines.append(f"  - Segment {fid}{err}")
+
+    # Resumable / next-step guidance
+    remaining = result.segment_count - result.success_count
+    if result.is_partial and remaining > 0:
+        lines.append(f"Remaining: {remaining} segment(s) to complete")
+    if result.resumable:
+        if remaining > 0:
+            lines.append(f"Next step: run with --resume to continue "
+                         f"(reuses {result.success_count} completed, "
+                         f"processes {remaining} remaining)")
+        else:
+            lines.append("Next step: retry failed segments with --resume")
+
+    # Aggregated/corrected char counts
+    if result.aggregated_translation:
+        agg_len = len(result.aggregated_translation)
+        suffix = " (pre-consistency)" if result.corrected_translation is not None else ""
+        lines.append(f"Aggregated: {agg_len} chars{suffix}")
+    if result.corrected_translation is not None:
+        lines.append(f"Corrected:  {len(result.corrected_translation)} chars (post-consistency)")
+
+    # Strategy overview
+    strategy = result.strategy_plan_summary
+    if strategy:
+        complexity = strategy.get("complexity", {})
+        overall = strategy.get("overall_strategy", {})
+        parts = []
+        if complexity:
+            level = complexity.get("level", "—")
+            score = complexity.get("score")
+            if score is not None:
+                parts.append(f"complexity={level} ({score:.2f})")
+            else:
+                parts.append(f"complexity={level}")
+        if overall:
+            mode = overall.get("processing_mode", "—")
+            budget = overall.get("budget_profile", "—")
+            intensity = overall.get("consistency_intensity", "—")
+            parts.append(f"mode={mode}")
+            parts.append(f"budget={budget}")
+            parts.append(f"consistency={intensity}")
+        if parts:
+            lines.append("Strategy: " + ", ".join(parts))
+
+    # Consistency audit
+    audit = result.consistency_audit
+    if audit is not None:
+        total = audit.get("total_issues", 0)
+        auto_fixed = audit.get("auto_fixed", 0)
+        if total == 0:
+            lines.append("Consistency: no issues found")
+        elif auto_fixed == total:
+            plural = "s" if total != 1 else ""
+            lines.append(f"Consistency: all resolved ({total} issue{plural} auto-fixed)")
+        elif auto_fixed > 0:
+            lines.append(f"Consistency: {total} issues ({auto_fixed} auto-fixed)")
+        else:
+            lines.append(f"Consistency: {total} issues found")
+        if total > 0:
+            for cat, count in sorted(audit.get("by_category", {}).items()):
+                lines.append(f"  {cat}: {count}")
+
+    # Correction summary
+    correction = result.correction_summary
+    if correction and correction.get("total_corrections", 0) > 0:
+        lines.append("Corrections:")
+        for cat, count in sorted(correction.get("by_category", {}).items()):
+            lines.append(f"  {cat}: {count}")
+
+    # Manifest path
+    manifest_path = result.manifest.manifest_path if result.manifest else None
+    if manifest_path:
+        lines.append(f"Manifest: {manifest_path}")
+
+    return "\n".join(lines)
+
+
 @app.post("/translate/chapter", response_model=ChapterResponseModel)
 async def post_translate_chapter(request: ChapterRequestModel) -> ChapterResponseModel:
     """Translate a full chapter using the chapter-level orchestrator."""
@@ -154,6 +253,7 @@ async def post_translate_chapter(request: ChapterRequestModel) -> ChapterRespons
         success_count=result.success_count,
         failed_segment_ids=result.failed_segment_ids,
         resumable=result.resumable,
+        readable_summary=_format_chapter_summary(result),
     )
 
 
