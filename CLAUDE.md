@@ -129,6 +129,22 @@ For orchestrator design and current capabilities, see `ORCHESTRATION.md`.
 
 遇到看似要合并两者的"简化"机会，先停下问，这基本就是违规信号。
 
+## Frozen Designs
+
+以下设计主题已明确评估并冻结。除非用户明确重新打开该主题，否则不允许实现、预重构、或做任何前置准备。
+
+### `chapter stream --dry-run` — FROZEN
+
+**状态：** 已推迟，不属于 Phase A 范围。
+
+**原因：** stdout/stderr 契约歧义。`chapter stream` 保留 stdout 用于流式翻译输出，加入 `--dry-run` 需要一个尚未做出的显式接口决策（输出到 stderr？切换到不同输出模式？）。
+
+**范围边界：**
+- 这不是 bug，不是遗漏，不是下一批默认候选。
+- `chapter run` 主路径 Phase A 已完成。
+- 不允许修改 CLI parser、stdout/stderr 处理、stream output contract、或相关测试结构来"为这个功能做准备"。
+- 只有当用户明确说"重新打开 stream dry-run 设计"或等价表述时，才允许进入 discovery。在此之前，任何发现或实现尝试都视为范围越界。
+
 ## Verification Before Claims
 
 - 不要猜 API 签名、字段名、文件位置；先用 Read / Grep 读一手

@@ -1,7 +1,7 @@
 # Session Checkpoint – 2026-04-24
 
 ## Current focus
-Phase A: chapter-level CLI operator friction reduction. Stay within CLI surface — no architecture, prompts, models, config, or HTTP work.
+Phase A (`chapter run` CLI friction reduction) is complete. No active batch.
 
 ## Confirmed done
 
@@ -31,7 +31,7 @@ Phase A: chapter-level CLI operator friction reduction. Stay within CLI surface 
 
 - **Env var fallback for source/output defaults** — deferred by user. Opens a broader config-surface question (env var names, chapter/stream/legacy consistency, future config-file interaction). Not the right next batch.
 - **Stream mode isolation** — already done in an earlier batch, not touched in these two batches.
-- **`chapter stream` lacks `--dry-run`** — has stdout design ambiguity (dry-run output vs stream output both go to stdout). Needs direction before implementation.
+- **`chapter stream` lacks `--dry-run`** — FROZEN. stdout/stderr contract ambiguity: stream reserves stdout for output, dry-run would require an explicit interface decision. Removed from Phase A scope. Only reopen if user explicitly says so.
 - **`chapter run` other candidates** — none identified in this session.
 - **Unaddressed larger items** (Phase B/C/D): HTTP polish endpoint, batch processing, real translation models, sentence-level splitting, config file.
 
@@ -40,7 +40,6 @@ Phase A: chapter-level CLI operator friction reduction. Stay within CLI surface 
 Next batch candidates (user to decide direction):
 - Phase B: HTTP polish endpoint
 - Phase C: batch processing / config file
-- Resolve `chapter stream --dry-run` design ambiguity
 
 ## Key artifacts
 - `app/cli.py` — `_orchestrator_progress_logging()` (context manager, before `read_source_file`), `run_chapter_pipeline` (--confirm at line ~260, --no-clobber at line ~247), `chapter run` parser (--confirm flag at line ~605)
