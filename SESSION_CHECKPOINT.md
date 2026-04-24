@@ -49,5 +49,5 @@ Next batch candidates (user to decide direction):
 ## Validation status
 - Tests/checks run: yes (full suite 276 passed, 56 CLI)
 - Repo/worktree relevant: yes
-- Worktree clean: yes (SESSION_CHECKPOINT.md pending commit)
+- Worktree clean: yes
 - Confidence: high
