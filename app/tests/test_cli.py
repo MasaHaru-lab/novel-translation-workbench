@@ -416,6 +416,38 @@ def test_run_chapter_pipeline_success(tmp_path):
     assert "Translated output." in content
 
 
+def test_run_chapter_pipeline_fresh_shows_plan(tmp_path, capsys):
+    """Fresh run should print chapter title and segment count before translating."""
+    source = tmp_path / "s.txt"
+    output = tmp_path / "o.md"
+    source.write_text("第一章\n\nTest content.", encoding='utf-8')
+
+    mock_result = ChapterResult(
+        chapter_title="第一章",
+        source_text="第一章\n\nTest content.",
+        aggregated_translation="# 第一章\n\nOutput.",
+        segment_statuses={"1": SegmentStatus.COMPLETED},
+        chapter_status=ChapterStatus.COMPLETED,
+    )
+
+    with patch('app.cli.ChapterOrchestrator') as mock_orch_cls:
+        mock_orch = MagicMock()
+        mock_orch_cls.return_value = mock_orch
+        mock_orch.load_manifest.return_value = None
+        mock_plan = MagicMock()
+        mock_plan.chapter_title = "第一章"
+        mock_plan.segment_count = 3
+        mock_orch.plan.return_value = mock_plan
+        mock_orch.run_with_manifest.return_value = mock_result
+
+        run_chapter_pipeline(source, output)
+
+    captured = capsys.readouterr()
+    assert "Chapter:" in captured.out
+    assert "第一章" in captured.out
+    assert "3 segments" in captured.out
+
+
 # ── run_chapter_stream ───────────────────────────────────────────────
 
 

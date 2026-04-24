@@ -280,6 +280,8 @@ def run_chapter_pipeline(
             print(f"  Starting a fresh run.")
 
     # ── Fresh run path ───────────────────────────────────────────────────
+    plan = orchestrator.plan(text)
+    print(f"Chapter: '{plan.chapter_title}' ({plan.segment_count} segments)")
     print(f"\nTranslating using {mode}...")
     try:
         result = orchestrator.run_with_manifest(
