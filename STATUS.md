@@ -120,6 +120,24 @@ A minimal FastAPI service for draft translation has been added.
 
 *Last updated: 2026-04-20*
 
+## Reality Check: Fishhead Wrapper Unreachable (2026-04-25)
+
+- **Attempt**: Reality Check discovery only — `chapter run` on real content (`one_chapter.txt`)
+- **Blocker**: Fishhead wrapper at `http://192.168.68.61:8001/generate` is unreachable (ARP incomplete, all probes timed out)
+- **Current status**: The wrapper was verified functional on 2026-04-20 but is unreachable from this Mac as of 2026-04-25. No other backend is configured (`MODEL_BACKEND_URL` not set, Ollama available but no models loaded).
+- **No code changes made** during this discovery.
+- **Next action**: Bring Fishhead wrapper online, then:
+  ```bash
+  MODEL_BACKEND_URL=http://192.168.68.61:8001/generate \
+    venv/bin/python -m app.cli chapter run \
+    --source one_chapter.txt \
+    --output data/exports/reality_chapter.md \
+    --dry-run --confirm
+  ```
+- **Frozen**: `chapter stream --dry-run` remains frozen per Batch 4B design freeze.
+
+*Last updated: 2026-04-25*
+
 ## Default Workflow Implementation
 
 Implements the contract defined in WORKFLOW.md:

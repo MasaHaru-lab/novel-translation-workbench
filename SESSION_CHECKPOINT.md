@@ -1,52 +1,40 @@
-# Session Checkpoint – 2026-04-24
+# Session Checkpoint — 2026-04-25
 
 ## Current focus
-Phase A (`chapter run` CLI friction reduction) is complete. No active batch.
+Reality Check — verify chapter run output quality on real Chinese novel content (one_chapter.txt).
 
-## Confirmed done
+## Previous phase: chapter run Phase A complete
+- CLI friction batch (3f444d0): --no-clobber msg fix, resume progress logging, --confirm flag
+- --no-clobber output protection (a6d2a79)
+- Elapsed-time reporting (19ae52b)
+- 276 tests passing (56 CLI)
+- chapter stream --dry-run: FROZEN (stdout/stderr contract ambiguity, not in Phase A scope)
 
-- **Elapsed-time reporting** (`19ae52b`)
-  - `time.monotonic()` wraps both fresh-run and resume orchestrator paths
-  - Output: `Elapsed: 12.3s` line before `Done.` in final summary
-  - 3 new tests (fresh, formatting, resume path), all passing
+## Confirmed done (read-only)
+- Real input files identified: only one_chapter.txt
+- Backend unreachable: Fishhead wrapper at 192.168.68.61:8001/generate (ARP incomplete)
+- Chapter run path: translate_draft() → backend_adapter.call_model_backend() → MODEL_BACKEND_URL
+- Output path: data/exports/reality_chapter.md
+- STATUS.md updated with unreachable state
 
-- **`--no-clobber` output protection** (`a6d2a79`)
-  - Flag on `chapter run` subparser only
-  - Check fires before any orchestrator execution (before dry-run, resume, or fresh-run paths)
-  - Error output:
-    ```
-      Error: Output file already exists: <path>
-      Use --no-clobber to protect existing output. Remove the file or omit --no-clobber to overwrite.
-    ```
-  - Exits with code 1, orchestrator never instantiated
-  - 3 new tests (exists+exit, absent+proceed, default+overwrite), all passing
-
-- **CLI friction batch: `--no-clobber` msg + resume progress + `--confirm`** (`3f444d0`)
-  - Fixed `--no-clobber` self-referential error message ("Remove the file or use a different --output path.")
-  - Extracted `_orchestrator_progress_logging()` context manager, used in both fresh-run and resume paths
-  - Added `--confirm` flag with interactive prompt after plan preview
-  - 4 new tests (confirm yes/no, dry-run+confirm yes/no), 56 CLI tests total
-
-## Still pending / blocked / broken
-
-- **Env var fallback for source/output defaults** — deferred by user. Opens a broader config-surface question (env var names, chapter/stream/legacy consistency, future config-file interaction). Not the right next batch.
-- **Stream mode isolation** — already done in an earlier batch, not touched in these two batches.
-- **`chapter stream` lacks `--dry-run`** — FROZEN. stdout/stderr contract ambiguity: stream reserves stdout for output, dry-run would require an explicit interface decision. Removed from Phase A scope. Only reopen if user explicitly says so.
-- **`chapter run` other candidates** — none identified in this session.
-- **Unaddressed larger items** (Phase B/C/D): HTTP polish endpoint, batch processing, real translation models, sentence-level splitting, config file.
+## Still pending / blocked / frozen
+- **BLOCKED**: Reality Check cannot proceed — Fishhead wrapper unreachable from this Mac
+- **Frozen**: chapter stream --dry-run (stdout/stderr contract ambiguity)
+- **Deferred**: env var fallback for source/output defaults, HTTP polish endpoint, batch processing, config file, sentence-level splitting
 
 ## Next starting action
+Bring Fishhead wrapper online, then:
 
-Next batch candidates (user to decide direction):
-- Phase B: HTTP polish endpoint
-- Phase C: batch processing / config file
-
-## Key artifacts
-- `app/cli.py` — `_orchestrator_progress_logging()` (context manager, before `read_source_file`), `run_chapter_pipeline` (--confirm at line ~260, --no-clobber at line ~247), `chapter run` parser (--confirm flag at line ~605)
-- `app/tests/test_cli.py` — confirm tests (lines ~416-455), mock function (line ~262)
+```bash
+MODEL_BACKEND_URL=http://192.168.68.61:8001/generate \
+  venv/bin/python -m app.cli chapter run \
+  --source one_chapter.txt \
+  --output data/exports/reality_chapter.md \
+  --dry-run --confirm
+```
 
 ## Validation status
-- Tests/checks run: yes (full suite 276 passed, 56 CLI)
+- Tests/checks run: no (backend unreachable)
 - Repo/worktree relevant: yes
-- Worktree clean: yes
+- Worktree clean: yes (no code changes)
 - Confidence: high
