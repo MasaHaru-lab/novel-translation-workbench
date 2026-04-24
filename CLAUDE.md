@@ -2,6 +2,20 @@
 
 This project provides a translation workflow for Chinese novel chapters into English.
 
+## Local development
+
+Working directory must be `~/novel-translation-workbench` before any file operation. Do NOT operate from `/Users/ambrosiazheng` or any parent directory. If `pwd` is wrong, stop and ask — do not create files (including `CLAUDE.md`) at the wrong level.
+
+Always use the project venv (`venv/bin/python`), not system `python3`.
+
+| Action | Command |
+|--------|---------|
+| Run tests | `python -m pytest app/tests/` |
+| Run pipeline | `python -m app.cli run` |
+| Start service | `python run_translation_service.py` |
+
+Commands assume `source venv/bin/activate` first. Without activation, prefix each command with `venv/bin/python` (e.g., `venv/bin/python -m pytest app/tests/`).
+
 ## Governing documents
 
 This project is governed by the following document priority:
@@ -92,3 +106,93 @@ The project includes a chapter-level orchestrator kernel (`app/chapter/orchestra
 The orchestrator invokes the segment-level workflow defined in `WORKFLOW.md` for each segment. `WORKFLOW.md` remains the segment-level execution protocol.
 
 For orchestrator design and current capabilities, see `ORCHESTRATION.md`.
+
+## Scope Discipline
+
+当用户使用 "minimal / narrow / scoped / conservative / 只改 X / 先不改 / 先检查" 这类措辞时，严格照字面执行：
+
+- 不派生语义、不加额外字段、不做"顺手清理"、不建 helper / 并行入口 / 根目录 CLI
+- 如果需要碰范围外文件（即便是 import、README、测试夹具），先停下问，不要自行扩范围
+- 用户说 "先不要改 / 只看 / inspect / 先 dry-run"，那一轮禁止调用 Edit / Write / MultiEdit，以及任何会改磁盘或远端状态的 Bash
+- 收到"最小修复"/"两行改动"这类指令时，先回读：要改的文件清单 + 预计 diff 行数 + 明确不做的事，拿到 go 再动工具
+
+违反以上任何一条都按范围越界处理，直接回滚。
+
+## Architecture Constraints
+
+### Planned vs Enacted
+
+- `ChapterPlan` 只承载 planned 值（计划时刻的预期、预算、策略意图）
+- Enactment 记录只承载 actual 运行时值（真实 token 用量、真实片段切分、真实一致性强度），必须来自执行路径，不能从 plan 复制或回推
+- 不要给 `ChapterPlan` 挂运行时字段；不要让 enactment 回填进 plan
+- planned 和 enacted 在任何数据结构、日志、audit 里都要保持来源可辨
+
+遇到看似要合并两者的"简化"机会，先停下问，这基本就是违规信号。
+
+## Verification Before Claims
+
+- 不要猜 API 签名、字段名、文件位置；先用 Read / Grep 读一手
+- 不要声称"文件已 commit / 服务已启动 / 测试已通过 / venv 已激活"，除非刚刚用 Bash 验证过
+- 长探索之前，先让 Task agent 去查，再回主会话做 edit —— 避免主上下文被探索吃光
+- 当前批次过半或 exploration 较长时，先写一段 checkpoint（任务 / 改动文件 / 测试状态 / 下一步 / 阻塞点）再继续，别等 context 爆了才补
+
+## Collaboration Mode
+
+### 协作模式
+- 你是执行者，不是来逐项征求用户选择的
+- 用户负责批次目标、范围边界和最终验收
+- 你负责在既定边界内自主推进并完成整批工作
+- 默认不要把用户拖进每一个局部实现决策
+
+### 默认工作模式
+- 默认按批次推进，而不是逐项征求确认
+- 默认不要逐行贴大段 patch / diff / 长代码块
+- 默认只做批次级汇报
+- 普通编辑 / 测试 / 小实现，由你自己推进
+- 删除 / restore / commit 这类高风险动作再停下来确认
+
+### 批次级汇报格式
+除非用户明确要求，否则只输出：
+1. 改了哪些文件
+2. 每个文件一句话摘要
+3. 跑了哪些测试 / 验证
+4. 是否通过
+5. 有没有碰到边界禁区
+6. 是否达到本批次完成标准
+7. 还剩什么没做
+
+### 只有这些情况才允许停下来问
+- 必须碰禁区文件才能继续
+- 当前批次必须扩范围才能成立
+- 出现两条明显不同且会影响主线的产品方向
+- 准备执行高风险动作（删除文件 / git restore / git commit）
+- 当前本地状态与既有判断明显冲突
+
+### 上下文控制
+- 不要重复复述已确认背景
+- 不要粘贴大段代码 / patch / diff，除非用户明确要求
+- 不要输出冗长计划
+- 当前批次完成后直接收口，不要自动开启下一批
+- 如果对话变长，先输出短 checkpoint，而不是继续堆上下文
+
+### Tool approval behavior
+
+Some commands may still trigger approval prompts because of the tool/runtime safety layer. This does not mean the user should be pulled back into routine implementation decisions.
+
+Default rule:
+
+- If a command is low risk and clearly belongs to the current batch, proceed within the current batch logic.
+- Do not treat every approval prompt as a new product or planning question.
+- Approval prompts are often a tool-layer requirement, not a signal that the project direction is unclear.
+
+Only escalate the decision back to the user when the command would:
+
+- expand the current batch scope
+- touch a forbidden file or boundary
+- perform a high-risk action such as delete / git restore / git commit
+- reveal a conflict with the already confirmed local project state
+
+In other words:
+
+- tool approval is a runtime/safety concern
+- whether something belongs to the current batch is an execution judgment you should usually make yourself

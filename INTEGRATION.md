@@ -23,7 +23,7 @@ The draft translation endpoint now integrates with a local model backend via HTT
 
 ## Starting the Translation Service
 
-1. Install optional dependencies:
+1. Activate the project venv (`source venv/bin/activate`), then install optional dependencies:
    ```bash
    pip install -r requirements.txt
    ```
@@ -66,7 +66,7 @@ The backend must return a JSON response containing the generated text in one of 
 
 ## Testing
 
-Run the test suite:
+Run the test suite (with venv activated):
 ```bash
 python -m pytest app/tests/
 ```
