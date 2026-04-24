@@ -1,41 +1,53 @@
 # Session Checkpoint – 2026-04-24
 
 ## Current focus
-Phase A: making the chapter-level CLI operator-friendly without touching architecture, prompts, or models.
+Phase A: chapter-level CLI operator friction reduction. Stay within CLI surface — no architecture, prompts, models, config, or HTTP work.
 
 ## Confirmed done
 
-- **Per-segment CLI progress logging** (`c01538c`)
-  - temporary StreamHandler on orchestrator logger wraps fresh-run `run_with_manifest`
-- **Update session checkpoint** (`5ca79cd`)
-  - checkpoint commit after per-segment progress logging
-- **Refresh STATUS for chapter-level CLI phase** (`565555f`)
-  - STATUS.md now reflects current orchestrator/CLI state
-- **Polish chapter run final summary output** (`012a8a2`)
-  - `_report_chapter_result()` output reordered: Written to / Manifest right after status/counts, Strategy at end
-  - Removed duplicate resume guidance and noisy "Aggregated:" line
-  - File-writing logic untouched (still `final_translation`), stream mode untouched
-  - Tests updated with precise assertions: `.index("Written to:") < .index("Strategy:")`,
-    `"partial — 1/3 segments"` exact match, `"Aggregated:"` absence verified
+- **Elapsed-time reporting** (`19ae52b`)
+  - `time.monotonic()` wraps both fresh-run and resume orchestrator paths
+  - Output: `Elapsed: 12.3s` line before `Done.` in final summary
+  - 3 new tests (fresh, formatting, resume path), all passing
+
+- **`--no-clobber` output protection** (`a6d2a79`)
+  - Flag on `chapter run` subparser only
+  - Check fires before any orchestrator execution (before dry-run, resume, or fresh-run paths)
+  - Error output:
+    ```
+      Error: Output file already exists: <path>
+      Use --no-clobber to protect existing output. Remove the file or omit --no-clobber to overwrite.
+    ```
+  - Exits with code 1, orchestrator never instantiated
+  - 3 new tests (exists+exit, absent+proceed, default+overwrite), all passing
+
+- **CLI friction batch: `--no-clobber` msg + resume progress + `--confirm`** (`3f444d0`)
+  - Fixed `--no-clobber` self-referential error message ("Remove the file or use a different --output path.")
+  - Extracted `_orchestrator_progress_logging()` context manager, used in both fresh-run and resume paths
+  - Added `--confirm` flag with interactive prompt after plan preview
+  - 4 new tests (confirm yes/no, dry-run+confirm yes/no), 56 CLI tests total
 
 ## Still pending / blocked / broken
 
-- **Resume path progress**: Per-segment progress handler only wraps fresh-run path. Intentional — resume is a recovery flow.
+- **Env var fallback for source/output defaults** — deferred by user. Opens a broader config-surface question (env var names, chapter/stream/legacy consistency, future config-file interaction). Not the right next batch.
+- **Stream mode isolation** — already done in an earlier batch, not touched in these two batches.
+- **`chapter stream` lacks `--dry-run`** — has stdout design ambiguity (dry-run output vs stream output both go to stdout). Needs direction before implementation.
+- **`chapter run` other candidates** — none identified in this session.
+- **Unaddressed larger items** (Phase B/C/D): HTTP polish endpoint, batch processing, real translation models, sentence-level splitting, config file.
 
 ## Next starting action
 
-Identify the next smallest operator-facing friction point in the chapter-level CLI path. Do not start architecture/prompt/model work yet.
-
-## Checkpoint saved to
-`SESSION_CHECKPOINT.md` (replaced, cumulative)
+Next batch candidates (user to decide direction):
+- Phase B: HTTP polish endpoint
+- Phase C: batch processing / config file
+- Resolve `chapter stream --dry-run` design ambiguity
 
 ## Key artifacts
-- `app/cli.py` — `_report_chapter_result()` output order (lines 355–465)
-- `app/tests/test_cli.py` — ordering assertions, partial-label match, aggregated absence
-- `app/chapter/models.py` — `ChapterResult` (unchanged)
+- `app/cli.py` — `_orchestrator_progress_logging()` (context manager, before `read_source_file`), `run_chapter_pipeline` (--confirm at line ~260, --no-clobber at line ~247), `chapter run` parser (--confirm flag at line ~605)
+- `app/tests/test_cli.py` — confirm tests (lines ~416-455), mock function (line ~262)
 
 ## Validation status
-- Tests/checks run: yes (full suite 266 passed, 46 CLI)
+- Tests/checks run: yes (full suite 276 passed, 56 CLI)
 - Repo/worktree relevant: yes
-- Worktree clean: before this checkpoint edit
+- Worktree clean: yes (SESSION_CHECKPOINT.md pending commit)
 - Confidence: high
