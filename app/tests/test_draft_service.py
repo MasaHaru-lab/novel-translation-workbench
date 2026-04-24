@@ -27,9 +27,11 @@ if not FASTAPI_AVAILABLE:
 client = TestClient(app)
 
 
+@patch('app.service.draft_service.config')
 @patch('app.service.draft_service.translate_draft_with_backend')
-def test_translate_draft_endpoint_basic(mock_translate):
+def test_translate_draft_endpoint_basic(mock_translate, mock_config):
     """Test the /translate/draft endpoint with minimal input."""
+    mock_config.MODEL_BACKEND_URL = "http://mock-backend"
     mock_translate.return_value = TranslationOutput(
         segment_id="test_1",
         draft_translation="Translated draft.",
@@ -58,9 +60,11 @@ def test_translate_draft_endpoint_basic(mock_translate):
     assert call_arg.source_text == "Hello world"
 
 
+@patch('app.service.draft_service.config')
 @patch('app.service.draft_service.translate_draft_with_backend')
-def test_translate_draft_endpoint_with_glossary(mock_translate):
+def test_translate_draft_endpoint_with_glossary(mock_translate, mock_config):
     """Test glossary replacement works through the endpoint."""
+    mock_config.MODEL_BACKEND_URL = "http://mock-backend"
     mock_translate.return_value = TranslationOutput(
         segment_id="test_2",
         draft_translation="Young Lady called Prince",
@@ -93,9 +97,11 @@ def test_translate_draft_endpoint_with_glossary(mock_translate):
     assert call_arg.glossary_terms[0].en == "Young Lady"
 
 
+@patch('app.service.draft_service.config')
 @patch('app.service.draft_service.translate_draft_with_backend')
-def test_translate_draft_endpoint_backend_error(mock_translate):
+def test_translate_draft_endpoint_backend_error(mock_translate, mock_config):
     """Test endpoint returns 503 when backend raises RuntimeError."""
+    mock_config.MODEL_BACKEND_URL = "http://mock-backend"
     mock_translate.side_effect = RuntimeError("Backend down")
     payload = {
         "segment_id": "test_3",
