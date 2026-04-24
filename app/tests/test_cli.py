@@ -2,6 +2,7 @@
 Tests for CLI behavior, especially service fallback.
 """
 import sys
+import logging
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
@@ -1108,6 +1109,100 @@ def test_chapter_run_resume_help_text(capsys):
     assert "manifest file lives at" in captured.out
     assert "partial" in captured.out
     assert "interrupted" in captured.out
+
+
+# ── Per-segment progress output ──────────────────────────────────────────
+
+
+def test_chapter_run_per_segment_progress(tmp_path, capsys):
+    """Progress lines should appear on stdout and handler must not leak."""
+    source = tmp_path / "s.txt"
+    output = tmp_path / "o.md"
+    source.write_text("第一章\n\nTest content.", encoding='utf-8')
+
+    orch_log = logging.getLogger('app.chapter.orchestrator')
+    prev_handlers = len(orch_log.handlers)
+    prev_level = orch_log.level
+
+    def mock_run_with_manifest(text, **kw):
+        orch_log.info("  Segment 1 starting...")
+        orch_log.info("  Segment 1 completed.")
+        return ChapterResult(
+            chapter_title="第一章",
+            source_text=text,
+            aggregated_translation="Output.",
+            segment_statuses={"1": SegmentStatus.COMPLETED},
+            chapter_status=ChapterStatus.COMPLETED,
+        )
+
+    with patch('app.cli.ChapterOrchestrator') as mock_orch_cls:
+        mock_orch = MagicMock()
+        mock_orch_cls.return_value = mock_orch
+        mock_orch.load_manifest.return_value = None
+        mock_plan = MagicMock()
+        mock_plan.chapter_title = "第一章"
+        mock_plan.segment_count = 1
+        mock_orch.plan.return_value = mock_plan
+        mock_orch.run_with_manifest = mock_run_with_manifest
+
+        run_chapter_pipeline(source, output)
+
+    captured = capsys.readouterr()
+    assert "Segment 1 starting..." in captured.out
+    assert "Segment 1 completed." in captured.out
+
+    # Handler must not leak after the call returns.
+    assert len(orch_log.handlers) == prev_handlers
+    assert orch_log.level == prev_level
+
+
+def test_chapter_stream_stdout_clean_after_chapter_run(tmp_path, capsys):
+    """Stream stdout must not contain log messages after a prior chapter run."""
+    source = tmp_path / "s.txt"
+    output = tmp_path / "o.md"
+    source.write_text("第一章\n\nTest content.", encoding='utf-8')
+
+    chapters_result = ChapterResult(
+        chapter_title="第一章",
+        source_text="Test content.",
+        aggregated_translation="Chapter output.",
+        segment_statuses={"1": SegmentStatus.COMPLETED},
+        chapter_status=ChapterStatus.COMPLETED,
+    )
+
+    with patch('app.cli.ChapterOrchestrator') as mock_orch_cls:
+        mock_orch = MagicMock()
+        mock_orch_cls.return_value = mock_orch
+        mock_orch.load_manifest.return_value = None
+        mock_plan = MagicMock()
+        mock_plan.chapter_title = "第一章"
+        mock_plan.segment_count = 1
+        mock_orch.plan.return_value = mock_plan
+        mock_orch.run_with_manifest.return_value = chapters_result
+
+        run_chapter_pipeline(source, output)
+
+    capsys.readouterr()  # discard prior output
+
+    stream_source = tmp_path / "stream.txt"
+    stream_source.write_text("第一章\n\nStream content.", encoding='utf-8')
+
+    stream_result = ChapterResult(
+        chapter_title="第一章",
+        source_text="Stream content.",
+        aggregated_translation="Stream output.",
+        chapter_status=ChapterStatus.COMPLETED,
+    )
+
+    with patch('app.cli.ChapterOrchestrator') as mock_orch_cls:
+        mock_orch = MagicMock()
+        mock_orch_cls.return_value = mock_orch
+        mock_orch.run_with_manifest.return_value = stream_result
+
+        run_chapter_stream(source_path=stream_source)
+
+    captured = capsys.readouterr()
+    assert captured.out == "Stream output.\n"
 
 
 if __name__ == "__main__":

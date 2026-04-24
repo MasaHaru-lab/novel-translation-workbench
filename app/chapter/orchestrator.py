@@ -479,6 +479,7 @@ class ChapterOrchestrator:
         Updates the manifest with each attempt.
         """
         seg_id = str(seg.segment_id)
+        logger.info("  Segment %s starting...", seg_id)
         inp = build_translation_input(seg, glossary)
         manifest.mark_segment_running(seg_id)
 

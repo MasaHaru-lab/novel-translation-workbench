@@ -3,6 +3,7 @@
 CLI for novel translation workbench.
 """
 import argparse
+import logging
 import sys
 from pathlib import Path
 from typing import Callable, Optional
@@ -291,6 +292,14 @@ def run_chapter_pipeline(
     plan = orchestrator.plan(text)
     print(f"Chapter: '{plan.chapter_title}' ({plan.segment_count} segments)")
     print(f"\nTranslating using {mode}...")
+
+    # Temporary stdout logging so the operator sees per-segment progress.
+    orch_log = logging.getLogger('app.chapter.orchestrator')
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setFormatter(logging.Formatter('%(message)s'))
+    prev_level = orch_log.level
+    orch_log.setLevel(logging.INFO)
+    orch_log.addHandler(handler)
     try:
         result = orchestrator.run_with_manifest(
             text,
@@ -302,8 +311,12 @@ def run_chapter_pipeline(
     except Exception as e:
         print(f"  Error: Chapter translation pipeline failed: {e}")
         sys.exit(1)
-
-    _report_chapter_result(result, output_path)
+    else:
+        _report_chapter_result(result, output_path)
+    finally:
+        orch_log.removeHandler(handler)
+        handler.close()
+        orch_log.setLevel(prev_level)
 
 
 def _display_plan(plan) -> None:
