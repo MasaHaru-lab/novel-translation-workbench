@@ -625,6 +625,359 @@ def test_report_chapter_result_failed_shows_retry_guidance(tmp_path, capsys):
     assert "--resume" in captured.out
 
 
+# ── _report_chapter_result: strategy overview ──────────────────────────
+
+
+def test_report_chapter_result_strategy_shows_when_available(capsys):
+    """Should show strategy overview when strategy_plan_summary is set."""
+    result = ChapterResult(
+        chapter_title="Test",
+        source_text="test",
+        aggregated_translation="All done.",
+        segment_results=[
+            TranslationOutput(segment_id="1", draft_translation="", polished_translation="Done."),
+        ],
+        segment_statuses={"1": SegmentStatus.COMPLETED},
+        chapter_status=ChapterStatus.COMPLETED,
+        strategy_plan_summary={
+            "complexity": {"level": "medium", "score": 0.45},
+            "overall_strategy": {
+                "processing_mode": "standard",
+                "budget_profile": "standard",
+                "consistency_intensity": "enhanced",
+                "segmentation_granularity": "standard",
+            },
+        },
+    )
+
+    _report_chapter_result(result, Path("/tmp/out.md"))
+    captured = capsys.readouterr()
+
+    assert "Strategy:" in captured.out
+    assert "Complexity:" in captured.out and "medium" in captured.out
+    assert "segments" in captured.out and "Budget:" in captured.out
+    assert "Consistency:" in captured.out and "enhanced" in captured.out
+
+
+def test_report_chapter_result_strategy_no_complexity(capsys):
+    """Should show partial strategy when complexity is missing."""
+    result = ChapterResult(
+        chapter_title="Test",
+        source_text="test",
+        aggregated_translation="All done.",
+        segment_results=[
+            TranslationOutput(segment_id="1", draft_translation="", polished_translation="Done."),
+        ],
+        segment_statuses={"1": SegmentStatus.COMPLETED},
+        chapter_status=ChapterStatus.COMPLETED,
+        strategy_plan_summary={
+            "overall_strategy": {
+                "budget_profile": "standard",
+                "consistency_intensity": "standard",
+                "segmentation_granularity": "standard",
+            },
+        },
+    )
+
+    _report_chapter_result(result, Path("/tmp/out.md"))
+    captured = capsys.readouterr()
+
+    assert "Strategy:" in captured.out
+    assert "Segmentation:" in captured.out and "Budget:" in captured.out
+    assert "Consistency:" in captured.out and "standard" in captured.out
+
+
+def test_report_chapter_result_strategy_no_overall(capsys):
+    """Should show partial strategy when overall_strategy is missing."""
+    result = ChapterResult(
+        chapter_title="Test",
+        source_text="test",
+        aggregated_translation="All done.",
+        segment_results=[
+            TranslationOutput(segment_id="1", draft_translation="", polished_translation="Done."),
+        ],
+        segment_statuses={"1": SegmentStatus.COMPLETED},
+        chapter_status=ChapterStatus.COMPLETED,
+        strategy_plan_summary={
+            "complexity": {"level": "high", "score": 0.78},
+        },
+    )
+
+    _report_chapter_result(result, Path("/tmp/out.md"))
+    captured = capsys.readouterr()
+
+    assert "Strategy:" in captured.out
+    assert "Complexity:" in captured.out and "Mode:" in captured.out
+    assert "high" in captured.out
+
+
+def test_report_chapter_result_strategy_none(capsys):
+    """Should not show strategy section when strategy_plan_summary is None."""
+    result = ChapterResult(
+        chapter_title="Test",
+        source_text="test",
+        aggregated_translation="All done.",
+        segment_results=[
+            TranslationOutput(segment_id="1", draft_translation="", polished_translation="Done."),
+        ],
+        segment_statuses={"1": SegmentStatus.COMPLETED},
+        chapter_status=ChapterStatus.COMPLETED,
+    )
+
+    _report_chapter_result(result, Path("/tmp/out.md"))
+    captured = capsys.readouterr()
+
+    assert "Strategy:" not in captured.out
+
+
+def test_report_chapter_result_strategy_empty_dict(capsys):
+    """Should not show strategy section when strategy_plan_summary is empty."""
+    result = ChapterResult(
+        chapter_title="Test",
+        source_text="test",
+        aggregated_translation="All done.",
+        segment_results=[
+            TranslationOutput(segment_id="1", draft_translation="", polished_translation="Done."),
+        ],
+        segment_statuses={"1": SegmentStatus.COMPLETED},
+        chapter_status=ChapterStatus.COMPLETED,
+        strategy_plan_summary={},
+    )
+
+    _report_chapter_result(result, Path("/tmp/out.md"))
+    captured = capsys.readouterr()
+
+    assert "Strategy:" not in captured.out
+
+
+# ── _report_chapter_result: consistency audit / correction readability ──
+
+
+def test_report_chapter_result_consistency_not_run(capsys):
+    """Should not show consistency section when audit is None (pass not run)."""
+    result = ChapterResult(
+        chapter_title="Test",
+        source_text="test",
+        aggregated_translation="All done.",
+        segment_results=[
+            TranslationOutput(segment_id="1", draft_translation="", polished_translation="Done."),
+        ],
+        segment_statuses={"1": SegmentStatus.COMPLETED},
+        chapter_status=ChapterStatus.COMPLETED,
+        consistency_audit=None,
+    )
+
+    _report_chapter_result(result, Path("/tmp/out.md"))
+    captured = capsys.readouterr()
+
+    assert "Consistency:" not in captured.out
+    assert "no issues found" not in captured.out
+
+
+def test_report_chapter_result_consistency_no_issues(capsys):
+    """Should show 'no issues found' when audit ran with 0 issues."""
+    result = ChapterResult(
+        chapter_title="Test",
+        source_text="test",
+        aggregated_translation="All done.",
+        segment_results=[
+            TranslationOutput(segment_id="1", draft_translation="", polished_translation="Done."),
+        ],
+        segment_statuses={"1": SegmentStatus.COMPLETED},
+        chapter_status=ChapterStatus.COMPLETED,
+        consistency_audit={
+            "total_issues": 0,
+            "by_category": {},
+            "auto_fixable": 0,
+            "auto_fixed": 0,
+        },
+    )
+
+    _report_chapter_result(result, Path("/tmp/out.md"))
+    captured = capsys.readouterr()
+
+    assert "Consistency:" in captured.out
+    assert "no issues found" in captured.out
+    # No category breakdown when 0 issues
+    assert "by_category" not in captured.out
+
+
+def test_report_chapter_result_consistency_all_resolved(capsys):
+    """Should show 'all resolved' when all issues were auto-fixed."""
+    result = ChapterResult(
+        chapter_title="Test",
+        source_text="test",
+        aggregated_translation="All done.",
+        segment_results=[
+            TranslationOutput(segment_id="1", draft_translation="", polished_translation="Done."),
+        ],
+        segment_statuses={"1": SegmentStatus.COMPLETED},
+        chapter_status=ChapterStatus.COMPLETED,
+        consistency_audit={
+            "total_issues": 2,
+            "by_category": {"name_variant": 1, "title_variant": 1},
+            "auto_fixable": 2,
+            "auto_fixed": 2,
+        },
+        correction_summary={
+            "total_corrections": 2,
+            "total_replacements": 3,
+            "by_category": {"name_variant": 1, "title_variant": 1},
+        },
+        corrected_translation="Corrected chapter text.",
+    )
+
+    _report_chapter_result(result, Path("/tmp/out.md"))
+    captured = capsys.readouterr()
+
+    assert "Consistency:" in captured.out
+    assert "all resolved" in captured.out
+    assert "(2 issues" in captured.out
+    assert "auto-fixed" in captured.out
+    # Category breakdown
+    assert "name_variant" in captured.out
+    assert "title_variant" in captured.out
+    # Correction actions section
+    assert "Corrections:" in captured.out
+    # Corrected version
+    assert "Corrected:" in captured.out
+    # Check no raw field labels from old format
+    assert "Auto-fixable" not in captured.out
+    assert "Auto-fixed" not in captured.out
+
+
+def test_report_chapter_result_consistency_partial_fix(capsys):
+    """Should show both total and auto-fixed counts when not all fixed."""
+    result = ChapterResult(
+        chapter_title="Test",
+        source_text="test",
+        aggregated_translation="All done.",
+        segment_results=[
+            TranslationOutput(segment_id="1", draft_translation="", polished_translation="Done."),
+        ],
+        segment_statuses={"1": SegmentStatus.COMPLETED},
+        chapter_status=ChapterStatus.COMPLETED,
+        consistency_audit={
+            "total_issues": 5,
+            "by_category": {"name_variant": 3, "term_variant": 2},
+            "auto_fixable": 3,
+            "auto_fixed": 3,
+        },
+        correction_summary={
+            "total_corrections": 3,
+            "total_replacements": 3,
+            "by_category": {"name_variant": 2, "term_variant": 1},
+        },
+        corrected_translation="Partially corrected text.",
+    )
+
+    _report_chapter_result(result, Path("/tmp/out.md"))
+    captured = capsys.readouterr()
+
+    assert "Consistency:" in captured.out
+    assert "(3 auto-fixed)" in captured.out
+    assert "5 issues" in captured.out or "issues" in captured.out
+    # Category breakdown
+    assert "name_variant" in captured.out
+    assert "term_variant" in captured.out
+    # Corrections section
+    assert "Corrections:" in captured.out
+    assert "Corrected:" in captured.out
+    assert "no issues found" not in captured.out
+    assert "all resolved" not in captured.out
+
+
+def test_report_chapter_result_consistency_no_fix(capsys):
+    """Should show 'issues found' when no issues were auto-fixable."""
+    result = ChapterResult(
+        chapter_title="Test",
+        source_text="test",
+        aggregated_translation="All done.",
+        segment_results=[
+            TranslationOutput(segment_id="1", draft_translation="", polished_translation="Done."),
+        ],
+        segment_statuses={"1": SegmentStatus.COMPLETED},
+        chapter_status=ChapterStatus.COMPLETED,
+        consistency_audit={
+            "total_issues": 3,
+            "by_category": {"style_inconsistency": 3},
+            "auto_fixable": 0,
+            "auto_fixed": 0,
+        },
+    )
+
+    _report_chapter_result(result, Path("/tmp/out.md"))
+    captured = capsys.readouterr()
+
+    assert "Consistency:" in captured.out
+    assert "3 issues found" in captured.out
+    assert "style_inconsistency" in captured.out
+    # No correction section — nothing was fixable
+    assert "Corrections:" not in captured.out
+    # No corrected version
+    assert "Corrected:" not in captured.out
+    assert "all resolved" not in captured.out
+    assert "no issues found" not in captured.out
+
+
+def test_report_chapter_result_consistency_single_issue_all_resolved(capsys):
+    """Single issue with auto-fixed should show singular form."""
+    result = ChapterResult(
+        chapter_title="Test",
+        source_text="test",
+        aggregated_translation="All done.",
+        segment_results=[
+            TranslationOutput(segment_id="1", draft_translation="", polished_translation="Done."),
+        ],
+        segment_statuses={"1": SegmentStatus.COMPLETED},
+        chapter_status=ChapterStatus.COMPLETED,
+        consistency_audit={
+            "total_issues": 1,
+            "by_category": {"name_variant": 1},
+            "auto_fixable": 1,
+            "auto_fixed": 1,
+        },
+        correction_summary={
+            "total_corrections": 1,
+            "total_replacements": 1,
+            "by_category": {"name_variant": 1},
+        },
+        corrected_translation="Fixed text.",
+    )
+
+    _report_chapter_result(result, Path("/tmp/out.md"))
+    captured = capsys.readouterr()
+
+    assert "Consistency:" in captured.out
+    assert "all resolved" in captured.out
+    assert "(1 issue" in captured.out  # singular
+    assert "Corrections:" in captured.out
+    assert "Corrected:" in captured.out
+
+
+def test_report_chapter_result_consistency_none_with_partial_run(capsys):
+    """Partial run without audit should not show consistency section."""
+    result = ChapterResult(
+        chapter_title="Test",
+        source_text="test",
+        aggregated_translation="Partial.",
+        segment_results=[
+            TranslationOutput(segment_id="1", draft_translation="", polished_translation="Seg 1"),
+            TranslationOutput(segment_id="2", draft_translation="", polished_translation=""),
+        ],
+        segment_statuses={"1": SegmentStatus.COMPLETED, "2": SegmentStatus.FAILED},
+        chapter_status=ChapterStatus.PARTIAL,
+        failed_segment_ids=["2"],
+        resumable=True,
+        consistency_audit=None,
+    )
+
+    _report_chapter_result(result, Path("/tmp/out.md"))
+    captured = capsys.readouterr()
+
+    assert "Consistency:" not in captured.out
+
+
 # ── --resume help text ──────────────────────────────────────────────────
 
 

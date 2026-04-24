@@ -300,7 +300,8 @@ def _report_chapter_result(result: ChapterResult, output_path: Path) -> None:
     """Print a status summary and write output for a chapter run result.
 
     Batch 3 addition: reports consistency audit findings and correction
-    summary when available.
+    summary when available as a one-line status summary with category
+    breakdown when issues exist.
     """
     status_label = result.chapter_status.value
     print(f"\nChapter '{result.chapter_title}' result:")
@@ -328,28 +329,53 @@ def _report_chapter_result(result: ChapterResult, output_path: Path) -> None:
         agg_suffix = " (pre-consistency)" if result.corrected_translation is not None else ""
         print(f"  Aggregated:  {len(result.aggregated_translation)} chars{agg_suffix}")
 
-    # Batch 3: consistency report
+    # Strategy overview: display planned strategy from existing fields only.
+    strategy = result.strategy_plan_summary
+    if strategy:
+        complexity = strategy.get("complexity", {})
+        overall = strategy.get("overall_strategy", {})
+        if complexity or overall:
+            print(f"  Strategy:")
+        if complexity:
+            level = complexity.get("level", "—")
+            score = complexity.get("score")
+            mode = overall.get("processing_mode", "—") if overall else "—"
+            line = f"    Complexity:   {level}"
+            if score is not None:
+                line += f" ({score:.2f})"
+            line += f" · Mode: {mode}"
+            print(line)
+        if overall:
+            seg = overall.get("segmentation_granularity", "—")
+            budget = overall.get("budget_profile", "—")
+            cons = overall.get("consistency_intensity", "—")
+            print(f"    Segmentation: {seg} · {result.segment_count} segments · Budget: {budget}")
+            print(f"    Consistency:  {cons}")
+
+    # Batch 3: consistency report — readable status summary
     audit = result.consistency_audit
     correction = result.correction_summary
     if audit:
-        print(f"  Consistency audit:")
-        print(f"    Issues:      {audit['total_issues']}")
-        if audit['total_issues'] > 0:
-            by_cat = audit['by_category']
-            for cat, count in sorted(by_cat.items()):
-                print(f"      {cat}: {count}")
-            print(f"    Auto-fixable: {audit['auto_fixable']}")
-            if audit['auto_fixed'] > 0:
-                print(f"    Auto-fixed:   {audit['auto_fixed']}")
-    if correction and correction['total_corrections'] > 0:
-        print(f"  Corrections applied:")
-        print(f"    Actions:      {correction['total_corrections']}")
-        print(f"    Replacements: {correction['total_replacements']}")
-        by_cat = correction['by_category']
-        for cat, count in sorted(by_cat.items()):
-            print(f"      {cat}: {count}")
-    if result.corrected_translation is not None:
-        print(f"  Corrected:   {len(result.corrected_translation)} chars (post-consistency)")
+        total = audit['total_issues']
+        auto_fixed = audit['auto_fixed']
+        if total == 0:
+            print(f"  Consistency:     no issues found")
+        elif auto_fixed == total:
+            plural = "s" if total != 1 else ""
+            print(f"  Consistency:     all resolved ({total} issue{plural} auto-fixed)")
+        elif auto_fixed > 0:
+            print(f"  Consistency:     {total} issues ({auto_fixed} auto-fixed)")
+        else:
+            print(f"  Consistency:     {total} issues found")
+        if total > 0:
+            for cat, count in sorted(audit['by_category'].items()):
+                print(f"    {cat}: {count}")
+        if correction and correction['total_corrections'] > 0:
+            print(f"  Corrections:")
+            for cat, count in sorted(correction['by_category'].items()):
+                print(f"    {cat}: {count}")
+        if result.corrected_translation is not None:
+            print(f"  Corrected:       {len(result.corrected_translation)} chars (post-consistency)")
 
     # Write output — prefer corrected version when available
     output_text = result.final_translation
