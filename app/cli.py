@@ -194,6 +194,7 @@ def run_chapter_pipeline(
     max_retries: int = 2,
     retry_delay_seconds: float = 1.0,
     auto_retry_on_resume: bool = True,
+    no_clobber: bool = False,
 ):
     """Run the chapter-level translation pipeline.
 
@@ -223,6 +224,12 @@ def run_chapter_pipeline(
         print(f"  Error: {e}")
         sys.exit(1)
     print(f"Loaded {len(text)} characters.")
+
+    # ── No-clobber check ─────────────────────────────────────────────────
+    if no_clobber and output_path.exists():
+        print(f"  Error: Output file already exists: {output_path}")
+        print(f"  Use --no-clobber to protect existing output. Remove the file or omit --no-clobber to overwrite.")
+        sys.exit(1)
 
     # ── Dry-run path ─────────────────────────────────────────────────────
     if dry_run:
@@ -576,6 +583,8 @@ def main():
                                     help='Base delay between retry attempts in seconds (default: 1.0).')
     chapter_run_parser.add_argument('--no-auto-retry-on-resume', action='store_false', dest='auto_retry_on_resume',
                                     help='Disable automatic retry of failed segments on resume (default: auto-retry enabled).')
+    chapter_run_parser.add_argument('--no-clobber', action='store_true',
+                                    help='Do not overwrite an existing output file. Exit with an error if the output path already exists.')
 
     chapter_stream_parser = chapter_sub.add_parser('stream', help='Stream chapter translation: read source, translate, output final translation to stdout')
     chapter_stream_parser.add_argument('--source', type=Path, default=None,
@@ -615,6 +624,7 @@ def main():
                 max_retries=args.max_retries,
                 retry_delay_seconds=args.retry_delay_seconds,
                 auto_retry_on_resume=args.auto_retry_on_resume,
+                no_clobber=args.no_clobber,
             )
         elif args.chapter_command == 'stream':
             run_chapter_stream(

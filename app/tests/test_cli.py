@@ -260,7 +260,7 @@ def _invoke_chapter_main_with_argv(argv):
     captured = {}
 
     def fake_run_chapter_pipeline(source, output, service_url, allow_mock_fallback,
-                                 *, assets_mode, resume, dry_run, max_retries, retry_delay_seconds, auto_retry_on_resume):
+                                 *, assets_mode, resume, dry_run, max_retries, retry_delay_seconds, auto_retry_on_resume, no_clobber):
         captured['source'] = source
         captured['output'] = output
         captured['service_url'] = service_url
@@ -271,6 +271,7 @@ def _invoke_chapter_main_with_argv(argv):
         captured['max_retries'] = max_retries
         captured['retry_delay_seconds'] = retry_delay_seconds
         captured['auto_retry_on_resume'] = auto_retry_on_resume
+        captured['no_clobber'] = no_clobber
 
     with patch('sys.argv', argv):
         with patch.object(cli, 'run_chapter_pipeline', side_effect=fake_run_chapter_pipeline):
@@ -526,6 +527,89 @@ def test_run_chapter_pipeline_fresh_shows_plan(tmp_path, capsys):
     assert "Chapter:" in captured.out
     assert "第一章" in captured.out
     assert "3 segments" in captured.out
+
+
+# ── chapter run --no-clobber ────────────────────────────────────────────
+
+
+def test_chapter_run_no_clobber_output_exists_exits(tmp_path, capsys):
+    """--no-clobber exits with error when output file already exists, before any orchestrator work."""
+    source = tmp_path / "source.txt"
+    output = tmp_path / "output.md"
+    source.write_text("第一章\n\nTest content.", encoding='utf-8')
+    output.write_text("Existing output.", encoding='utf-8')
+
+    with patch('app.cli.ChapterOrchestrator') as mock_orch_cls:
+        with pytest.raises(SystemExit) as exc:
+            run_chapter_pipeline(source, output, no_clobber=True)
+        assert exc.value.code == 1
+
+    captured = capsys.readouterr()
+    assert "Output file already exists" in captured.out
+    mock_orch_cls.assert_not_called()
+
+
+def test_chapter_run_no_clobber_proceeds_when_no_output(tmp_path):
+    """--no-clobber proceeds normally when output file does not exist."""
+    source = tmp_path / "source.txt"
+    output = tmp_path / "output.md"
+    source.write_text("第一章\n\nTest content.", encoding='utf-8')
+
+    mock_result = ChapterResult(
+        chapter_title="第一章",
+        source_text="第一章\n\nTest content.",
+        aggregated_translation="# 第一章\n\nOutput.",
+        segment_statuses={"1": SegmentStatus.COMPLETED},
+        chapter_status=ChapterStatus.COMPLETED,
+    )
+
+    with patch('app.cli.ChapterOrchestrator') as mock_orch_cls:
+        mock_orch = MagicMock()
+        mock_orch_cls.return_value = mock_orch
+        mock_orch.load_manifest.return_value = None
+        mock_plan = MagicMock()
+        mock_plan.chapter_title = "第一章"
+        mock_plan.segment_count = 1
+        mock_orch.plan.return_value = mock_plan
+        mock_orch.run_with_manifest.return_value = mock_result
+
+        run_chapter_pipeline(source, output, no_clobber=True)
+
+    assert output.exists()
+    mock_orch_cls.assert_called_once()
+
+
+def test_chapter_run_no_clobber_default_overwrites(tmp_path):
+    """Without --no-clobber, existing output file is overwritten normally."""
+    source = tmp_path / "source.txt"
+    output = tmp_path / "output.md"
+    source.write_text("第一章\n\nTest content.", encoding='utf-8')
+    output.write_text("Old content.", encoding='utf-8')
+
+    mock_result = ChapterResult(
+        chapter_title="第一章",
+        source_text="第一章\n\nTest content.",
+        aggregated_translation="# 第一章\n\nNew output.",
+        segment_statuses={"1": SegmentStatus.COMPLETED},
+        chapter_status=ChapterStatus.COMPLETED,
+    )
+
+    with patch('app.cli.ChapterOrchestrator') as mock_orch_cls:
+        mock_orch = MagicMock()
+        mock_orch_cls.return_value = mock_orch
+        mock_orch.load_manifest.return_value = None
+        mock_plan = MagicMock()
+        mock_plan.chapter_title = "第一章"
+        mock_plan.segment_count = 1
+        mock_orch.plan.return_value = mock_plan
+        mock_orch.run_with_manifest.return_value = mock_result
+
+        run_chapter_pipeline(source, output)
+
+    assert output.exists()
+    content = output.read_text(encoding='utf-8')
+    assert "New output." in content
+    assert "Old content." not in content
 
 
 # ── run_chapter_stream ───────────────────────────────────────────────
