@@ -450,11 +450,15 @@ class ChapterOrchestrator:
             # Batch 4A strategy visibility
             strategy_plan_summary=plan.strategy_plan,
         )
+        seg_granularity = (
+            plan.strategy_plan.get("overall_strategy", {}).get("segmentation_granularity")
+            if plan.strategy_plan else None
+        )
         result.enactment = self._build_enactment(
             plan=plan,
             budget_config=budget_config,
             consistency_intensity=consistency_intensity,
-            segmentation_granularity=None,
+            segmentation_granularity=seg_granularity,
             segment_count=len(plan.segments),
         )
         return result
