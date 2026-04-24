@@ -5,6 +5,7 @@ CLI for novel translation workbench.
 import argparse
 import logging
 import sys
+import time
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -263,6 +264,7 @@ def run_chapter_pipeline(
                 if failed:
                     print(f"  → Failed segments ({failed}) will be retried (up to {max_retries} attempts each).")
                 print(f"\nContinuing the chapter run from saved progress...")
+                resume_start = time.monotonic()
                 try:
                     result = orchestrator.resume(
                         text,
@@ -276,7 +278,7 @@ def run_chapter_pipeline(
                     print("  Starting a fresh run instead.")
                     result = None
                 if result is not None:
-                    _report_chapter_result(result, output_path)
+                    _report_chapter_result(result, output_path, elapsed_seconds=time.monotonic() - resume_start)
                     return
                 else:
                     print("  Could not resume. Starting a fresh run.")
@@ -300,6 +302,7 @@ def run_chapter_pipeline(
     prev_level = orch_log.level
     orch_log.setLevel(logging.INFO)
     orch_log.addHandler(handler)
+    run_start = time.monotonic()
     try:
         result = orchestrator.run_with_manifest(
             text,
@@ -312,7 +315,7 @@ def run_chapter_pipeline(
         print(f"  Error: Chapter translation pipeline failed: {e}")
         sys.exit(1)
     else:
-        _report_chapter_result(result, output_path)
+        _report_chapter_result(result, output_path, elapsed_seconds=time.monotonic() - run_start)
     finally:
         orch_log.removeHandler(handler)
         handler.close()
@@ -352,7 +355,7 @@ def _display_plan(plan) -> None:
             print(f"  Rationale:      {rationale}")
 
 
-def _report_chapter_result(result: ChapterResult, output_path: Path) -> None:
+def _report_chapter_result(result: ChapterResult, output_path: Path, elapsed_seconds: Optional[float] = None) -> None:
     """Print a status summary and write output for a chapter run result.
 
     Batch 3 addition: reports consistency audit findings and correction
@@ -461,6 +464,9 @@ def _report_chapter_result(result: ChapterResult, output_path: Path) -> None:
             cons = overall.get("consistency_intensity", "—")
             print(f"    Segmentation: {seg} · {result.segment_count} segments · Budget: {budget}")
             print(f"    Consistency:  {cons}")
+
+    if elapsed_seconds is not None:
+        print(f"Elapsed: {elapsed_seconds:.1f}s")
 
     print("Done.")
 

@@ -1209,6 +1209,113 @@ def test_chapter_stream_stdout_clean_after_chapter_run(tmp_path, capsys):
     assert captured.out == "Stream output.\n"
 
 
+# ── Elapsed time in final summary ───────────────────────────────────────
+
+
+def test_chapter_run_fresh_shows_elapsed(tmp_path, capsys):
+    """Fresh run shows elapsed time in final summary."""
+    source = tmp_path / "source.txt"
+    output = tmp_path / "output.md"
+    source.write_text("第一章\n\nTest content.", encoding='utf-8')
+
+    mock_result = ChapterResult(
+        chapter_title="第一章",
+        source_text="第一章\n\nTest content.",
+        aggregated_translation="# 第一章\n\nOutput.",
+        segment_statuses={"1": SegmentStatus.COMPLETED},
+        chapter_status=ChapterStatus.COMPLETED,
+    )
+
+    with patch('app.cli.ChapterOrchestrator') as mock_orch_cls:
+        mock_orch = MagicMock()
+        mock_orch_cls.return_value = mock_orch
+        mock_orch.load_manifest.return_value = None
+        mock_plan = MagicMock()
+        mock_plan.chapter_title = "第一章"
+        mock_plan.segment_count = 1
+        mock_orch.plan.return_value = mock_plan
+        mock_orch.run_with_manifest.return_value = mock_result
+
+        with patch('app.cli.time.monotonic', side_effect=[0.0, 12.3]):
+            run_chapter_pipeline(source, output)
+
+    captured = capsys.readouterr()
+    assert "Elapsed: 12.3s" in captured.out
+    assert captured.out.index("Elapsed:") < captured.out.index("Done.")
+
+
+def test_chapter_run_elapsed_formatting(tmp_path, capsys):
+    """Elapsed time is formatted with one decimal place."""
+    source = tmp_path / "source.txt"
+    output = tmp_path / "output.md"
+    source.write_text("第一章\n\nTest content.", encoding='utf-8')
+
+    mock_result = ChapterResult(
+        chapter_title="第一章",
+        source_text="第一章\n\nTest content.",
+        aggregated_translation="# 第一章\n\nOutput.",
+        segment_statuses={"1": SegmentStatus.COMPLETED},
+        chapter_status=ChapterStatus.COMPLETED,
+    )
+
+    with patch('app.cli.ChapterOrchestrator') as mock_orch_cls:
+        mock_orch = MagicMock()
+        mock_orch_cls.return_value = mock_orch
+        mock_orch.load_manifest.return_value = None
+        mock_plan = MagicMock()
+        mock_plan.chapter_title = "第一章"
+        mock_plan.segment_count = 1
+        mock_orch.plan.return_value = mock_plan
+        mock_orch.run_with_manifest.return_value = mock_result
+
+        with patch('app.cli.time.monotonic', side_effect=[0.0, 0.5]):
+            run_chapter_pipeline(source, output)
+
+    captured = capsys.readouterr()
+    assert "Elapsed: 0.5s" in captured.out
+
+
+def test_chapter_run_elapsed_resume_path(tmp_path, capsys):
+    """Resume path also shows elapsed time."""
+    source = tmp_path / "source.txt"
+    output = tmp_path / "output.md"
+    source.write_text("第一章\n\nTest content.", encoding='utf-8')
+
+    mock_result = ChapterResult(
+        chapter_title="第一章",
+        source_text="第一章\n\nTest content.",
+        aggregated_translation="# 第一章\n\nOutput.",
+        segment_statuses={"1": SegmentStatus.COMPLETED},
+        chapter_status=ChapterStatus.COMPLETED,
+    )
+
+    mock_manifest = MagicMock()
+    mock_manifest.get_summary.return_value = {
+        'run_id': 'test-run',
+        'status': 'partial',
+        'completed': 2,
+        'total_segments': 3,
+        'failed': 1,
+        'pending': 1,
+        'resumable': True,
+    }
+    mock_manifest.manifest_path = str(tmp_path / "test.manifest.json")
+    mock_manifest.segments = {}
+
+    with patch('app.cli.ChapterOrchestrator') as mock_orch_cls:
+        mock_orch = MagicMock()
+        mock_orch_cls.return_value = mock_orch
+        mock_orch.load_manifest.return_value = mock_manifest
+        mock_orch.resume.return_value = mock_result
+
+        with patch('app.cli.time.monotonic', side_effect=[0.0, 45.6]):
+            run_chapter_pipeline(source, output, resume=True)
+
+    captured = capsys.readouterr()
+    assert "Elapsed: 45.6s" in captured.out
+    assert captured.out.index("Elapsed:") < captured.out.index("Done.")
+
+
 if __name__ == "__main__":
     # Run simple smoke test
     print("CLI tests passed (mocked).")
