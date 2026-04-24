@@ -260,7 +260,7 @@ def _invoke_chapter_main_with_argv(argv):
     captured = {}
 
     def fake_run_chapter_pipeline(source, output, service_url, allow_mock_fallback,
-                                 *, assets_mode, resume, dry_run, max_retries, retry_delay_seconds, auto_retry_on_resume, no_clobber):
+                                 *, assets_mode, resume, dry_run, max_retries, retry_delay_seconds, auto_retry_on_resume, no_clobber, confirm):
         captured['source'] = source
         captured['output'] = output
         captured['service_url'] = service_url
@@ -272,6 +272,7 @@ def _invoke_chapter_main_with_argv(argv):
         captured['retry_delay_seconds'] = retry_delay_seconds
         captured['auto_retry_on_resume'] = auto_retry_on_resume
         captured['no_clobber'] = no_clobber
+        captured['confirm'] = confirm
 
     with patch('sys.argv', argv):
         with patch.object(cli, 'run_chapter_pipeline', side_effect=fake_run_chapter_pipeline):
@@ -410,6 +411,114 @@ def test_chapter_run_dry_run_and_resume_mutually_exclusive():
         with patch('sys.argv', ['cli', 'chapter', 'run', '--dry-run', '--resume']):
             cli.main()
     assert excinfo.value.code == 2  # argparse usage error
+
+
+# ── chapter run --confirm ───────────────────────────────────────────────
+
+
+def test_chapter_run_confirm_yes_proceeds(tmp_path):
+    """--confirm with 'y' should display plan and then proceed to execution."""
+    source = tmp_path / "s.txt"
+    output = tmp_path / "o.md"
+    source.write_text("第一章\n\nContent.", encoding='utf-8')
+
+    mock_result = ChapterResult(
+        chapter_title="第一章",
+        source_text="第一章\n\nContent.",
+        aggregated_translation="Output.",
+        segment_statuses={"1": SegmentStatus.COMPLETED},
+        chapter_status=ChapterStatus.COMPLETED,
+    )
+
+    with patch('app.cli.ChapterOrchestrator') as mock_orch_cls:
+        mock_orch = MagicMock()
+        mock_orch_cls.return_value = mock_orch
+        mock_plan = MagicMock()
+        mock_plan.chapter_title = "第一章"
+        mock_plan.segment_count = 1
+        mock_orch.plan.return_value = mock_plan
+        mock_orch.run_with_manifest.return_value = mock_result
+
+        with patch('builtins.input', return_value='y'):
+            run_chapter_pipeline(source, output, confirm=True)
+
+    assert output.exists()
+    mock_orch_cls.assert_called()
+
+
+def test_chapter_run_confirm_no_exits(tmp_path):
+    """--confirm with 'n' should display plan and exit without execution."""
+    source = tmp_path / "s.txt"
+    output = tmp_path / "o.md"
+    source.write_text("第一章\n\nContent.", encoding='utf-8')
+
+    with patch('app.cli.ChapterOrchestrator') as mock_orch_cls:
+        mock_orch = MagicMock()
+        mock_orch_cls.return_value = mock_orch
+        mock_plan = MagicMock()
+        mock_plan.chapter_title = "第一章"
+        mock_plan.segment_count = 1
+        mock_orch.plan.return_value = mock_plan
+
+        with patch('builtins.input', return_value='n'):
+            with pytest.raises(SystemExit) as exc:
+                run_chapter_pipeline(source, output, confirm=True)
+            assert exc.value.code == 0
+
+    mock_orch.run_with_manifest.assert_not_called()
+
+
+def test_chapter_run_dry_run_confirm_yes_skips_early_return(tmp_path):
+    """--dry-run --confirm with 'y' should display plan and then proceed, not exit early."""
+    source = tmp_path / "s.txt"
+    output = tmp_path / "o.md"
+    source.write_text("第一章\n\nContent.", encoding='utf-8')
+
+    mock_result = ChapterResult(
+        chapter_title="第一章",
+        source_text="第一章\n\nContent.",
+        aggregated_translation="Output.",
+        segment_statuses={"1": SegmentStatus.COMPLETED},
+        chapter_status=ChapterStatus.COMPLETED,
+    )
+
+    with patch('app.cli.ChapterOrchestrator') as mock_orch_cls:
+        mock_orch = MagicMock()
+        mock_orch_cls.return_value = mock_orch
+        mock_orch.load_manifest.return_value = None
+        mock_plan = MagicMock()
+        mock_plan.chapter_title = "第一章"
+        mock_plan.segment_count = 1
+        mock_orch.plan.return_value = mock_plan
+        mock_orch.run_with_manifest.return_value = mock_result
+
+        with patch('builtins.input', return_value='y'):
+            run_chapter_pipeline(source, output, dry_run=True, confirm=True)
+
+    # Must have proceeded to execution (run_with_manifest called)
+    mock_orch.run_with_manifest.assert_called_once()
+
+
+def test_chapter_run_dry_run_confirm_no_exits(tmp_path):
+    """--dry-run --confirm with 'n' should exit without execution."""
+    source = tmp_path / "s.txt"
+    output = tmp_path / "o.md"
+    source.write_text("第一章\n\nContent.", encoding='utf-8')
+
+    with patch('app.cli.ChapterOrchestrator') as mock_orch_cls:
+        mock_orch = MagicMock()
+        mock_orch_cls.return_value = mock_orch
+        mock_plan = MagicMock()
+        mock_plan.chapter_title = "第一章"
+        mock_plan.segment_count = 1
+        mock_orch.plan.return_value = mock_plan
+
+        with patch('builtins.input', return_value='n'):
+            with pytest.raises(SystemExit) as exc:
+                run_chapter_pipeline(source, output, dry_run=True, confirm=True)
+            assert exc.value.code == 0
+
+    mock_orch.run_with_manifest.assert_not_called()
 
 
 def test_chapter_stream_no_resume_params():

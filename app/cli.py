@@ -6,8 +6,9 @@ import argparse
 import logging
 import sys
 import time
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Callable, Iterator, Optional
 
 from app.chapter.manifest import RunManifest, ResumeConfig
 from app.chapter.orchestrator import ChapterOrchestrator
@@ -24,6 +25,23 @@ from app.translate.translator import (
     translate_draft,
 )
 from app.translate.schema import TranslationInput, TranslationOutput
+
+
+@contextmanager
+def _orchestrator_progress_logging() -> Iterator[None]:
+    """Temporarily show the orchestrator's per-segment progress on stdout."""
+    log = logging.getLogger('app.chapter.orchestrator')
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setFormatter(logging.Formatter('%(message)s'))
+    prev_level = log.level
+    log.setLevel(logging.INFO)
+    log.addHandler(handler)
+    try:
+        yield
+    finally:
+        log.removeHandler(handler)
+        handler.close()
+        log.setLevel(prev_level)
 
 
 def read_source_file(source_path: Path) -> str:
@@ -195,6 +213,7 @@ def run_chapter_pipeline(
     retry_delay_seconds: float = 1.0,
     auto_retry_on_resume: bool = True,
     no_clobber: bool = False,
+    confirm: bool = False,
 ):
     """Run the chapter-level translation pipeline.
 
@@ -203,6 +222,8 @@ def run_chapter_pipeline(
 
     When ``resume=True``, attempts to load a saved run manifest for the
     output path and continue from where a previous run left off.
+    When ``confirm=True``, shows the chapter plan and prompts for
+    confirmation before executing.
     """
     _validate_assets_mode(assets_mode)
     # Validate resume configuration parameters
@@ -228,15 +249,21 @@ def run_chapter_pipeline(
     # ── No-clobber check ─────────────────────────────────────────────────
     if no_clobber and output_path.exists():
         print(f"  Error: Output file already exists: {output_path}")
-        print(f"  Use --no-clobber to protect existing output. Remove the file or omit --no-clobber to overwrite.")
+        print(f"  Remove the file or use a different --output path.")
         sys.exit(1)
 
-    # ── Dry-run path ─────────────────────────────────────────────────────
-    if dry_run:
+    # ── Plan preview (dry-run and/or confirm) ─────────────────────────────
+    if dry_run or confirm:
         orchestrator = ChapterOrchestrator()
         plan = orchestrator.plan(text)
         _display_plan(plan)
-        return
+        if confirm:
+            ans = input("  Continue? [y/N] ").strip().lower()
+            if ans not in ('y', 'yes'):
+                print("  Aborted.")
+                sys.exit(0)
+        if dry_run and not confirm:
+            return
 
     translate_fn, mode = _resolve_translate_fn(service_url, allow_mock_fallback, assets_mode)
     if translate_fn is None:
@@ -272,18 +299,19 @@ def run_chapter_pipeline(
                     print(f"  → Failed segments ({failed}) will be retried (up to {max_retries} attempts each).")
                 print(f"\nContinuing the chapter run from saved progress...")
                 resume_start = time.monotonic()
-                try:
-                    result = orchestrator.resume(
-                        text,
-                        manifest_path,
-                        translate_draft_fn=translate_fn,
-                        assets_mode=assets_mode,
-                        resume_config=resume_config,
-                    )
-                except Exception as e:
-                    print(f"  Error: Resume failed: {e}")
-                    print("  Starting a fresh run instead.")
-                    result = None
+                with _orchestrator_progress_logging():
+                    try:
+                        result = orchestrator.resume(
+                            text,
+                            manifest_path,
+                            translate_draft_fn=translate_fn,
+                            assets_mode=assets_mode,
+                            resume_config=resume_config,
+                        )
+                    except Exception as e:
+                        print(f"  Error: Resume failed: {e}")
+                        print("  Starting a fresh run instead.")
+                        result = None
                 if result is not None:
                     _report_chapter_result(result, output_path, elapsed_seconds=time.monotonic() - resume_start)
                     return
@@ -302,31 +330,20 @@ def run_chapter_pipeline(
     print(f"Chapter: '{plan.chapter_title}' ({plan.segment_count} segments)")
     print(f"\nTranslating using {mode}...")
 
-    # Temporary stdout logging so the operator sees per-segment progress.
-    orch_log = logging.getLogger('app.chapter.orchestrator')
-    handler = logging.StreamHandler(sys.stdout)
-    handler.setFormatter(logging.Formatter('%(message)s'))
-    prev_level = orch_log.level
-    orch_log.setLevel(logging.INFO)
-    orch_log.addHandler(handler)
     run_start = time.monotonic()
-    try:
-        result = orchestrator.run_with_manifest(
-            text,
-            translate_draft_fn=translate_fn,
-            assets_mode=assets_mode,
-            resume_config=resume_config,
-            manifest_path=manifest_path,
-        )
-    except Exception as e:
-        print(f"  Error: Chapter translation pipeline failed: {e}")
-        sys.exit(1)
-    else:
-        _report_chapter_result(result, output_path, elapsed_seconds=time.monotonic() - run_start)
-    finally:
-        orch_log.removeHandler(handler)
-        handler.close()
-        orch_log.setLevel(prev_level)
+    with _orchestrator_progress_logging():
+        try:
+            result = orchestrator.run_with_manifest(
+                text,
+                translate_draft_fn=translate_fn,
+                assets_mode=assets_mode,
+                resume_config=resume_config,
+                manifest_path=manifest_path,
+            )
+        except Exception as e:
+            print(f"  Error: Chapter translation pipeline failed: {e}")
+            sys.exit(1)
+    _report_chapter_result(result, output_path, elapsed_seconds=time.monotonic() - run_start)
 
 
 def _display_plan(plan) -> None:
@@ -585,6 +602,10 @@ def main():
                                     help='Disable automatic retry of failed segments on resume (default: auto-retry enabled).')
     chapter_run_parser.add_argument('--no-clobber', action='store_true',
                                     help='Do not overwrite an existing output file. Exit with an error if the output path already exists.')
+    chapter_run_parser.add_argument('--confirm', action='store_true',
+                                    help='Show chapter plan and wait for confirmation before executing. '
+                                         'Useful after --dry-run to preview then decide, or standalone '
+                                         'to see the plan before starting a fresh run.')
 
     chapter_stream_parser = chapter_sub.add_parser('stream', help='Stream chapter translation: read source, translate, output final translation to stdout')
     chapter_stream_parser.add_argument('--source', type=Path, default=None,
@@ -625,6 +646,7 @@ def main():
                 retry_delay_seconds=args.retry_delay_seconds,
                 auto_retry_on_resume=args.auto_retry_on_resume,
                 no_clobber=args.no_clobber,
+                confirm=args.confirm,
             )
         elif args.chapter_command == 'stream':
             run_chapter_stream(
