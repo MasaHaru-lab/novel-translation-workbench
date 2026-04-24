@@ -2,7 +2,7 @@
 
 ## Current focus
 Phase A: making the chapter-level CLI/HTTP path operator-friendly and reliable.
-Most recent batch: fresh-run plan info in CLI `chapter run`.
+Most recent batch: chapter run --dry-run.
 
 ## Confirmed done
 - **Batch: readable_summary** — committed as `6d73fe9`
@@ -17,6 +17,10 @@ Most recent batch: fresh-run plan info in CLI `chapter run`.
   - `app/tests/test_cli.py`: one new test verifying stdout contains title and segment count
   - Resume path unchanged; orchestrator public API unchanged
 - Full test suite: 261 passed
+- **Batch: chapter run --dry-run** — committed as `89daff0`
+  - `app/cli.py`: `--dry-run` flag via argparse mutually exclusive group with `--resume`; `_display_plan()` helper prints title, segment count, complexity, strategy (budget, granularity, consistency intensity, rationale); short-circuits before translate function resolution
+  - `app/tests/test_cli.py`: 3 new tests (plan output, no-strategy fallback, mutual exclusion error)
+  - Full test suite: 264 passed
 
 ## Still pending / blocked / broken
 - **Execution progress during chapter run**: orchestrator uses `logger.info()` not `print()` — operator sees no per-segment output during execution. Proper fix requires changing orchestrator public method signatures (progress callback), which is a larger batch.
@@ -31,13 +35,18 @@ Run: `venv/bin/python -m pytest app/tests/test_cli.py -x -q`
 `SESSION_CHECKPOINT.md` (updated, cumulative)
 
 ## Key artifacts
+- `app/cli.py` — `run_chapter_pipeline()`, `_display_plan()`, `_report_chapter_result()`
+- `app/tests/test_cli.py` — CLI-level tests including dry-run, resume params, strategy display
 - `app/service/draft_service.py` — `_format_chapter_summary()` + `readable_summary` field
 - `app/tests/test_draft_service.py` — 5 tests for summary content
-- `app/cli.py` — `run_chapter_pipeline()` with plan info, `_report_chapter_result()`
-- `app/tests/test_cli.py` — CLI-level tests including fresh-run plan output
 - `app/chapter/models.py` — `ChapterResult` (source data, untouched)
 
 ## Validation status
-- Tests/checks run: yes (full suite 261 passed)
+- Tests/checks run: yes (full suite 264 passed)
 - Repo/worktree relevant: yes
 - Worktree clean: pending commit of this checkpoint
+- Confidence: high
+- Notes: 4 batches (readable_summary `6d73fe9`, test isolation `0c11353`, fresh-run plan `4a3dad0`, dry-run `89daff0`). All committed atomically. Full suite green.
+
+## Summary
+Four batches this session, all small and atomic. Next batch needs identification (narrow scope, Phase A only).
