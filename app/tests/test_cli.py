@@ -259,13 +259,14 @@ def _invoke_chapter_main_with_argv(argv):
     captured = {}
 
     def fake_run_chapter_pipeline(source, output, service_url, allow_mock_fallback,
-                                 *, assets_mode, resume, max_retries, retry_delay_seconds, auto_retry_on_resume):
+                                 *, assets_mode, resume, dry_run, max_retries, retry_delay_seconds, auto_retry_on_resume):
         captured['source'] = source
         captured['output'] = output
         captured['service_url'] = service_url
         captured['allow_mock_fallback'] = allow_mock_fallback
         captured['assets_mode'] = assets_mode
         captured['resume'] = resume
+        captured['dry_run'] = dry_run
         captured['max_retries'] = max_retries
         captured['retry_delay_seconds'] = retry_delay_seconds
         captured['auto_retry_on_resume'] = auto_retry_on_resume
@@ -329,6 +330,84 @@ def test_chapter_run_resume_params_with_other_flags():
     assert captured['max_retries'] == 0
     assert captured['retry_delay_seconds'] == 0.5
     assert captured['auto_retry_on_resume'] is True  # default when not specified
+
+
+# ── chapter run --dry-run ────────────────────────────────────────────────
+
+
+def test_chapter_run_dry_run_prints_plan(tmp_path, capsys):
+    """--dry-run should print chapter plan and exit without calling run_with_manifest."""
+    source = tmp_path / "s.txt"
+    output = tmp_path / "o.md"
+    source.write_text("第一章\n\nTest content.", encoding='utf-8')
+
+    mock_plan = MagicMock()
+    mock_plan.chapter_title = "第一章"
+    mock_plan.segment_count = 3
+    mock_plan.strategy_plan = {
+        "complexity": {"level": "low", "score": 0.15},
+        "overall_strategy": {
+            "processing_mode": "standard",
+            "budget_profile": "light",
+            "consistency_intensity": "standard",
+            "segmentation_granularity": "standard",
+        },
+        "rationale": "Short chapter with low complexity.",
+    }
+
+    with patch('app.cli.ChapterOrchestrator') as mock_orch_cls:
+        mock_orch = MagicMock()
+        mock_orch_cls.return_value = mock_orch
+        mock_orch.plan.return_value = mock_plan
+
+        run_chapter_pipeline(source, output, dry_run=True)
+
+    captured = capsys.readouterr()
+    assert "Chapter:" in captured.out
+    assert "第一章" in captured.out
+    assert "3 segments" in captured.out
+    assert "Complexity:" in captured.out
+    assert "low" in captured.out
+    assert "light" in captured.out
+    assert "Rationale:" in captured.out
+    # run_with_manifest must NOT be called on a dry run
+    mock_orch.run_with_manifest.assert_not_called()
+
+
+def test_chapter_run_dry_run_handles_no_strategy(tmp_path, capsys):
+    """--dry-run should still work when strategy_plan is None."""
+    source = tmp_path / "s.txt"
+    output = tmp_path / "o.md"
+    source.write_text("第一章\n\nContent.", encoding='utf-8')
+
+    mock_plan = MagicMock()
+    mock_plan.chapter_title = "第一章"
+    mock_plan.segment_count = 2
+    mock_plan.strategy_plan = None
+
+    with patch('app.cli.ChapterOrchestrator') as mock_orch_cls:
+        mock_orch = MagicMock()
+        mock_orch_cls.return_value = mock_orch
+        mock_orch.plan.return_value = mock_plan
+
+        run_chapter_pipeline(source, output, dry_run=True)
+
+    captured = capsys.readouterr()
+    assert "Chapter:" in captured.out
+    assert "2 segments" in captured.out
+    assert "Complexity:" not in captured.out
+    # run_with_manifest must NOT be called on a dry run
+    mock_orch.run_with_manifest.assert_not_called()
+
+
+def test_chapter_run_dry_run_and_resume_mutually_exclusive():
+    """--dry-run and --resume must be rejected by argparse."""
+    from app import cli
+
+    with pytest.raises(SystemExit) as excinfo:
+        with patch('sys.argv', ['cli', 'chapter', 'run', '--dry-run', '--resume']):
+            cli.main()
+    assert excinfo.value.code == 2  # argparse usage error
 
 
 def test_chapter_stream_no_resume_params():

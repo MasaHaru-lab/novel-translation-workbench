@@ -188,6 +188,7 @@ def run_chapter_pipeline(
     allow_mock_fallback: bool = False,
     assets_mode: AssetsMode = DEFAULT_ASSETS_MODE,
     resume: bool = False,
+    dry_run: bool = False,
     max_retries: int = 2,
     retry_delay_seconds: float = 1.0,
     auto_retry_on_resume: bool = True,
@@ -220,6 +221,13 @@ def run_chapter_pipeline(
         print(f"  Error: {e}")
         sys.exit(1)
     print(f"Loaded {len(text)} characters.")
+
+    # ── Dry-run path ─────────────────────────────────────────────────────
+    if dry_run:
+        orchestrator = ChapterOrchestrator()
+        plan = orchestrator.plan(text)
+        _display_plan(plan)
+        return
 
     translate_fn, mode = _resolve_translate_fn(service_url, allow_mock_fallback, assets_mode)
     if translate_fn is None:
@@ -296,6 +304,39 @@ def run_chapter_pipeline(
         sys.exit(1)
 
     _report_chapter_result(result, output_path)
+
+
+def _display_plan(plan) -> None:
+    """Print a human-readable chapter plan summary to stdout.
+
+    CLI-only helper. Not reused for HTTP or programmatic callers.
+    """
+    strategy = plan.strategy_plan
+    print(f"Chapter: '{plan.chapter_title}' ({plan.segment_count} segments)")
+    if strategy:
+        complexity = strategy.get("complexity", {})
+        overall = strategy.get("overall_strategy", {})
+        if complexity:
+            level = complexity.get("level", "—")
+            score = complexity.get("score")
+            mode = overall.get("processing_mode", "—") if overall else "—"
+            line = f"  Complexity:     {level}"
+            if score is not None:
+                try:
+                    line += f" ({float(score):.2f})"
+                except (TypeError, ValueError):
+                    line += f" ({score})"
+            line += f" · Mode: {mode}"
+            print(line)
+        if overall:
+            seg = overall.get("segmentation_granularity", "—")
+            budget = overall.get("budget_profile", "—")
+            cons = overall.get("consistency_intensity", "—")
+            print(f"  Segmentation:   {seg} · {plan.segment_count} segments · Budget: {budget}")
+            print(f"  Consistency:    {cons}")
+        rationale = strategy.get("rationale")
+        if rationale:
+            print(f"  Rationale:      {rationale}")
 
 
 def _report_chapter_result(result: ChapterResult, output_path: Path) -> None:
@@ -505,12 +546,18 @@ def main():
                                     help='Project-asset injection mode. "full" (default) injects '
                                          'the project memory block into translation prompts; "none" '
                                          'suppresses it entirely.')
-    chapter_run_parser.add_argument('--resume', action='store_true',
-                                    help='Resume an incomplete chapter run from its saved manifest. '
-                                         'Completed segments are reused; pending and failed segments '
-                                         'are processed again subject to retry limits. The manifest '
-                                         'file lives at <output>.manifest.json. Use this to continue '
-                                         'a partial or interrupted chapter run.')
+    # --resume and --dry-run are mutually exclusive
+    resume_group = chapter_run_parser.add_mutually_exclusive_group()
+    resume_group.add_argument('--resume', action='store_true',
+                              help='Resume an incomplete chapter run from its saved manifest. '
+                                   'Completed segments are reused; pending and failed segments '
+                                   'are processed again subject to retry limits. The manifest '
+                                   'file lives at <output>.manifest.json. Use this to continue '
+                                   'a partial or interrupted chapter run.')
+    resume_group.add_argument('--dry-run', action='store_true',
+                              help='Preview the chapter plan and exit without translating. '
+                                   'Shows segment count, complexity, and strategy decisions. '
+                                   'Cannot be combined with --resume.')
     chapter_run_parser.add_argument('--max-retries', type=int, default=2,
                                     help='Maximum number of retry attempts per segment before marking it failed (default: 2).')
     chapter_run_parser.add_argument('--retry-delay-seconds', type=float, default=1.0,
@@ -552,6 +599,7 @@ def main():
                 args.allow_mock_fallback,
                 assets_mode=args.assets_mode,
                 resume=args.resume,
+                dry_run=args.dry_run,
                 max_retries=args.max_retries,
                 retry_delay_seconds=args.retry_delay_seconds,
                 auto_retry_on_resume=args.auto_retry_on_resume,
