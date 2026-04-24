@@ -374,39 +374,45 @@ def _report_chapter_result(result: ChapterResult, output_path: Path) -> None:
                 rec = result.manifest.segments.get(fid) if result.manifest else None
                 err = f" ({rec.error_message})" if rec and rec.error_message else ""
                 print(f"    - Segment {fid}{err}")
-    if result.resumable:
-        remaining = result.segment_count - result.success_count
-        if remaining > 0:
-            print(f"  Remaining:   {remaining} segment(s) to complete")
-            print("  Next step:   Continue this run with --resume.")
-        else:
-            print("  Next step:   You can retry failed segments with --resume.")
-    if result.aggregated_translation:
-        agg_suffix = " (pre-consistency)" if result.corrected_translation is not None else ""
-        print(f"  Aggregated:  {len(result.aggregated_translation)} chars{agg_suffix}")
 
-    # Strategy overview: display planned strategy from existing fields only.
-    strategy = result.strategy_plan_summary
-    if strategy:
-        complexity = strategy.get("complexity", {})
-        overall = strategy.get("overall_strategy", {})
-        if complexity or overall:
-            print(f"  Strategy:")
-        if complexity:
-            level = complexity.get("level", "—")
-            score = complexity.get("score")
-            mode = overall.get("processing_mode", "—") if overall else "—"
-            line = f"    Complexity:   {level}"
-            if score is not None:
-                line += f" ({score:.2f})"
-            line += f" · Mode: {mode}"
-            print(line)
-        if overall:
-            seg = overall.get("segmentation_granularity", "—")
-            budget = overall.get("budget_profile", "—")
-            cons = overall.get("consistency_intensity", "—")
-            print(f"    Segmentation: {seg} · {result.segment_count} segments · Budget: {budget}")
-            print(f"    Consistency:  {cons}")
+
+    # Write output — prefer corrected version when available
+    output_text = result.final_translation
+    if result.is_complete or result.is_partial:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        if output_text:
+            output_path.write_text(output_text, encoding='utf-8')
+            labels = []
+            if result.corrected_translation is not None:
+                labels.append("post-consistency")
+            if result.is_partial:
+                labels.append(f"partial — {result.success_count}/{result.segment_count} segments")
+            suffix = f" ({', '.join(labels)})" if labels else ""
+            print(f"  Written to:  {output_path}{suffix}")
+        else:
+            print(f"  No output written: translation is empty.")
+    else:
+        if result.failed_segment_ids and result.success_count == 0:
+            print(f"  No output written: all segments failed.")
+        else:
+            print(f"  No output written: chapter status is '{status_label}'.")
+
+    # Manifest + resume guidance (consolidated)
+    manifest_path = result.manifest.manifest_path if result.manifest else None
+    if result.is_partial and manifest_path:
+        completed = result.success_count
+        pending_failed = result.segment_count - completed
+        print(f"  Manifest:    {manifest_path}")
+        print(f"  Next step:   run with --resume to continue")
+        print(f"               (reuses {completed} completed segments; "
+              f"processes {pending_failed} remaining segments, subject to retry limits)")
+    elif result.resumable and manifest_path:
+        # All segments failed — still resumable
+        print(f"  Manifest:    {manifest_path}")
+        print(f"  Next step:   run with --resume to retry all segments")
+    elif manifest_path:
+        # Completed or terminal — manifest is a run record
+        print(f"  Manifest:    {manifest_path}")
 
     # Batch 3: consistency report — readable status summary
     audit = result.consistency_audit
@@ -433,42 +439,29 @@ def _report_chapter_result(result: ChapterResult, output_path: Path) -> None:
         if result.corrected_translation is not None:
             print(f"  Corrected:       {len(result.corrected_translation)} chars (post-consistency)")
 
-    # Write output — prefer corrected version when available
-    output_text = result.final_translation
-    if result.is_complete or result.is_partial:
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        if output_text:
-            output_path.write_text(output_text, encoding='utf-8')
-            labels = []
-            if result.corrected_translation is not None:
-                labels.append("post-consistency")
-            if result.is_partial:
-                labels.append(f"partial — {result.success_count}/{result.segment_count} segments")
-            suffix = f" ({', '.join(labels)})" if labels else ""
-            print(f"  Written to:  {output_path}{suffix}")
-        else:
-            print(f"  No output written: translation is empty.")
-    else:
-        if result.failed_segment_ids and result.success_count == 0:
-            print(f"  No output written: all segments failed.")
-        else:
-            print(f"  No output written: chapter status is '{status_label}'.")
+    # Strategy overview: display planned strategy from existing fields only.
+    strategy = result.strategy_plan_summary
+    if strategy:
+        complexity = strategy.get("complexity", {})
+        overall = strategy.get("overall_strategy", {})
+        if complexity or overall:
+            print(f"  Strategy:")
+        if complexity:
+            level = complexity.get("level", "—")
+            score = complexity.get("score")
+            mode = overall.get("processing_mode", "—") if overall else "—"
+            line = f"    Complexity:   {level}"
+            if score is not None:
+                line += f" ({score:.2f})"
+            line += f" · Mode: {mode}"
+            print(line)
+        if overall:
+            seg = overall.get("segmentation_granularity", "—")
+            budget = overall.get("budget_profile", "—")
+            cons = overall.get("consistency_intensity", "—")
+            print(f"    Segmentation: {seg} · {result.segment_count} segments · Budget: {budget}")
+            print(f"    Consistency:  {cons}")
 
-    manifest_path = result.manifest.manifest_path if result.manifest else None
-    if result.is_partial and manifest_path:
-        completed = result.success_count
-        pending_failed = result.segment_count - completed
-        print(f"  Manifest:    {manifest_path}")
-        print(f"  Next step:   run with --resume to continue")
-        print(f"               (reuses {completed} completed segments; "
-              f"processes {pending_failed} remaining segments, subject to retry limits)")
-    elif result.resumable and manifest_path:
-        # All segments failed — still resumable
-        print(f"  Manifest:    {manifest_path}")
-        print(f"  Next step:   run with --resume to retry all segments")
-    elif manifest_path:
-        # Completed or terminal — manifest is a run record
-        print(f"  Manifest:    {manifest_path}")
     print("Done.")
 
 

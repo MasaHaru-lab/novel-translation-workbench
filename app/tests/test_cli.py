@@ -656,6 +656,9 @@ def test_report_chapter_result_complete_no_guidance(capsys):
     assert "Next step" not in captured.out
     assert "--resume" not in captured.out
     assert "Manifest" in captured.out
+    assert "Written to:" in captured.out
+    assert "/tmp/out.md" in captured.out
+    assert "Aggregated:" not in captured.out
 
 
 def test_report_chapter_result_partial_shows_guidance(tmp_path, capsys):
@@ -693,11 +696,11 @@ def test_report_chapter_result_partial_shows_guidance(tmp_path, capsys):
     _report_chapter_result(result, output)
     captured = capsys.readouterr()
 
-    assert "2 segment(s) to complete" in captured.out
     assert "Manifest" in captured.out
     assert "/tmp/test.manifest.json" in captured.out
     assert "reuses 1 completed segments" in captured.out
     assert "processes 2 remaining segments" in captured.out
+    assert "partial — 1/3 segments" in captured.out
 
 
 def test_report_chapter_result_failed_shows_retry_guidance(tmp_path, capsys):
@@ -769,6 +772,7 @@ def test_report_chapter_result_strategy_shows_when_available(capsys):
     assert "Complexity:" in captured.out and "medium" in captured.out
     assert "segments" in captured.out and "Budget:" in captured.out
     assert "Consistency:" in captured.out and "enhanced" in captured.out
+    assert captured.out.index("Written to:") < captured.out.index("Strategy:")
 
 
 def test_report_chapter_result_strategy_no_complexity(capsys):
