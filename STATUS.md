@@ -1,61 +1,57 @@
-# Status: MVP Complete
+# Status: Phase A — Chapter-Level CLI
 
-## What Works
+## Current Capabilities
 
-- ✅ Project structure created (`app/segment`, `app/translate`, `app/cli`)
-- ✅ Sample Chinese chapter placed at `data/source/chapter1.txt`
-- ✅ Segmentation:
-  - Splits text by paragraph boundaries (`\n\n`)
-  - Groups paragraphs into chunks ≤1200 characters
-  - Preserves previous/next segment context in `Segment` objects
-- ✅ Mock translation functions:
-  - `draft_translate()` returns `"[DRAFT ENGLISH] " + original`
-  - `polish_translate()` returns `"[POLISHED ENGLISH] " + original`
-- ✅ CLI command `python -m app.cli run` reads source, segments, translates, writes Markdown
-- ✅ HTTP translation service with POST `/translate/draft` endpoint (optional)
-- ✅ Output format matches specification (Markdown with segments, draft, polished)
-- ✅ Basic segmentation tests pass
+- ✅ **Chapter-level CLI** (`chapter run`, `chapter stream`, `chapter run --dry-run`, `chapter run --resume`)
+  - Per-segment progress logging during fresh-run execution
+  - Plan preview with segment count, complexity, budget, consistency intensity
+  - Manifest-based resume with failure isolation, retry, and guidance
+- ✅ **Chapter orchestration** (plan → execute → aggregate → consistency pass)
+  - Chapter plan generation with pre-execution strategy assessment
+  - Segment-level execution via existing translation engine
+  - Strategy enactment closed loop (budget/consistency resolved from plan, record attached to `ChapterResult`)
+- ✅ **Consistency audit** (term unification, limited automated correction)
+- ✅ **Advanced CLI output** — strategy overview, consistency summary, resume guidance
+- ✅ **266 tests passing** (46 CLI + 37 chapter + others)
 
-## What's Missing (Beyond MVP)
+## What's Still Missing
 
-- Real translation models (currently mocked)
-- Handling of paragraphs longer than 1200 characters (currently splits by character boundary, not sentence)
-- Min‑segment‑size enforcement (`min_chars` parameter unused)
-- Support for multiple chapters, batch processing
-- Configuration file for segment size, model paths, etc.
-- Error handling for malformed input
-- Logging beyond console prints
+- Real translation models (currently mocked for tests)
+- Sentence‑level splitting for long paragraphs (splits by character boundary)
+- Configuration file for segment size, model paths
+- Batch processing of multiple chapters
+- HTTP polish endpoint (`POST /translate/polish`)
 
 ## Known Limitations
 
-- Segmentation algorithm is greedy: it adds paragraphs until the next would exceed `max_chars`, then starts a new segment. This can create segments much smaller than `max_chars` if a single paragraph is already close to the limit.
+- Segmentation is greedy: adds paragraphs until the next would exceed `max_chars`, can create segments much smaller than `max_chars`.
 - No sentence‑level splitting within long paragraphs.
-- The mock translation does not use the provided `prev`/`next` context.
-- CLI only accepts default file paths or explicit `--source`/`--output`; no chapter selection or glob patterns.
+- Strategy parameters are internal-only (no CLI/HTTP user control).
 
 ## Run Instructions
 
 ```bash
-# From project root
+# Chapter-level CLI (recommended)
+python -m app.cli chapter run                          # fresh run
+python -m app.cli chapter run --dry-run                # preview plan
+python -m app.cli chapter run --resume                 # resume partial run
+python -m app.cli chapter stream                       # stdout-only mode
+
+# Legacy segment-level pipeline
 python -m app.cli run
 ```
-
-Output will be written to `data/exports/chapter1_en.md`.
 
 ## Test Instructions
 
 ```bash
-python app/tests/test_segmenter.py
+python -m pytest app/tests/
 ```
 
-All three tests should pass.
+All 266 tests should pass (46 CLI + 37 chapter + others).
 
 ## Next Immediate Steps
 
-1. Replace mock translation with a local LLM (e.g., Ollama, llama.cpp).
-2. Add a configuration file (`config.yaml`) for model settings, segment sizes.
-3. Improve segmentation to split long paragraphs by sentence boundaries.
-4. Add a simple web UI for post‑editing polished translations.
+1. Operator-facing improvements to the chapter-level CLI (currently: plan preview, dry-run, per-segment progress, resume).
 
 ## HTTP Translation Service (New)
 
