@@ -100,8 +100,7 @@ def test_format_aggregated_single_segment():
         TranslationOutput(segment_id="1", draft_translation="", polished_translation="Single paragraph."),
     ]
     out = format_aggregated_translation("Chapter 1", results)
-    assert out.startswith("# Chapter 1")
-    assert "Single paragraph." in out
+    assert out == "Single paragraph."
 
 
 def test_format_aggregated_multiple_segments():
@@ -110,9 +109,7 @@ def test_format_aggregated_multiple_segments():
         TranslationOutput(segment_id="2", draft_translation="", polished_translation="Second para."),
     ]
     out = format_aggregated_translation("Chapter 2", results)
-    assert out.startswith("# Chapter 2")
-    assert "First para." in out
-    assert "Second para." in out
+    assert out == "First para.\n\nSecond para."
     # Check ordering
     first_idx = out.index("First para.")
     second_idx = out.index("Second para.")

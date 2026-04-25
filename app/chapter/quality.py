@@ -97,17 +97,18 @@ def validate_chapter_output(result: ChapterResult) -> QualityReport:
     final_text = result.final_translation or ""
 
     # ── Title preservation ─────────────────────────────────────────────
-    # The orchestrator currently prepends the raw chapter title as a
-    # markdown heading. If the title is still Chinese, the heading is too.
-    title = (result.chapter_title or "").strip()
-    if title and _count_cjk(title) >= 1:
+    # The first line of the output should not be Chinese — the title is
+    # part of the first segment's input and should be translated by the
+    # segment-level translator like any other content.
+    first_line = (result.final_translation or "").splitlines()[0] if result.final_translation else ""
+    if first_line and _count_cjk(first_line) >= 1:
         issues.append(
             QualityIssue(
                 code="title_untranslated",
                 severity="error",
                 message=(
-                    f"Chapter heading still in Chinese: {title!r}. "
-                    "Aggregated output exposes an untranslated title."
+                    f"Output first line still in Chinese: {first_line!r}. "
+                    "The chapter heading was not translated."
                 ),
             )
         )

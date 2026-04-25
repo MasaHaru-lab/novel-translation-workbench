@@ -17,6 +17,13 @@ Batch completed: chapter-level quality gate hardened so a "completed" run cannot
 - **Validation**: `venv/bin/python -m pytest app/tests/ -q` → **303 passed** (was 299 baseline).
 - **Files in commit (10)**: `.gitignore`, `app/chapter/manifest.py`, `app/chapter/models.py`, `app/chapter/orchestrator.py`, `app/chapter/quality.py` (new), `app/cli.py`, `app/tests/test_quality.py` (new), `app/tests/test_translator.py`, `app/translate/translator.py`, `data/source/one_chapter_quality_source.txt`.
 
+### Chapter heading aggregation fix (Batch 4C) — pending commit
+- **`app/chapter/orchestrator.py`**: aggregation no longer prepends raw `# {chapter_title}`.
+- **`app/chapter/quality.py`**: `title_untranslated` checks final output first line, not metadata title.
+- **`app/tests/test_chapter.py` and `app/tests/test_quality.py`**: updated coverage.
+- **Validation**: `venv/bin/python -m pytest app/tests/ -q` → 303 passed.
+- **Known residual**: `app/chapter/consistency.py` TITLE_FORMAT deferred to later chapter output format contract work.
+
 ## Live calibration (2026-04-25, no code change)
 - Real Fishhead chapter run on `data/source/one_chapter_quality_source.txt` (with `MODEL_BACKEND_URL` set, `--service-url http://localhost:8000`) confirms gate behavior end-to-end.
 - CLI prints `Status: completed` together with `Quality: FAILED — 2 error(s) [title_untranslated, cjk_residue]` plus per-error lines — completion no longer masks quality failure.

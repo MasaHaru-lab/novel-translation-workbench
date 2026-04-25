@@ -74,9 +74,11 @@ def format_aggregated_translation(
     """Concatenate polished translations into a flowing full chapter.
 
     Each segment's polished result becomes a section, separated by a blank
-    line for readability. The chapter title becomes the top-level heading.
+    line for readability. The chapter title is NOT prepended as a heading
+    here — the first segment's input already contains it, and the
+    segment-level translator renders it in English naturally.
     """
-    parts = [f"# {chapter_title}\n"]
+    parts = []
     for out in segment_results:
         text = out.polished_translation.strip()
         if text:

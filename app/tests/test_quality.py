@@ -43,11 +43,12 @@ def _good_chapter() -> ChapterResult:
 
 
 def test_title_untranslated_triggers():
+    """First line of output still in Chinese triggers the gate."""
     result = ChapterResult(
-        chapter_title="第一章 序",
+        chapter_title="Chapter 1: Preface",  # metadata is English — gate checks output, not metadata
         source_text="第一章 序\n\n她走进房间。",
         segment_results=[_seg("1", "She walked into the room.")],
-        aggregated_translation="# 第一章 序\n\nShe walked into the room.",
+        aggregated_translation="第一章 序\n\nShe walked into the room.",
     )
     report = validate_chapter_output(result)
     assert not report.passed
