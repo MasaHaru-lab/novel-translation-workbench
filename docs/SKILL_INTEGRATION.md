@@ -175,6 +175,41 @@ Do not duplicate the framework, the shared workflow, or the workbench
 repository per direction. The workbench is direction-aware via the
 active direction profile; new directions slot in alongside `zh_to_en/`.
 
+## Versioned Snapshot
+
+The skill framework lives outside this repo, at the canonical runtime
+path. Because that path is not version-controlled by the workbench, this
+repo also keeps a **versioned snapshot** of the framework files, used as
+a backup and review copy.
+
+Paths:
+
+- **Canonical runtime skill path** (authoritative, executed by Claude
+  Code):
+
+  ```
+  ~/.claude/skills/fishhead-literary-translator/
+  ```
+
+- **Repo snapshot path** (versioned backup and review copy, lives in
+  this repo):
+
+  ```
+  docs/skill_snapshot/fishhead-literary-translator/
+  ```
+
+Rules:
+
+- Claude Code MUST use the canonical runtime skill path when executing
+  the skill. The snapshot is not on the runtime load path.
+- The repo snapshot is a **versioned backup and review copy** so that
+  framework changes have a diffable history alongside the workbench.
+- The snapshot is **not** a second independent source of truth. The
+  canonical runtime path remains authoritative.
+- If the canonical skill files and the repo snapshot diverge, do **not**
+  silently auto-merge. Report the divergence and sync intentionally,
+  preserving the canonical path as the source of truth.
+
 ## Rule priority
 
 When framework, workbench, and prompt files disagree, the framework
