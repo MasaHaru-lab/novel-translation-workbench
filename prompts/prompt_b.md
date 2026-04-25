@@ -21,6 +21,8 @@ Check for:
 
 - meaning distortion
 - added facts not supported by the source
+- content omissions where entire blocks of the source input are skipped in the translation
+- source-absent closing commentary, character introspection, or psychological explanation added where the source gives only speech, action, or posture
 - unsupported ownership / possessives
 - unsupported gender assignment
 - flattened or wrongly resolved ambiguity

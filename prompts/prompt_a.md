@@ -17,6 +17,7 @@ Translate the provided Chinese source text into real English fiction prose.
 
 The translation must preserve:
 - meaning
+- full source coverage — render all blocks of the source text in the order they appear
 - scene logic
 - tone
 - narrative pressure
@@ -65,6 +66,9 @@ Translate the sentence’s function, not just its dictionary meaning.
 - Do not over-modernize dialogue.
 - Do not make all characters sound alike.
 - Do not turn restrained literary prose into flashy writing.
+- Do not reverse facial-color emotional signals. 黑了 means the face darkened (with displeasure), not turned pale.
+- Chinese temporal expressions (旬, 更, 刻) have specific durations. Do not guess from English intuition.
+- Do not leave Chinese characters or pinyin inline in English prose. Render all content into English.
 
 ## Anti-translationese rules
 
