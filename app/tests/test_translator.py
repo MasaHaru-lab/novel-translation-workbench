@@ -15,6 +15,7 @@ from app.translate.translator import (
     clean_polished_output,
     parse_review_findings,
     ReviewFindings,
+    check_segment_coverage,
 )
 from app.segment.segmenter import Segment
 
@@ -324,6 +325,120 @@ def test_build_translation_input():
     assert input.prev_context == "Previous"
     assert input.next_context == "Next"
     assert input.glossary_terms == glossary
+
+
+# ── check_segment_coverage unit tests ────────────────────────────────────
+
+
+def test_check_segment_coverage_paragraph_triggers():
+    """4+ source paragraphs but candidate has ≤1 → gate fires."""
+    source = "A.\n\nB.\n\nC.\n\nD."
+    candidate = "A."
+    result = check_segment_coverage(source, candidate)
+    assert result is not None
+    assert "Possible omission" in result.major_issue
+
+
+def test_check_segment_coverage_dialogue_u201c_triggers():
+    """Source uses U+201C left double quotation marks for dialogue,
+    candidate preserves only one exchange → gate fires."""
+    source = (
+        "“Hello.”\n\n"
+        "“How are you?”\n\n"
+        "“I am fine.”\n\n"
+        "“And you?”\n\n"
+        "“Me too.”"
+    )
+    candidate = "\"Hello.\""
+    result = check_segment_coverage(source, candidate)
+    assert result is not None
+    assert "Possible omission" in result.major_issue
+
+
+def test_check_segment_coverage_length_ratio_triggers():
+    """Long source but candidate <20% → gate fires."""
+    source = "“" + "X" * 299
+    candidate = "Y" * 50  # ~16.7% of source length
+    result = check_segment_coverage(source, candidate)
+    assert result is not None
+    assert "Output too short" in result.major_issue
+
+
+def test_check_segment_coverage_adequate_notrigger():
+    """Short source with adequate candidate → gate does not fire."""
+    source = "Short normal text."
+    candidate = "Short normal translation."
+    result = check_segment_coverage(source, candidate)
+    assert result is None
+
+
+# ── Coverage gate integration tests through polish_translation ──────────
+
+
+def test_coverage_gate_triggers_revision_on_paragraph_omission():
+    """Prompt B says no issue but draft omits 3 paragraphs → coverage gate
+    injects major_issue → revision path fires."""
+    def run():
+        source = "A.\n\nB.\n\nC.\n\nD."
+        draft = "A."
+
+        input = TranslationInput(
+            segment_id="cg-int-1",
+            source_text=source,
+            glossary_terms=[],
+        )
+        draft_output = TranslationOutput(
+            segment_id="cg-int-1",
+            draft_translation=draft,
+            polished_translation="",
+            notes=[],
+        )
+
+        # Prompt B sees no issue — coverage gate must catch the omission.
+        review_reply = "major_issue: none\n"
+        revision_reply = "A.\n\nB.\n\nC.\n\nD."
+
+        with patch('app.translate.backend_adapter.call_model_backend') as mock_backend:
+            mock_backend.side_effect = [review_reply, revision_reply]
+            output = polish_translation(input, draft_output)
+            # Two calls: review + revision (coverage gate overrides findings)
+            assert mock_backend.call_count == 2
+
+        assert output.polished_translation == revision_reply
+        _assert_no_reviewer_scaffolding(output.polished_translation)
+
+    _with_backend_env(run)
+
+
+def test_coverage_gate_no_false_positive_adequate_draft():
+    """Prompt B says no issue and draft has adequate coverage → no revision."""
+    def run():
+        source = "Short normal text."
+        draft = "Short normal translation."
+
+        input = TranslationInput(
+            segment_id="cg-int-2",
+            source_text=source,
+            glossary_terms=[],
+        )
+        draft_output = TranslationOutput(
+            segment_id="cg-int-2",
+            draft_translation=draft,
+            polished_translation="",
+            notes=[],
+        )
+
+        review_reply = "major_issue: none\n"
+
+        with patch('app.translate.backend_adapter.call_model_backend') as mock_backend:
+            mock_backend.side_effect = [review_reply]
+            output = polish_translation(input, draft_output)
+            # Only review call — coverage gate does not fire, no revision.
+            assert mock_backend.call_count == 1
+
+        assert output.polished_translation == draft
+
+    _with_backend_env(run)
 
 
 if __name__ == "__main__":

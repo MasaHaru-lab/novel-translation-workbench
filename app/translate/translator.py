@@ -165,6 +165,14 @@ def polish_translation(
     review_raw = run_internal_review_with_backend(input, draft_text, assets_mode, budget_config=bc)
     findings = parse_review_findings(review_raw)
 
+    # Step 1.5 — coverage gate: catch omissions Prompt B may have missed.
+    # Runs after review but before the revision decision.  If the gate
+    # fires and Prompt B did not already flag a major issue, inject the
+    # coverage finding to trigger the existing revision path.
+    coverage_finding = check_segment_coverage(input.source_text, draft_text)
+    if coverage_finding and not findings.has_major_issue():
+        findings = coverage_finding
+
     # Step 2 — revise once if a material issue was flagged, else keep draft.
     if findings.has_major_issue():
         polished_text = translate_polish_with_backend(
@@ -605,6 +613,91 @@ class ReviewFindings:
         if not s:
             return False
         return not any(neg in s for neg in self._NEGATIVE_PHRASES)
+
+
+def check_segment_coverage(source_text: str, candidate_text: str) -> Optional[ReviewFindings]:
+    """Deterministic coverage check for segment translations.
+
+    Coarse-grained heuristic checks for potential omissions that the Prompt B
+    review may have missed. Uses three rules:
+      1. Paragraph count — source has >=4 paragraphs but candidate has <=1
+      2. Dialogue count — source has >=4 dialogue utterances using Chinese
+         opening quote marks such as U+300C LEFT CORNER BRACKET or U+201C
+         LEFT DOUBLE QUOTATION MARK, but candidate has <30% as many
+      3. Length ratio — source >=300 chars but candidate <20% of source length
+
+    Returns a ReviewFindings with major_issue set if a likely omission is
+    detected, or None if coverage looks adequate.
+    """
+    # ── Paragraph coverage ─────────────────────────────────────────────
+    source_paras = [p for p in source_text.split('\n\n') if p.strip()]
+    candidate_paras = [p for p in candidate_text.split('\n\n') if p.strip()]
+
+    if len(source_paras) >= 4 and len(candidate_paras) <= 1:
+        return ReviewFindings(
+            raw="",
+            major_issue=(
+                f"Possible omission: source has {len(source_paras)} paragraphs "
+                f"but output covers only {len(candidate_paras)} paragraph(s)"
+            ),
+            why_it_matters=(
+                "Multiple distinct source paragraphs suggest significant "
+                "content or structural breaks may be missing from the "
+                "translation"
+            ),
+            recommended_fix=(
+                f"Ensure all {len(source_paras)} source paragraphs are "
+                "represented in the translation"
+            ),
+        )
+
+    # ── Dialogue coverage ──────────────────────────────────────────────
+    # Count Chinese left-corner bracket and Chinese double quotes as
+    # dialogue utterances.  Source text may use 「」 or “” for dialogue.
+    source_dialogues = source_text.count('「') + source_text.count('“')
+    # Candidate (English) may use ASCII straight quotes or curly quotes.
+    candidate_quotes = (candidate_text.count('"')
+                        + candidate_text.count('“')
+                        + candidate_text.count('”'))
+    candidate_dialogues = candidate_quotes // 2
+
+    if source_dialogues >= 4 and candidate_dialogues < max(1, source_dialogues * 0.3):
+        return ReviewFindings(
+            raw="",
+            major_issue=(
+                f"Possible omission: source has approximately "
+                f"{source_dialogues} dialogue exchanges but output preserves "
+                f"only about {candidate_dialogues}"
+            ),
+            why_it_matters=(
+                "Missing dialogue lines lose character voice and scene pacing"
+            ),
+            recommended_fix=(
+                "Ensure all dialogue exchanges from the source are "
+                "represented in the translation"
+            ),
+        )
+
+    # ── Length ratio ───────────────────────────────────────────────────
+    if len(source_text) >= 300 and len(candidate_text) < len(source_text) * 0.2:
+        return ReviewFindings(
+            raw="",
+            major_issue=(
+                f"Output too short: source is {len(source_text)} characters "
+                f"but output is only {len(candidate_text)} characters "
+                f"({len(candidate_text) * 100 // len(source_text)}%)"
+            ),
+            why_it_matters=(
+                "Extreme length disparity often indicates large portions of "
+                "the source passage were not translated"
+            ),
+            recommended_fix=(
+                "Expand the translation to proportionally cover the full "
+                "source passage"
+            ),
+        )
+
+    return None
 
 
 def parse_review_findings(text: str) -> ReviewFindings:
