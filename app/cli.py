@@ -25,6 +25,7 @@ from app.translate.translator import (
     translate_draft,
 )
 from app.translate.schema import TranslationInput, TranslationOutput
+from app.config import config
 
 
 @contextmanager
@@ -131,7 +132,7 @@ def run_pipeline(
         translation_mode = "service"
     else:
         translate_draft_fn = local_translate_fn
-        translation_mode = "local mock"
+        translation_mode = "configured model backend" if config.MODEL_BACKEND_URL.strip() else "local (no backend)"
 
     print(f"Translating using {translation_mode}...")
     service_failed = False
@@ -154,7 +155,7 @@ def run_pipeline(
                 print(f"  Falling back to local mock translation (--allow-mock-fallback enabled).")
                 # Switch to local translation for this and subsequent segments
                 translate_draft_fn = local_translate_fn
-                translation_mode = "local mock"
+                translation_mode = "configured model backend" if config.MODEL_BACKEND_URL.strip() else "local (no backend)"
                 service_failed = True
                 # Retry with local translation
                 draft_out = translate_draft_fn(input)
@@ -198,7 +199,9 @@ def _resolve_translate_fn(
 
     if http_fn is not None:
         return http_fn, "service"
-    return local_fn, "local mock"
+    if config.MODEL_BACKEND_URL.strip():
+        return local_fn, "configured model backend"
+    return local_fn, "local (no backend)"
 
 
 def run_chapter_pipeline(
