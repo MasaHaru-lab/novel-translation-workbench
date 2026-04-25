@@ -160,6 +160,17 @@ For orchestrator design and current capabilities, see `ORCHESTRATION.md`.
 - 你负责在既定边界内自主推进并完成整批工作
 - 默认不要把用户拖进每一个局部实现决策
 
+### Interrupt Handling
+
+When the user interrupts, rejects a tool call, or says to stop: **immediately halt the current tool sequence.** Do not continue, retry, or proceed with the rejected plan in a different form. Pause, identify what was rejected and why, then re-clarify the corrected intent before taking any further action.
+
+This applies especially when:
+- A tool call is denied or rejected — do not attempt a different approach to the same objective
+- The user says "stop", "no", "不要", "先不改", or similar — halt all edits
+- The user corrects scope or direction — do not finish the "almost done" work
+
+Continuing down a rejected path is the fastest way to waste session budget and hit context limits.
+
 ### 默认工作模式
 - 默认按批次推进，而不是逐项征求确认
 - 默认不要逐行贴大段 patch / diff / 长代码块
