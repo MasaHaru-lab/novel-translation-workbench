@@ -41,9 +41,9 @@ Batch completed: chapter-level quality gate hardened so a "completed" run cannot
 - **STATUS.md not yet updated** to reflect this batch's additions.
 
 ## Next starting action
-Mainline seal point remains commit `9360892`. Live calibration produced no code change.
+Mainline seal point is commit `901eb89` (Batch 4C: chapter heading fix).
 
-Next batch candidate: **chapter heading translation fix** — the title is currently passed through verbatim from source to output (the gate's `title_untranslated` rule reliably catches it on every real run). Fix is a translator-chain concern, not a quality-gate concern.
+Next session: do big-picture project orientation first — prioritize between Batch 5 (chapter-level CLI/HTTP integration, per ORCHESTRATION.md) and the chapter output format contract residual (`consistency.py` TITLE_FORMAT). Do not execute directly; assess and decide before committing to a batch.
 
 Secondary: update `STATUS.md` to add a "Quality gate (post-hoc)" row under Current Capabilities.
 
