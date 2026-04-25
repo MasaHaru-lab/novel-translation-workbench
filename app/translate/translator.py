@@ -169,7 +169,9 @@ def polish_translation(
     # Runs after review but before the revision decision.  If the gate
     # fires and Prompt B did not already flag a major issue, inject the
     # coverage finding to trigger the existing revision path.
-    coverage_finding = check_segment_coverage(input.source_text, draft_text)
+    coverage_finding = check_segment_coverage(
+        input.source_text, draft_text, glossary_terms=input.glossary_terms
+    )
     if coverage_finding and not findings.has_major_issue():
         findings = coverage_finding
 
@@ -615,20 +617,87 @@ class ReviewFindings:
         return not any(neg in s for neg in self._NEGATIVE_PHRASES)
 
 
-def check_segment_coverage(source_text: str, candidate_text: str) -> Optional[ReviewFindings]:
+# Match any character that is unambiguously Chinese-script residue:
+# CJK symbols & punctuation (U+3000–303F, e.g. 「」、。〈〉),
+# CJK unified ideographs (U+3400–9FFF), CJK compatibility ideographs
+# (U+F900–FAFF), and halfwidth/fullwidth forms (U+FF00–FFEF, e.g. ，！？).
+_CJK_RE = re.compile(r"[　-〿㐀-鿿豈-﫿＀-￯]")
+_CJK_RESIDUE_THRESHOLD = 5
+
+
+def _count_cjk(text: str) -> int:
+    return len(_CJK_RE.findall(text or ""))
+
+
+def check_segment_coverage(
+    source_text: str,
+    candidate_text: str,
+    glossary_terms: Optional[List[GlossaryTerm]] = None,
+) -> Optional[ReviewFindings]:
     """Deterministic coverage check for segment translations.
 
-    Coarse-grained heuristic checks for potential omissions that the Prompt B
-    review may have missed. Uses three rules:
-      1. Paragraph count — source has >=4 paragraphs but candidate has <=1
-      2. Dialogue count — source has >=4 dialogue utterances using Chinese
+    Coarse-grained heuristic checks for failure types that the Prompt B
+    review may have missed. Rules in priority order:
+      1. CJK residue — candidate retains >= ``_CJK_RESIDUE_THRESHOLD`` CJK
+         characters (untranslated Chinese). Highest signal — runs first.
+      2. Glossary enforcement — when ``glossary_terms`` is supplied, any
+         glossary ``zh`` term that occurs in the source must have its ``en``
+         rendering present in the candidate. Catches honorific genericization
+         (e.g. 大小姐 rendered as a generic "Miss" instead of "Young Lady").
+      3. Paragraph count — source has >=4 paragraphs but candidate has <=1
+      4. Dialogue count — source has >=4 dialogue utterances using Chinese
          opening quote marks such as U+300C LEFT CORNER BRACKET or U+201C
          LEFT DOUBLE QUOTATION MARK, but candidate has <30% as many
-      3. Length ratio — source >=300 chars but candidate <20% of source length
+      5. Length ratio — source >=300 chars but candidate <20% of source length
 
-    Returns a ReviewFindings with major_issue set if a likely omission is
+    Returns a ReviewFindings with major_issue set if a likely failure is
     detected, or None if coverage looks adequate.
     """
+    # ── CJK residue ────────────────────────────────────────────────────
+    cjk_count = _count_cjk(candidate_text)
+    if cjk_count >= _CJK_RESIDUE_THRESHOLD:
+        sample = "".join(_CJK_RE.findall(candidate_text)[:8])
+        return ReviewFindings(
+            raw="",
+            major_issue=(
+                f"Untranslated Chinese in output: candidate retains "
+                f"{cjk_count} CJK characters (e.g. {sample!r})"
+            ),
+            why_it_matters=(
+                "English output must not contain untranslated Chinese; "
+                "residue indicates the model dropped or skipped source spans"
+            ),
+            recommended_fix=(
+                "Translate every Chinese span. Do not leave source characters "
+                "in the English prose; render names per the glossary"
+            ),
+        )
+
+    # ── Glossary enforcement ───────────────────────────────────────────
+    if glossary_terms:
+        for term in glossary_terms:
+            zh = (term.zh or "").strip()
+            en = (term.en or "").strip()
+            if not zh or not en:
+                continue
+            if zh in source_text and en not in candidate_text:
+                return ReviewFindings(
+                    raw="",
+                    major_issue=(
+                        f"Glossary term not honored: source contains {zh!r} "
+                        f"but candidate is missing the project rendering "
+                        f"{en!r}"
+                    ),
+                    why_it_matters=(
+                        "Generic substitutions for honorifics, titles, and "
+                        "proper nouns break project-level naming consistency"
+                    ),
+                    recommended_fix=(
+                        f"Render {zh!r} as {en!r} per the project glossary; "
+                        "do not substitute a generic English equivalent"
+                    ),
+                )
+
     # ── Paragraph coverage ─────────────────────────────────────────────
     source_paras = [p for p in source_text.split('\n\n') if p.strip()]
     candidate_paras = [p for p in candidate_text.split('\n\n') if p.strip()]

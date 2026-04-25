@@ -1,0 +1,304 @@
+"""Regression tests for chapter-level quality gates.
+
+These exercise ``app.chapter.quality.validate_chapter_output`` against
+hand-built ``ChapterResult`` instances. No real LLM backend is required.
+"""
+import sys
+import os
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+
+from app.chapter.models import ChapterResult
+from app.chapter.quality import (
+    QualityIssue,
+    QualityReport,
+    validate_chapter_output,
+)
+from app.translate.schema import TranslationOutput
+
+
+def _seg(seg_id: str, polished: str) -> TranslationOutput:
+    return TranslationOutput(
+        segment_id=seg_id,
+        draft_translation=polished,
+        polished_translation=polished,
+        notes=[],
+    )
+
+
+def _good_chapter() -> ChapterResult:
+    return ChapterResult(
+        chapter_title="Chapter 1: The Arrival",
+        source_text="第一章 到来\n\n她走进房间。",
+        segment_results=[
+            _seg("1", "Chapter 1: The Arrival\n\nShe walked into the room."),
+        ],
+        aggregated_translation=(
+            "# Chapter 1: The Arrival\n\nShe walked into the room."
+        ),
+    )
+
+
+# ── Title preservation ───────────────────────────────────────────────────
+
+
+def test_title_untranslated_triggers():
+    result = ChapterResult(
+        chapter_title="第一章 序",
+        source_text="第一章 序\n\n她走进房间。",
+        segment_results=[_seg("1", "She walked into the room.")],
+        aggregated_translation="# 第一章 序\n\nShe walked into the room.",
+    )
+    report = validate_chapter_output(result)
+    assert not report.passed
+    assert "title_untranslated" in report.codes()
+
+
+def test_title_translated_does_not_trigger_title_rule():
+    report = validate_chapter_output(_good_chapter())
+    assert "title_untranslated" not in report.codes()
+
+
+# ── Chapter-level CJK residue ────────────────────────────────────────────
+
+
+def test_chapter_cjk_residue_triggers():
+    result = ChapterResult(
+        chapter_title="Chapter 1",
+        source_text="第一章\n\n她走进房间。",
+        segment_results=[_seg("1", "She walked 进入 the 房间 quickly today.")],
+        aggregated_translation=(
+            "# Chapter 1\n\n她走进房间。这里有一些未翻译的中文。" * 2
+        ),
+    )
+    report = validate_chapter_output(result)
+    assert not report.passed
+    assert "cjk_residue" in report.codes()
+
+
+def test_chapter_cjk_residue_below_threshold_notrigger():
+    """Two stray CJK chars in a long English chapter should not fire."""
+    result = ChapterResult(
+        chapter_title="Chapter 1",
+        source_text="ignored",
+        segment_results=[_seg("1", "She greeted 王爷 warmly.")],
+        aggregated_translation="# Chapter 1\n\nShe greeted 王爷 warmly.",
+    )
+    report = validate_chapter_output(result)
+    assert "cjk_residue" not in report.codes()
+
+
+# ── Per-segment checks ───────────────────────────────────────────────────
+
+
+def test_empty_segment_triggers():
+    result = ChapterResult(
+        chapter_title="Chapter 1",
+        source_text="ignored",
+        segment_results=[
+            _seg("1", "She walked in."),
+            _seg("2", "   "),
+        ],
+        aggregated_translation="# Chapter 1\n\nShe walked in.",
+    )
+    report = validate_chapter_output(result)
+    codes = report.codes()
+    assert "empty_segment" in codes
+    empty_issue = next(i for i in report.issues if i.code == "empty_segment")
+    assert empty_issue.segment_id == "2"
+
+
+def test_segment_residue_triggers():
+    result = ChapterResult(
+        chapter_title="Chapter 1",
+        source_text="ignored",
+        segment_results=[
+            _seg("1", "She said 「明天再来」 and left silently."),
+        ],
+        aggregated_translation="# Chapter 1\n\nShe said 「明天再来」 and left silently.",
+    )
+    report = validate_chapter_output(result)
+    assert "segment_residue" in report.codes()
+    issue = next(i for i in report.issues if i.code == "segment_residue")
+    assert issue.segment_id == "1"
+
+
+# ── Clean run ────────────────────────────────────────────────────────────
+
+
+def test_good_chapter_passes():
+    report = validate_chapter_output(_good_chapter())
+    assert report.passed
+    assert report.error_count == 0
+    assert report.issues == []
+
+
+# ── Report API ───────────────────────────────────────────────────────────
+
+
+def test_quality_report_passed_property():
+    r = QualityReport(issues=[
+        QualityIssue(code="x", severity="warning", message="m"),
+    ])
+    assert r.passed
+    assert r.warning_count == 1
+
+    r = QualityReport(issues=[
+        QualityIssue(code="x", severity="error", message="m"),
+    ])
+    assert not r.passed
+    assert r.error_count == 1
+
+
+# ── Orchestrator integration ─────────────────────────────────────────────
+
+
+def test_orchestrator_attaches_quality_report():
+    """``execute()`` must attach a quality_report so manifest completion
+    cannot mask bad output."""
+    from app.chapter.orchestrator import ChapterOrchestrator
+    from app.translate.schema import TranslationInput, GlossaryTerm
+
+    def fake_translate_draft(inp: TranslationInput) -> TranslationOutput:
+        return TranslationOutput(
+            segment_id=inp.segment_id,
+            draft_translation="Translated draft for " + inp.segment_id,
+            polished_translation="",
+            notes=[],
+        )
+
+    orch = ChapterOrchestrator()
+    plan = orch.plan("Chapter 1: Arrival\n\nShe walked into the room.")
+
+    # Patch polish_translation to bypass the backend.
+    import app.chapter.orchestrator as orch_mod
+
+    def fake_polish(inp, draft_out, **_kwargs):
+        return TranslationOutput(
+            segment_id=inp.segment_id,
+            draft_translation=draft_out.draft_translation,
+            polished_translation="She walked into the room.",
+            notes=[],
+        )
+
+    original_polish = orch_mod.polish_translation
+    orch_mod.polish_translation = fake_polish
+    try:
+        result = orch.execute(
+            plan,
+            translate_draft_fn=fake_translate_draft,
+            assets_mode="none",
+        )
+    finally:
+        orch_mod.polish_translation = original_polish
+
+    assert result.quality_report is not None
+    assert isinstance(result.quality_report, QualityReport)
+
+
+# ── Quality summary persistence and operator visibility ─────────────────
+
+
+def test_quality_report_to_summary_shape():
+    """Summary must be JSON-friendly and stable for manifest persistence."""
+    r = QualityReport(issues=[
+        QualityIssue(code="cjk_residue", severity="error", message="m"),
+        QualityIssue(code="title_untranslated", severity="error", message="m"),
+        QualityIssue(code="x", severity="warning", message="m"),
+    ])
+    s = r.to_summary()
+    assert s["passed"] is False
+    assert s["error_count"] == 2
+    assert s["warning_count"] == 1
+    assert "cjk_residue" in s["codes"]
+    assert "title_untranslated" in s["codes"]
+
+
+def test_run_with_manifest_persists_quality_summary(tmp_path):
+    """A failed quality gate must be reflected in the persisted manifest
+    JSON, not only in the in-memory ChapterResult."""
+    from app.chapter.orchestrator import ChapterOrchestrator
+    from app.chapter.manifest import RunManifest
+    from app.translate.schema import TranslationInput
+    import app.chapter.orchestrator as orch_mod
+
+    def fake_translate_draft(inp: TranslationInput) -> TranslationOutput:
+        return TranslationOutput(
+            segment_id=inp.segment_id,
+            draft_translation="d",
+            polished_translation="",
+            notes=[],
+        )
+
+    def fake_polish(inp, draft_out, **_kwargs):
+        # Deliberately leave untranslated Chinese to fail the gate.
+        return TranslationOutput(
+            segment_id=inp.segment_id,
+            draft_translation=draft_out.draft_translation,
+            polished_translation="She said 「明天再来」 and left silently.",
+            notes=[],
+        )
+
+    manifest_path = tmp_path / "run.manifest.json"
+    original_polish = orch_mod.polish_translation
+    orch_mod.polish_translation = fake_polish
+    try:
+        orch = ChapterOrchestrator()
+        result = orch.run_with_manifest(
+            source_text="Chapter 1\n\n她走进房间。",
+            translate_draft_fn=fake_translate_draft,
+            assets_mode="none",
+            manifest_path=str(manifest_path),
+        )
+    finally:
+        orch_mod.polish_translation = original_polish
+
+    assert result.quality_report is not None
+    assert not result.quality_report.passed
+
+    loaded = RunManifest.load(str(manifest_path))
+    assert loaded.quality_summary is not None
+    assert loaded.quality_summary["passed"] is False
+    assert loaded.quality_summary["error_count"] >= 1
+    assert "segment_residue" in loaded.quality_summary["codes"]
+
+
+def test_cli_report_prints_quality_failure(capsys):
+    """The CLI report must surface a quality fail; an operator must not see
+    a clean ``Status: completed`` while the quality gate flagged errors."""
+    from pathlib import Path
+    from app.chapter.models import ChapterResult
+    from app.chapter.manifest import ChapterStatus
+    from app.cli import _report_chapter_result
+
+    bad_result = ChapterResult(
+        chapter_title="Chapter 1",
+        source_text="ignored",
+        segment_results=[_seg("1", "She said 「明天再来」 and left silently.")],
+        aggregated_translation="# Chapter 1\n\nShe said 「明天再来」 and left.",
+        chapter_status=ChapterStatus.COMPLETED,
+    )
+    bad_result.quality_report = validate_chapter_output(bad_result)
+    assert not bad_result.quality_report.passed
+
+    _report_chapter_result(bad_result, Path("/tmp/__quality_test_unused.md"))
+    out = capsys.readouterr().out
+    assert "Quality:" in out
+    assert "FAILED" in out
+    assert "segment_residue" in out
+
+
+def test_cli_report_prints_quality_pass(capsys):
+    from pathlib import Path
+    from app.chapter.models import ChapterResult
+    from app.chapter.manifest import ChapterStatus
+    from app.cli import _report_chapter_result
+
+    good = _good_chapter()
+    good.chapter_status = ChapterStatus.COMPLETED
+    good.quality_report = validate_chapter_output(good)
+    assert good.quality_report.passed
+
+    _report_chapter_result(good, Path("/tmp/__quality_test_unused.md"))
+    out = capsys.readouterr().out
+    assert "Quality:     passed" in out

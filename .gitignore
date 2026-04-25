@@ -40,4 +40,5 @@ Thumbs.db
 *.log
 outputs/
 data/exports/
+data/output/
 *.md.save

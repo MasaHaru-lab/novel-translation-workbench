@@ -128,6 +128,17 @@ class RunManifest:
     started_at: Optional[float] = None
     completed_at: Optional[float] = None
     manifest_path: Optional[str] = None
+    quality_summary: Optional[dict] = None
+    """Post-aggregation quality-gate summary.
+
+    Persisted so a "completed" manifest cannot mask a failed quality gate.
+    Shape::
+
+        {"passed": bool, "error_count": int, "warning_count": int,
+         "codes": [str, ...]}
+
+    ``None`` means the quality gate was not run (e.g. older runs before
+    the gate was wired in)."""
 
     @staticmethod
     def create(
@@ -329,6 +340,7 @@ class RunManifest:
             started_at=d.get("started_at"),
             completed_at=d.get("completed_at"),
             manifest_path=d.get("manifest_path"),
+            quality_summary=d.get("quality_summary"),
         )
 
     @staticmethod

@@ -372,6 +372,139 @@ def test_check_segment_coverage_adequate_notrigger():
     assert result is None
 
 
+# ── CJK residue rule ────────────────────────────────────────────────────
+
+
+def test_check_segment_coverage_cjk_residue_triggers():
+    """Candidate retains untranslated Chinese above the residue threshold."""
+    source = "她说：「明天再来。」他点了点头。"
+    candidate = "She said: 「明天再来。」he nodded."  # 6 CJK chars left
+    result = check_segment_coverage(source, candidate)
+    assert result is not None
+    assert "Untranslated Chinese" in result.major_issue
+
+
+def test_check_segment_coverage_cjk_residue_below_threshold_notrigger():
+    """A single proper-noun Chinese span (under threshold) should not fire."""
+    source = "Wang Ye stepped inside."
+    candidate = "王爷 stepped inside."  # 2 CJK chars
+    result = check_segment_coverage(source, candidate)
+    assert result is None
+
+
+# ── Glossary enforcement rule ───────────────────────────────────────────
+
+
+def test_check_segment_coverage_glossary_term_missing_triggers():
+    """Source contains a glossary zh term but candidate uses a generic
+    English form instead of the project rendering → gate fires."""
+    source = "大小姐 turned to face him."
+    # Output uses a generic 'Miss' instead of the project rendering.
+    candidate = "Miss turned to face him."
+    glossary = [GlossaryTerm(zh="大小姐", en="Young Lady")]
+    result = check_segment_coverage(source, candidate, glossary_terms=glossary)
+    assert result is not None
+    assert "Glossary term not honored" in result.major_issue
+    assert "大小姐" in result.major_issue
+    assert "Young Lady" in result.major_issue
+
+
+def test_check_segment_coverage_glossary_term_honored_notrigger():
+    """Project rendering present → gate does not fire."""
+    source = "大小姐 turned to face him."
+    candidate = "Young Lady turned to face him."
+    glossary = [GlossaryTerm(zh="大小姐", en="Young Lady")]
+    result = check_segment_coverage(source, candidate, glossary_terms=glossary)
+    assert result is None
+
+
+def test_check_segment_coverage_glossary_term_not_in_source_notrigger():
+    """Glossary lists a term that does not appear in source → not enforced."""
+    source = "He nodded once."
+    candidate = "He nodded once."
+    glossary = [GlossaryTerm(zh="大小姐", en="Young Lady")]
+    result = check_segment_coverage(source, candidate, glossary_terms=glossary)
+    assert result is None
+
+
+def test_check_segment_coverage_priority_cjk_residue_over_glossary():
+    """When both CJK residue and glossary miss are present, the residue
+    rule fires first because it is a higher-signal failure type."""
+    source = "大小姐 turned and 离开了 the hall."
+    # Candidate retains Chinese AND drops the glossary rendering.
+    candidate = "Miss 离开了 the 大厅 quickly here."
+    glossary = [GlossaryTerm(zh="大小姐", en="Young Lady")]
+    result = check_segment_coverage(source, candidate, glossary_terms=glossary)
+    assert result is not None
+    assert "Untranslated Chinese" in result.major_issue
+
+
+# ── Coverage gate integration tests through polish_translation ──────────
+
+
+def test_coverage_gate_triggers_revision_on_cjk_residue():
+    """Prompt B says no issue but draft has Chinese residue → coverage gate
+    fires → revision path runs."""
+    def run():
+        source = "她转身离开了房间。"
+        # Draft retains heavy Chinese residue.
+        draft = "She turned 离开了房间然后 walked away here."
+
+        input = TranslationInput(
+            segment_id="cg-cjk-1",
+            source_text=source,
+            glossary_terms=[],
+        )
+        draft_output = TranslationOutput(
+            segment_id="cg-cjk-1",
+            draft_translation=draft,
+            polished_translation="",
+            notes=[],
+        )
+
+        review_reply = "major_issue: none\n"
+        revision_reply = "She turned, left the room, and walked away."
+
+        with patch('app.translate.backend_adapter.call_model_backend') as mock_backend:
+            mock_backend.side_effect = [review_reply, revision_reply]
+            output = polish_translation(input, draft_output)
+            assert mock_backend.call_count == 2
+
+        assert output.polished_translation == revision_reply
+
+    _with_backend_env(run)
+
+
+def test_coverage_gate_triggers_revision_on_glossary_drift():
+    """Prompt B says no issue but draft renders 大小姐 as generic 'Miss' →
+    glossary enforcement gate fires → revision path runs."""
+    def run():
+        source = "大小姐 turned to face him."
+        draft = "Miss turned to face him."
+
+        input = TranslationInput(
+            segment_id="cg-glos-1",
+            source_text=source,
+            glossary_terms=[GlossaryTerm(zh="大小姐", en="Young Lady")],
+        )
+        draft_output = TranslationOutput(
+            segment_id="cg-glos-1",
+            draft_translation=draft,
+            polished_translation="",
+            notes=[],
+        )
+
+        review_reply = "major_issue: none\n"
+        revision_reply = "Young Lady turned to face him."
+
+        with patch('app.translate.backend_adapter.call_model_backend') as mock_backend:
+            mock_backend.side_effect = [review_reply, revision_reply]
+            output = polish_translation(input, draft_output)
+            assert mock_backend.call_count == 2
+
+        assert "Young Lady" in output.polished_translation
+
+
 # ── Coverage gate integration tests through polish_translation ──────────
 
 

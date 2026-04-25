@@ -97,6 +97,12 @@ class ChapterResult:
     Contains complexity level, risk assessments, and strategy decisions.
     None when strategy assessment was not performed or failed."""
 
+    # Quality gate report (deterministic post-hoc validation).
+    # Populated by the orchestrator after aggregation. ``None`` means the
+    # gate was not run; an empty report means the chapter passed.
+    # ``Any`` typing avoids a forward-import cycle with quality.py.
+    quality_report: Optional[object] = None
+
     # Batch 4B: enactment record
     enactment: Optional[dict] = None
     """Enactment record showing how strategy decisions were applied at runtime.

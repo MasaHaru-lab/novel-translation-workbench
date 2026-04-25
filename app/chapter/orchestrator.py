@@ -259,6 +259,9 @@ class ChapterOrchestrator:
         )
         # Batch 4B: attach enactment record
         result.enactment = self._build_enactment(plan, budget_config, self._resolve_consistency_intensity_from_plan(plan), None, len(plan.segments))
+        # Quality gates: populate report so manifest completion ≠ quality pass.
+        from app.chapter.quality import validate_chapter_output
+        result.quality_report = validate_chapter_output(result)
         return result
 
     def run(
@@ -461,6 +464,13 @@ class ChapterOrchestrator:
             segmentation_granularity=seg_granularity,
             segment_count=len(plan.segments),
         )
+        from app.chapter.quality import validate_chapter_output
+        result.quality_report = validate_chapter_output(result)
+        # Persist the quality summary into the manifest so the manifest
+        # cannot say "completed" while the quality gate failed.
+        manifest.quality_summary = result.quality_report.to_summary()
+        if manifest.manifest_path:
+            manifest.save()
         return result
 
     def _execute_segment_with_retry(

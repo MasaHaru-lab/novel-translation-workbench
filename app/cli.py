@@ -393,6 +393,24 @@ def _report_chapter_result(result: ChapterResult, output_path: Path, elapsed_sec
     print(f"\nChapter '{result.chapter_title}' result:")
     print(f"  Status:      {status_label}")
     print(f"  Completed:   {result.success_count}/{result.segment_count} segments")
+
+    # Quality gate — surfaced before consistency so operators cannot miss a
+    # quality fail when the run is otherwise marked "completed".
+    quality = getattr(result, "quality_report", None)
+    if quality is not None:
+        if quality.passed and quality.error_count == 0 and quality.warning_count == 0:
+            print(f"  Quality:     passed")
+        elif quality.passed:
+            print(f"  Quality:     passed ({quality.warning_count} warning(s))")
+        else:
+            print(
+                f"  Quality:     FAILED — {quality.error_count} error(s) "
+                f"[{', '.join(quality.codes())}]"
+            )
+            for issue in quality.issues:
+                if issue.severity == "error":
+                    seg = f" (segment {issue.segment_id})" if issue.segment_id else ""
+                    print(f"    - {issue.code}{seg}: {issue.message}")
     if result.failed_segment_ids:
         if result.success_count == 0:
             # All segments failed — compact summary avoids noise
