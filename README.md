@@ -2,6 +2,8 @@
 
 A local MVP for translating Chinese novel chapters into English with two-stage translation: faithful draft and polished version.
 
+> **Framework**: this repo is the current implementation of the `fishhead-literary-translator` framework, `zh_to_en` direction profile (A = literary translator, B = quality gate / reviewer). The canonical skill lives at `~/.claude/skills/fishhead-literary-translator/`; a versioned snapshot is kept at `docs/skill_snapshot/fishhead-literary-translator/`. See `docs/SKILL_INTEGRATION.md` for the mapping.
+
 ## Document hierarchy
 
 This project uses a layered document structure:

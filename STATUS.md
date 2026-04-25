@@ -1,5 +1,27 @@
 # Status: Phase A — Chapter-Level CLI
 
+## Framework Migration Complete (2026-04-25)
+
+The translation framework has been migrated to a reusable, direction-agnostic skill. **Sealed — no further architecture changes in this phase.**
+
+- **Framework**: `fishhead-literary-translator` is the reusable literary translation production framework.
+- **Direction profile**: `zh_to_en` is the first implemented direction profile.
+- **Roles**: A = literary translator. B = quality gate / reviewer.
+- **Implementation**: `novel-translation-workbench` (this repo) is the current implementation, **not** the skill itself.
+- **Canonical skill (runtime)**: `~/.claude/skills/fishhead-literary-translator/`
+- **Versioned snapshot (this repo)**: `docs/skill_snapshot/fishhead-literary-translator/`
+- **Mapping doc**: `docs/SKILL_INTEGRATION.md` explains how this implementation maps to the skill.
+- **Migration commits**:
+  - `f754654` — docs: add SKILL_INTEGRATION explaining fishhead-literary-translator mapping
+  - `e685c10` — docs: add versioned snapshot of fishhead-literary-translator skill
+
+### Next phase: Quality Loop
+
+Run/inspect real translated output and feed recurring issues back into `zh_to_en` style rules, roles, or book assets. No further architecture redesign.
+
+---
+
+
 ## Current Capabilities
 
 - ✅ **Chapter-level CLI** (`chapter run`, `chapter stream`, `chapter run --dry-run`, `chapter run --resume`)
