@@ -45,6 +45,14 @@ def _orchestrator_progress_logging() -> Iterator[None]:
         log.setLevel(prev_level)
 
 
+def _derive_output_path(source: Path) -> Path:
+    """Derive a default output path from the source path.
+
+    ``data/source/chapter3.txt`` becomes ``data/exports/chapter3_en.md``.
+    """
+    return Path("data/exports") / f"{source.stem}_en.md"
+
+
 def read_source_file(source_path: Path) -> str:
     """Read the source text file."""
     if not source_path.exists():
@@ -575,8 +583,8 @@ def main():
     # Optional arguments for input/output paths
     run_parser.add_argument('--source', type=Path, default=Path('data/source/chapter1.txt'),
                             help='Path to source text file')
-    run_parser.add_argument('--output', type=Path, default=Path('data/exports/chapter1_en.md'),
-                            help='Path to output markdown file')
+    run_parser.add_argument('--output', type=Path, default=None,
+                            help='Path to output markdown file (default: derived from --source, e.g. data/exports/<source-stem>_en.md)')
     run_parser.add_argument('--service-url', type=str, default=None,
                             help='URL of translation service (e.g., http://localhost:8000). If not provided, use local mock.')
     run_parser.add_argument('--allow-mock-fallback', action='store_true',
@@ -592,8 +600,8 @@ def main():
     chapter_run_parser = chapter_sub.add_parser('run', help='Run chapter-level translation pipeline')
     chapter_run_parser.add_argument('--source', type=Path, default=Path('data/source/chapter1.txt'),
                                     help='Path to full chapter source text file')
-    chapter_run_parser.add_argument('--output', type=Path, default=Path('data/exports/chapter1_en.md'),
-                                    help='Path to final chapter-level output file (post-consistency corrected when applicable)')
+    chapter_run_parser.add_argument('--output', type=Path, default=None,
+                                    help='Path to final chapter-level output file (default: derived from --source, e.g. data/exports/<source-stem>_en.md)')
     chapter_run_parser.add_argument('--service-url', type=str, default=None,
                                     help='URL of translation service (e.g., http://localhost:8000). If not provided, use local mock.')
     chapter_run_parser.add_argument('--allow-mock-fallback', action='store_true',
@@ -644,6 +652,8 @@ def main():
     args = parser.parse_args()
 
     if args.command == 'run':
+        if args.output is None:
+            args.output = _derive_output_path(args.source)
         # Ensure output directory exists
         args.output.parent.mkdir(parents=True, exist_ok=True)
         run_pipeline(
@@ -655,6 +665,8 @@ def main():
         )
     elif args.command == 'chapter':
         if args.chapter_command == 'run':
+            if args.output is None:
+                args.output = _derive_output_path(args.source)
             run_chapter_pipeline(
                 args.source,
                 args.output,

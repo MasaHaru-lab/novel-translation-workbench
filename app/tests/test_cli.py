@@ -13,6 +13,7 @@ import tempfile
 import shutil
 
 from app.cli import (
+    _derive_output_path,
     _report_chapter_result,
     run_chapter_pipeline,
     run_chapter_stream,
@@ -1507,6 +1508,84 @@ def test_chapter_run_elapsed_resume_path(tmp_path, capsys):
     captured = capsys.readouterr()
     assert "Elapsed: 45.6s" in captured.out
     assert captured.out.index("Elapsed:") < captured.out.index("Done.")
+
+
+# ── Smart output-path derivation ────────────────────────────────────────
+
+
+def test_derive_output_path_basic():
+    """Should derive output path from source filename."""
+    result = _derive_output_path(Path("data/source/chapter3.txt"))
+    assert result == Path("data/exports/chapter3_en.md")
+
+
+def test_derive_output_path_different_dir():
+    """Should use data/exports/ directory regardless of source location."""
+    result = _derive_output_path(Path("/tmp/my_source.txt"))
+    assert result == Path("data/exports/my_source_en.md")
+
+
+def test_derive_output_path_no_ext():
+    """Should handle source files without extension."""
+    result = _derive_output_path(Path("data/source/chapter3"))
+    assert result == Path("data/exports/chapter3_en.md")
+
+
+def test_derive_output_path_multi_dot():
+    """Should handle source files with multiple dots."""
+    result = _derive_output_path(Path("data/source/ch.3.backup.txt"))
+    assert result == Path("data/exports/ch.3.backup_en.md")
+
+
+def test_chapter_run_without_output_derives_from_source():
+    """chapter run without --output should derive output from source path."""
+    captured = _invoke_chapter_main_with_argv([
+        'cli', 'chapter', 'run', '--source', '/tmp/chapter3.txt',
+    ])
+    assert captured['output'] == Path('data/exports/chapter3_en.md')
+
+
+def test_chapter_run_without_output_default_source_backward_compat():
+    """chapter run without --output and default source should give old default."""
+    captured = _invoke_chapter_main_with_argv([
+        'cli', 'chapter', 'run',
+    ])
+    assert captured['output'] == Path('data/exports/chapter1_en.md')
+
+
+def test_chapter_run_with_explicit_output_unchanged():
+    """chapter run with explicit --output should use it directly."""
+    captured = _invoke_chapter_main_with_argv([
+        'cli', 'chapter', 'run', '--source', '/tmp/ch3.txt',
+        '--output', '/custom/path.md',
+    ])
+    assert captured['output'] == Path('/custom/path.md')
+
+
+def test_run_pipeline_without_output_derives_from_source():
+    """run pipeline without --output should derive output from source path."""
+    captured = _invoke_main_with_argv([
+        'cli', 'run', '--source', '/tmp/chapter3.txt',
+    ])
+    assert captured['output'] == Path('data/exports/chapter3_en.md')
+
+
+def test_run_pipeline_without_output_default_source_backward_compat():
+    """run pipeline without --output and default source should give old default."""
+    captured = _invoke_main_with_argv([
+        'cli', 'run',
+    ])
+    assert captured['output'] == Path('data/exports/chapter1_en.md')
+
+
+def test_run_pipeline_with_explicit_output_unchanged(tmp_path):
+    """run pipeline with explicit --output should use it directly."""
+    output = tmp_path / "out.md"
+    captured = _invoke_main_with_argv([
+        'cli', 'run', '--source', '/tmp/ch3.txt',
+        '--output', str(output),
+    ])
+    assert captured['output'] == output
 
 
 if __name__ == "__main__":
