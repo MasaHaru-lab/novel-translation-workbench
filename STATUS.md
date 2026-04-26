@@ -87,13 +87,13 @@ All 266 tests should pass (46 CLI + 37 chapter + others).
 - **Boundary map** documented (frozen surfaces vs open vs gated areas)
 - **No application code or prompt files modified** in this kickoff slice
 
-### Prompt Change Gate — facial-color direction (complete)
+### Prompt Change Gate — facial-color direction (verified v6)
 
-**Gate outcome:** Resolved — Type C enforcement already in place.
+**Gate outcome:** Resolved — Type C enforcement effective. Verified v6 PASS (2026-04-26).
 
 **Evidence (gate Step 1):** Facial-color reversal for 脸色都黑了 observed across
 multiple runs (v1: "turned pale" ✗; v3: "turned pale, clearly displeased" ✗;
-v2/v4/v5: correct). Two failures meet the multi-occurrence bar.
+v2/v4/v5/v6: correct). Two failures met the multi-occurrence bar; last 4 runs confirm fix.
 
 **Lower-level check (gate Step 2):** Type B (style note at §45-47 of
 `4. style_notes.md`) was tried and failed in v3 — model captured the displeasure
@@ -104,12 +104,13 @@ line 69: *"Do not reverse facial-color emotional signals. 黑了 means the face
 darkened (with displeasure), not turned pale."* Added in commit `06e04cd`
 before the gate was formalized.
 
-**Verification plan (gate Step 4):** Run v6 on the approved sample, check
-秦老太太一呛，脸色都黑了 passage for "darkened" (not "pale") rendering.
+**Verification (gate Step 4):** v6 run on 2026-04-26, `qwen2.5:14b` via Ollama.
+秦老太太一呛，脸色都黑了 → "Old Lady Qin was taken aback, her face darkening."
+**PASS** — direction correct. Type C rule effective.
 
-### Prompt Change Gate — narrative stance / hallucinated scene-closing commentary (complete)
+### Prompt Change Gate — narrative stance / hallucinated scene-closing commentary (verified v6)
 
-**Gate outcome:** Type C enforcement added to Prompt A line 59.
+**Gate outcome:** Type C enforcement effective. Verified v6 PASS (2026-04-26).
 
 **Evidence (gate Step 1):** Fabricated scene continuation after source end
 observed in all quality runs (v1: full continuation paragraph; v3: continuation
@@ -126,9 +127,10 @@ specific subclass of that constraint. Existing rules were too broad — the mode
 treats scene continuation as "generating the next expected beat" rather than
 "inventing facts."
 
-**Verification plan (gate Step 4, deferred):** Run v6 on approved sample when
-Fishhead is reachable. Pass = translation ends at source line 82
-(谢氏像是一拳打在棉花上，气闷不已) without fabricated continuation.
+**Verification (gate Step 4):** v6 run on 2026-04-26, `qwen2.5:14b` via Ollama.
+Translation ends at source line 82: 谢氏像是一拳打在棉花上，气闷不已 →
+"Lady Xie felt frustrated, like hitting a soft wall."
+**PASS** — no fabricated continuation. Type C rule effective.
 
 **Applied in:** work branch `work/phase-b-type-c-narrative-stance`,
 Prompt A diff committed.
