@@ -38,7 +38,7 @@ It touches only:
 ### Backend
 
 A working translation backend reachable at `MODEL_BACKEND_URL`.
-Currently: Fishhead wrapper at `http://192.168.68.61:8001/generate`,
+Currently: Fishhead wrapper at `http://192.168.68.51:8001/generate`,
 model `qwen2.5:14b` via Ollama.
 
 If the backend is unreachable, no quality-loop work runs.
@@ -60,7 +60,7 @@ Do not commit generated outputs.
 ### Run
 
 ```bash
-MODEL_BACKEND_URL=http://192.168.68.61:8001/generate \
+MODEL_BACKEND_URL=http://192.168.68.51:8001/generate \
   venv/bin/python -m app.cli chapter run \
   --source data/source/one_chapter_quality_source.txt \
   --output data/outputs/quality_run.md \
@@ -232,18 +232,37 @@ The existing runs (v1–v5) are archived at `data/exports/one_chapter_quality_sa
 | `STATUS.md` | OPEN | Status updates |
 | `SESSION_CHECKPOINT.md` | OPEN | Session checkpoint updates |
 
-## Next natural step after this kickoff
+## Type C gate records
 
-The quality loop closure report (`outputs/quality_loop_closure_report.md`)
-identified the first Type C candidates:
+### Facial-color direction for 黑了
 
-1. **Facial-color direction for 黑了** — style note exists (§45-47 of
-   `4. style_notes.md`) but model still reverses the signal (dark → pale).
-2. **Narrative stance / hallucinated scene-closing commentary** — style
-   note exists (§49-51) but model adds closing introspection not in source.
+**Gate outcome:** Resolved — Type C enforcement already in place (Prompt A §69).
+See `STATUS.md` for the full gate trace.
 
-Both have been observed across multiple runs (v1, v3, v4, v5), qualifying
-for Step 1 of the Prompt Change Gate.
+### Narrative stance / hallucinated scene-closing commentary
 
-To proceed: write a change proposal for one of these two candidates,
-run it through the gate steps above, then execute and verify.
+**Gate outcome:** Type C enforcement added (Prompt A line 59).
+
+**Gate steps:**
+1. **Evidence** (✓): Fabricated scene continuation after source end observed in
+   v1, v3, v4, v5 — four quality runs with the same failure pattern.
+2. **Lower-level check** (✓): Type A (glossary) not applicable. Type B
+   (style note §49-51 of `4. style_notes.md`) was tried and failed — model
+   ignores it across all post-writeback runs.
+3. **Change proposal** (✓): Add to Prompt A Hard constraints:
+   `- Do not add scene-ending commentary or narrative continuation beyond what the source provides.`
+   Rationale: existing rules (§58 "do not invent facts", §65 "do not add
+   psychological interpretation") are too broad — the model treats scene
+   continuation as "predicting the next beat" rather than inventing.
+4. **Verification plan** (deferred): Run v6 when Fishhead is reachable.
+   Pass criterion: translation ends at source line 82 without fabricated
+   continuation or closing commentary.
+5. **Approval** (✓): Type C warranted. Minimal targeted change applied.
+6. **Execute** (✓): Prompt A diff applied in work branch
+   `work/phase-b-type-c-narrative-stance`.
+7. **Confirm or revert** (pending): Awaiting Fishhead availability for v6 run.
+
+### Candidates status
+
+Both Type C candidates identified in the closure report are now processed.
+No further Type C candidates are currently open.

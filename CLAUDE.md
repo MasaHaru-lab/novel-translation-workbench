@@ -322,7 +322,7 @@ Allowed without prior per-batch approval:
 - read-only health / connectivity checks
   (`ssh Fishhead-Core 'hostname && nvidia-smi'`)
 - contract checks against the wrapper (e.g. shape of
-  `http://192.168.68.61:8001/generate` response on a tiny synthetic prompt)
+  `http://192.168.68.51:8001/generate` response on a tiny synthetic prompt)
 - protocol / reachability probes
 - small synthetic-input integration checks tied to an explicit batch goal
 
@@ -335,11 +335,11 @@ Not allowed without explicit per-batch user approval:
   prompt / workflow / orchestrator changes inside the same batch
 
 Operational facts:
-- Fishhead host: `192.168.68.61`, user `ambrosia`,
+- Fishhead host: `192.168.68.51`, user `ambrosia`,
   SSH alias `Fishhead-Core`, project path `/home/ambrosia/rubato-asr`,
   venv `/home/ambrosia/rubato-asr/.venv`. Update these in this
   document if anything changes.
-- Wrapper URL (when up): `http://192.168.68.61:8001/generate`
+- Wrapper URL (when up): `http://192.168.68.51:8001/generate`
 - Any generated artifacts from Fishhead runs (translations, manifests,
   logs) must stay under `data/output/`, `data/exports/`, or
   `outputs/`, all of which are gitignored. They must not be committed.

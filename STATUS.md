@@ -107,10 +107,31 @@ before the gate was formalized.
 **Verification plan (gate Step 4):** Run v6 on the approved sample, check
 秦老太太一呛，脸色都黑了 passage for "darkened" (not "pale") rendering.
 
-### Remaining Type C candidate
+### Prompt Change Gate — narrative stance / hallucinated scene-closing commentary (complete)
 
-**Narrative stance / hallucinated scene-closing commentary** — gate not yet run.
-Requires a separate batch.
+**Gate outcome:** Type C enforcement added to Prompt A line 59.
+
+**Evidence (gate Step 1):** Fabricated scene continuation after source end
+observed in all quality runs (v1: full continuation paragraph; v3: continuation
+with invented dialogue; v4/v5: same pattern). 4 of 4 runs show the failure.
+
+**Lower-level check (gate Step 2):** Type B (style note at §49-51 of
+`4. style_notes.md`) was tried and failed across v3, v4, v5 — the style note
+exists but the model ignores it for scene-closing content.
+
+**Change proposal (gate Step 3):** Add to Prompt A Hard constraints:
+`- Do not add scene-ending commentary or narrative continuation beyond what the source provides.`
+Positioned after existing "Do not invent facts" rule (§58) since this is a
+specific subclass of that constraint. Existing rules were too broad — the model
+treats scene continuation as "generating the next expected beat" rather than
+"inventing facts."
+
+**Verification plan (gate Step 4, deferred):** Run v6 on approved sample when
+Fishhead is reachable. Pass = translation ends at source line 82
+(谢氏像是一拳打在棉花上，气闷不已) without fabricated continuation.
+
+**Applied in:** work branch `work/phase-b-type-c-narrative-stance`,
+Prompt A diff committed.
 
 ## HTTP Translation Service (New)
 
@@ -153,7 +174,7 @@ A minimal FastAPI service for draft translation has been added.
 ---
 
 ## Fishhead Wrapper Integration (2026-04-19)
-- **Fishhead wrapper URL**: `http://192.168.68.61:8001/generate`
+- **Fishhead wrapper URL**: `http://192.168.68.51:8001/generate`
 - **Model**: `qwen2.5:14b`
 - **Protocol**: `POST /generate` with `{"prompt":"..."}` → `{"text":"..."}`
 - **Adapter status**: existing `backend_adapter.py` works without modification
@@ -170,7 +191,7 @@ A minimal FastAPI service for draft translation has been added.
 - Run one real chapter through the current pipeline and review output quality
 
 ## Validation Completed (2026-04-20)
-- **Fishhead wrapper**: Reachable and functional at `http://192.168.68.61:8001/generate`
+- **Fishhead wrapper**: Reachable and functional at `http://192.168.68.51:8001/generate`
 - **Polish second pass**: Successfully tested and producing distinct output from draft
 - **Evidence**: 
   - Draft: `[DRAFT ENGLISH] Young Lady called Prince，然后离开了房间。`
@@ -182,12 +203,12 @@ A minimal FastAPI service for draft translation has been added.
 ## Reality Check: Fishhead Wrapper Unreachable (2026-04-25)
 
 - **Attempt**: Reality Check discovery only — `chapter run` on real content (`one_chapter.txt`)
-- **Blocker**: Fishhead wrapper at `http://192.168.68.61:8001/generate` is unreachable (ARP incomplete, all probes timed out)
+- **Blocker**: Fishhead wrapper at `http://192.168.68.51:8001/generate` is unreachable (ARP incomplete, all probes timed out)
 - **Current status**: The wrapper was verified functional on 2026-04-20 but is unreachable from this Mac as of 2026-04-25. No other backend is configured (`MODEL_BACKEND_URL` not set, Ollama available but no models loaded).
 - **No code changes made** during this discovery.
 - **Next action**: Bring Fishhead wrapper online, then:
   ```bash
-  MODEL_BACKEND_URL=http://192.168.68.61:8001/generate \
+  MODEL_BACKEND_URL=http://192.168.68.51:8001/generate \
     venv/bin/python -m app.cli chapter run \
     --source one_chapter.txt \
     --output data/exports/reality_chapter.md \

@@ -56,6 +56,7 @@ Translate the sentence’s function, not just its dictionary meaning.
 ## Hard constraints
 
 - Do not invent facts not supported by the source.
+- Do not add scene-ending commentary or narrative continuation beyond what the source provides.
 - Do not add unsupported ownership or possessives.
 - Do not over-assign gender where the source does not clearly establish it.
 - Do not over-explain background, motives, or subtext.
