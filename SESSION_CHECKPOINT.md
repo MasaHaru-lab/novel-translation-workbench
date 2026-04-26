@@ -1,49 +1,39 @@
-# Session Checkpoint — 2026-04-26 (Phase B — v6 verification)
+# Session Checkpoint — 2026-04-26 (Phase B+ doc-sync batch)
 
 ## Current focus
-**v6 verification resumed** — Fishhead target corrected (`.61`, not `.51`), real model output generated, both Type C rules verified PASS.
+**Doc-sync batch** — update README, STATUS, and checkpoint to reflect Phase B+ operator improvements merged in PRs #9 and #10. No runtime code changes.
 
-## Fishhead target correction
-- Working target: `ambrosia@192.168.68.61:22` (verified via `ssh -G Fishhead-Core` + `ssh hostname/nvidia-smi`)
-- Earlier `.51` assumption was wrong — `.51` pings but refuses SSH on port 22
-- Ollama running on Fishhead: `qwen2.5:14b` (14.8B, Q4_K_M, RTX 3090)
-- Legacy wrapper at `.51:8001` not running; used SSH tunnel + Python proxy to Ollama API
+## What shipped in this phase (before this batch)
 
-## v6 verification result: PASS
+### PR #9 — Default output derivation from `--source`
+- Committed `9369504` on `main`
+- `run` and `chapter run` derive `--output` from `--source` when omitted
+- Prevents silent overwrites (the common footgun of running chapter3 without `--output` clobbering chapter1's output)
+- 10 new CLI tests
 
-### Signal 1 — Narrative stance: PASS ✓
-- Pass criterion: Translation ends at source line 82 without fabricated continuation
-- Actual: "Lady Xie felt frustrated, like hitting a soft wall." — faithful end, no continuation
-- Type C rule at Prompt A line 59 is effective
+### PR #10 — `chapter batch` command
+- Committed `6e6c605` on `main`
+- `python -m app.cli chapter batch --source f1 --source f2` for multi-file runs
+- Per-source output derivation, failure isolation, compact summary
+- KeyboardInterrupt/Ctrl+C not swallowed
+- 8 dedicated batch tests
 
-### Signal 2 — Facial-color direction: PASS ✓
-- Pass criterion: 秦老太太一呛，脸色都黑了 → "darkened" not "pale"
-- Actual: "Old Lady Qin was taken aback, her face darkening." — direction correct
-- Type C rule at Prompt A line 70 is effective
-
-### Quality gate note
-- Quality gate flagged segment_residue on segment 1 (7 CJK chars: "无情恩无情恩") — known model output artifact, unrelated to Type C rules
-
-## Changed files
-- **`docs/v6_verification_report.md`** — Updated from BLOCKED to PASS with full v6 evidence
-- **`STATUS.md`** — Updated both Prompt Change Gate sections to "verified v6"
-- **`SESSION_CHECKPOINT.md`** — this file, rewritten for this batch
+## What this batch changed
+- **`README.md`** — added `chapter batch` documentation with example output; updated output-default description; updated canonical commands table; removed "Batch processing" from Next Steps.
+- **`STATUS.md`** — test counts updated (339 passing, 74 CLI + 39 chapter); batch processing removed from "What's Still Missing"; Phase B+ operator-usability entry added; `chapter batch` added to Run Instructions.
+- **`SESSION_CHECKPOINT.md`** — rewritten for this batch.
 
 ## What was not changed
-- No Prompt A or Prompt B modifications
-- No Phase A surfaces touched (CLI, HTTP, manifest, output format, quality gate)
+- No runtime code changes
+- No test changes
+- No prompt or quality-rule changes
 - No project_assets changes
-- No application code changes
-- No scope expansion — verification batch only
-
-## Generated artifacts (gitignored, under data/outputs/)
-- `data/outputs/quality_v6_run.md` — chapter translation output
-- `data/outputs/quality_v6_run.manifest.json` — run manifest
+- No Fishhead access
+- No CLAUDE.md, WORKFLOW.md, SKILL.md, ORCHESTRATION.md, or QUALITY_LOOP.md modifications
 
 ## Test gate
-- Command: `source venv/bin/activate && python -m pytest app/tests/ -q`
-- Result: PENDING
+- Total: 339 passed (confirmed)
 
 ## Pre-merge gate
 - Script: `scripts/checks/pre_merge_gate.sh`
-- Status: PENDING
+- Status: PENDING (will run before merge to main)

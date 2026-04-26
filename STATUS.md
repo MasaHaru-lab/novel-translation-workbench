@@ -38,14 +38,13 @@ The translation framework has been migrated to a reusable, direction-agnostic sk
   - Strategy enactment closed loop (budget/consistency resolved from plan, record attached to `ChapterResult`)
 - ✅ **Consistency audit** (term unification, limited automated correction)
 - ✅ **Advanced CLI output** — strategy overview, consistency summary, resume guidance
-- ✅ **321 tests passing** (26 service + 46 CLI + 37 chapter + others)
+- ✅ **339 tests passing** (26 service + 74 CLI + 39 chapter + others)
 
 ## What's Still Missing (Phase B and later)
 
 - **Phase B**: Real translation models (currently mocked for tests)
 - **Phase B+**: Sentence‑level splitting for long paragraphs (splits by character boundary)
 - **Phase B+**: Configuration file for segment size, model paths
-- **Phase B+**: Batch processing of multiple chapters
 - **Phase B+**: HTTP polish endpoint (`POST /translate/polish`)
 
 ## Known Limitations
@@ -62,6 +61,7 @@ python -m app.cli chapter run                          # fresh run
 python -m app.cli chapter run --dry-run                # preview plan
 python -m app.cli chapter run --resume                 # resume partial run
 python -m app.cli chapter stream                       # stdout-only mode
+python -m app.cli chapter batch --source f1 --source f2   # batch multi-file
 
 # Legacy segment-level pipeline
 python -m app.cli run
@@ -73,7 +73,7 @@ python -m app.cli run
 python -m pytest app/tests/
 ```
 
-All 266 tests should pass (46 CLI + 37 chapter + others).
+All 339 tests should pass (74 CLI + 39 chapter + others).
 
 ## Phase B — Quality Loop
 
@@ -335,4 +335,13 @@ Use the enactment record to drive post‑run reporting or adaptive behavior in l
 
 **Batch 5C completed (2026-04-26):** minimal chapter-level HTTP/API integration. `POST /translate/chapter` endpoint exposes `ChapterOrchestrator.run_with_manifest()` with full manifest/resume semantics, consistency audit, strategy summary, and readable output. 26 endpoint tests (all mocked, no real-model execution). Test suite: 321 passed.
 
-**Next batch:** Phase B — quality loop. No further Phase A HTTP/CLI/integration work.
+**Phase B+ operator usability (PR #9, PR #10, 2026-04-26):**
+
+Two changes to eliminate operator footguns in daily use:
+
+- **Default output derivation (#9):** Both `run` and `chapter run` now derive `--output` from `--source` when omitted (e.g. `data/source/chapter3.txt` → `data/exports/chapter3_en.md`), instead of always defaulting to `chapter1_en.md`. Prevents silent overwrites. 10 new tests. Commit `9369504`.
+- **`chapter batch` command (#10):** `python -m app.cli chapter batch --source path1 --source path2` runs chapter-level translation on multiple source files in one invocation. Each source gets a safe default output via the same derivation helper. Failure isolation — one failed chapter does not block the rest. Compact per-chapter summary after completion. KeyboardInterrupt/Ctrl+C propagates naturally. 8 dedicated batch tests. Commit `6e6c605`.
+
+Test suite: 339 passed (74 CLI + 39 chapter + 26 service + others).
+
+**Next batch:** Phase B — quality loop. No further Phase A or Phase B+ operator-usability work.

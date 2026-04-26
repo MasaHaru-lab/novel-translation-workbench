@@ -129,7 +129,7 @@ You can specify custom input/output paths:
 python -m app.cli run --source path/to/source.txt --output path/to/output.md
 ```
 
-Output defaults to `data/exports/chapter1_en.md`.
+When `--output` is omitted, it is derived from `--source` (e.g. `data/source/chapter3.txt` → `data/exports/chapter3_en.md`).
 
 ### Chapter-level translation
 
@@ -180,6 +180,38 @@ Stream mode also reads from stdin when `--source` is omitted:
 cat data/source/chapter1.txt | python -m app.cli chapter stream > chapter1_en.txt
 ```
 
+### Batch chapter translation
+
+Translate multiple source files in a single command. Each source gets a safe default output derived from its filename. One failed chapter does not block subsequent chapters.
+
+```bash
+# Run batch translation for two chapters
+python -m app.cli chapter batch --source data/source/chapter1.txt --source data/source/chapter2.txt
+```
+
+Per-source output derivation: `data/source/chapter1.txt` → `data/exports/chapter1_en.md`, etc.
+
+The batch command accepts the same shared flags as `chapter run` (`--service-url`, `--allow-mock-fallback`, `--assets-mode`, `--resume`, `--no-clobber`). KeyboardInterrupt (Ctrl+C) propagates cleanly.
+
+Produces a per-chapter compact summary after all sources are processed:
+
+```
+Batch translation: 2 source(s)
+
+[1/2] chapter1.txt
+  Source:  data/source/chapter1.txt
+  Output:  data/exports/chapter1_en.md
+  ...
+[2/2] chapter2.txt
+  Source:  data/source/chapter2.txt
+  Output:  data/exports/chapter2_en.md
+  ...
+--- Batch Summary ---
+  chapter1.txt              COMPLETED
+  chapter2.txt              COMPLETED
+  (2 source(s) · 2 completed · 0 failed)
+```
+
 ### Canonical commands
 
 | Action | Command |
@@ -187,6 +219,7 @@ cat data/source/chapter1.txt | python -m app.cli chapter stream > chapter1_en.tx
 | Run tests | `python -m pytest app/tests/` |
 | Run segment-level pipeline (legacy) | `python -m app.cli run` |
 | Run chapter-level pipeline | `python -m app.cli chapter run` |
+| Run batch chapter translation | `python -m app.cli chapter batch --source ...` |
 | Stream chapter translation to stdout | `python -m app.cli chapter stream` |
 | Start translation service | `python run_translation_service.py` |
 
@@ -281,7 +314,6 @@ python -m pytest app/tests/test_segmenter.py
 **Beyond Phase B:**
 - Sentence‑level splitting for long paragraphs (currently splits by character boundary)
 - Configuration file for segment size, model parameters
-- Batch processing of multiple chapters
 - HTTP polish endpoint (`POST /translate/polish`)
 - Add post‑editing UI for human refinement
 
