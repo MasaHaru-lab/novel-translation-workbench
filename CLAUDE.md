@@ -247,3 +247,108 @@ Do not skip skills, ignore gstack errors, or work around missing gstack.
 Using gstack skills: After install, skills like /qa, /ship, /review, /investigate,
 and /browse are available. Use /browse for all web browsing.
 Use ~/.claude/skills/gstack/... for gstack file paths (the global path).
+
+## Local PR-style long-run workflow
+
+This repo uses a lightweight, **local** PR-style workflow for Claude/gstack
+long-running tasks. There is no GitHub PR, no remote bot, no CI, no
+auto-push, no auto-merge. The workflow exists so long sessions can run
+unattended without putting `main` at risk.
+
+### Branch model
+
+- `main` — stable seal point. Every commit on `main` should be a
+  green, atomically describable batch. `main` is what future sessions
+  resume from.
+- `work/<topic>` — 施工区. All Claude/gstack long-running work lives
+  on a `work/<topic>` branch. Inside a work branch you may freely create:
+  - batch commits
+  - WIP commits
+  - checkpoint commits (e.g. `SESSION_CHECKPOINT.md` updates)
+- The work branch is private to the session/operator. Force-push or
+  rebase inside the work branch is fine; just never force-push to `main`.
+
+### Merging back to main
+
+Before merging `work/<topic>` into `main`:
+
+1. Run the **pre-merge gate**: `./scripts/checks/pre_merge_gate.sh`
+2. Gate must exit 0 (PASS). On FAIL, do not merge, do not "work
+   around", do not bypass — fix the underlying issue first.
+3. Run the test suite (gate intentionally does not):
+   `source venv/bin/activate && python -m pytest app/tests/`
+4. Merge **squash-first** into `main`, so `main` keeps a clean
+   one-commit-per-batch history. The full WIP history stays on the
+   work branch (which can be deleted or kept for reference).
+5. Update `STATUS.md` / `SESSION_CHECKPOINT.md` on `main` if the batch
+   changed user-visible capabilities or the resume state.
+
+The gate is a merge-readiness check, not a substitute for tests, and
+not a quality verdict. It only verifies that the local repo is in a
+shape where a squash-merge into `main` will not leak generated outputs
+or half-staged WIP.
+
+### Pre-merge gate
+
+Script: `scripts/checks/pre_merge_gate.sh`
+
+What it checks (all local, offline, no model backend, no Fishhead):
+
+- inside the project git repo
+- working tree has no uncommitted tracked-file changes
+- generated-output paths (`data/output/`, `data/exports/`, `outputs/`)
+  are not tracked in git
+- current branch hint: `work/<topic>` expected; warn-only on `main`
+  or detached HEAD
+
+Exit codes: `0` = PASS, `1` = FAIL. FAIL must halt the merge flow.
+
+What the gate does NOT do: run pytest, call models, contact Fishhead,
+or verify translation quality. Those are operator responsibilities (or
+batch-level acceptance), not gate concerns.
+
+### Fishhead / 3090 usage boundary
+
+Fishhead (the local 3090 host) is a controlled engineering resource,
+not an automated quality oracle.
+
+Allowed without prior per-batch approval:
+- read-only health / connectivity checks
+  (`ssh Fishhead-Core 'hostname && nvidia-smi'`)
+- contract checks against the wrapper (e.g. shape of
+  `http://192.168.68.61:8001/generate` response on a tiny synthetic prompt)
+- protocol / reachability probes
+- small synthetic-input integration checks tied to an explicit batch goal
+
+Not allowed without explicit per-batch user approval:
+- real-sample translation acceptance runs
+- full chapter live runs against the real model
+- long-form literary quality evaluation
+- unbounded smoke / live runs
+- using real model output to retroactively justify or drive
+  prompt / workflow / orchestrator changes inside the same batch
+
+Operational facts:
+- Fishhead host: `192.168.68.61`, user `ambrosia`,
+  SSH alias `Fishhead-Core`, project path `/home/ambrosia/rubato-asr`,
+  venv `/home/ambrosia/rubato-asr/.venv`. Update these in this
+  document if anything changes.
+- Wrapper URL (when up): `http://192.168.68.61:8001/generate`
+- Any generated artifacts from Fishhead runs (translations, manifests,
+  logs) must stay under `data/output/`, `data/exports/`, or
+  `outputs/`, all of which are gitignored. They must not be committed.
+- Fishhead being unreachable is not a blocker for the gate or for
+  non-model batches.
+
+### Boundaries this section establishes
+
+This workflow section is infrastructure, not a feature. It does not
+authorize:
+- modifying application logic, orchestrator, consistency/quality
+  modules, Prompt A, or Prompt B
+- starting Batch 5A (chapter-level CLI/HTTP integration)
+- enabling continuous gstack checkpointing, GitHub Actions, remote
+  PRs, auto-push, or auto-merge bots
+- automated long-task scheduling
+
+Those require their own batch with explicit user approval.

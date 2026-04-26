@@ -1,7 +1,16 @@
-# Session Checkpoint — 2026-04-25 (quality gate hardening)
+# Session Checkpoint — 2026-04-26 (long-run workflow infra)
 
 ## Current focus
-Batch completed: chapter-level quality gate hardened so a "completed" run cannot mask a failed quality check. Operator-visible (CLI) and persistent (manifest JSON) signals are now wired in. Committed.
+Batch completed: established the local PR-style long-run workflow for this repo (branch model, pre-merge gate script, Fishhead/3090 usage boundary). Pure infrastructure — no application logic touched. Batch 5A is **not** started; that remains the next planning candidate.
+
+## Long-run workflow (this batch)
+- **`CLAUDE.md`** — added "Local PR-style long-run workflow" section: `main` as seal point, `work/<topic>` for施工, squash-merge back to main, gate-before-merge rule, Fishhead/3090 boundary (read-only health / contract / synthetic only; no real-sample acceptance without per-batch approval), and explicit non-authorizations (no Batch 5A, no GH Actions, no auto-push/merge).
+- **`scripts/checks/pre_merge_gate.sh`** (new, executable) — offline merge-readiness gate. Checks: inside git repo, working tree clean, `data/output` / `data/exports` / `outputs` not tracked, branch is `work/<topic>` (warn on main / detached). Exits 1 on FAIL, 0 on PASS. Does **not** run pytest, call models, or contact Fishhead.
+- **Fishhead health check (this session)**: `ssh Fishhead-Core 'hostname && nvidia-smi'` returned `Permission denied (publickey,password)` — TCP/SSH reachable on `192.168.68.61`, host is up, but key auth not configured for this shell. Treated as connectivity-only signal; no model verification performed. No artifacts generated.
+- **Fishhead IP**: `192.168.68.61` is current and already correct in `STATUS.md` / `SESSION_CHECKPOINT.md`. No fact update needed.
+
+## Prior batch (preserved for resume context)
+Earlier focus: chapter-level quality gate hardened so a "completed" run cannot mask a failed quality check. Operator-visible (CLI) and persistent (manifest JSON) signals wired in. Committed.
 
 ## Confirmed done
 
