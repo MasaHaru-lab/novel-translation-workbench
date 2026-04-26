@@ -7,8 +7,9 @@ import logging
 import sys
 import time
 from contextlib import contextmanager
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Iterator, Optional
+from typing import Callable, Iterator, List, Optional
 
 from app.chapter.manifest import RunManifest, ResumeConfig
 from app.chapter.orchestrator import ChapterOrchestrator
@@ -575,6 +576,94 @@ def run_chapter_stream(
         sys.exit(1)
 
 
+@dataclass
+class BatchChapterResult:
+    """Result of a single chapter run within a batch."""
+    source: Path
+    output: Path
+    status: str  # "COMPLETED" or "FAILED"
+    error: Optional[str] = None
+
+
+def run_chapter_batch(
+    source_paths: List[Path],
+    service_url: Optional[str] = None,
+    allow_mock_fallback: bool = False,
+    assets_mode: AssetsMode = DEFAULT_ASSETS_MODE,
+    resume: bool = False,
+    no_clobber: bool = False,
+) -> None:
+    """Run chapter translation for multiple source files.
+
+    Processes each source file sequentially. One failed chapter does
+    not stop subsequent chapters. Produces a per-chapter summary at
+    the end.
+    """
+    _validate_assets_mode(assets_mode)
+    results: List[BatchChapterResult] = []
+
+    print(f"Batch translation: {len(source_paths)} source(s)")
+    print()
+
+    for i, source in enumerate(source_paths, 1):
+        output = _derive_output_path(source)
+        print(f"[{i}/{len(source_paths)}] {source.name}")
+        print(f"  Source:  {source}")
+        print(f"  Output:  {output}")
+        print()
+
+        try:
+            run_chapter_pipeline(
+                source_path=source,
+                output_path=output,
+                service_url=service_url,
+                allow_mock_fallback=allow_mock_fallback,
+                assets_mode=assets_mode,
+                resume=resume,
+                no_clobber=no_clobber,
+            )
+            # Check actual output: run_chapter_pipeline can return without
+            # SystemExit even when translation failed (e.g., model backend
+            # unavailable). Treat missing output as a chapter failure.
+            if output.exists():
+                status = "COMPLETED"
+                error = None
+            else:
+                status = "FAILED"
+                error = "no output produced"
+            results.append(BatchChapterResult(
+                source=source, output=output, status=status, error=error,
+            ))
+        except SystemExit as e:
+            if e.code == 0:
+                raise  # user-initiated cancel propagates
+            error_msg = str(e) if str(e) else "chapter failed"
+            results.append(BatchChapterResult(
+                source=source, output=output, status="FAILED", error=error_msg,
+            ))
+        except Exception as e:
+            error_msg = str(e) if str(e) else type(e).__name__
+            results.append(BatchChapterResult(
+                source=source, output=output, status="FAILED", error=error_msg,
+            ))
+        print()
+
+    # ── Batch summary ─────────────────────────────────────────────────
+    completed = sum(1 for r in results if r.status == "COMPLETED")
+    failed = sum(1 for r in results if r.status == "FAILED")
+
+    print("--- Batch Summary ---")
+    for r in results:
+        line = f"  {r.source.name:40s} {r.status:<10s}"
+        if r.error:
+            line += f"  {r.error}"
+        print(line)
+    print(f"  ({len(results)} source(s) · {completed} completed · {failed} failed)")
+    print()
+    if failed:
+        print("  (One or more chapters failed. Check individual run output above.)")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Novel translation workbench MVP")
     subparsers = parser.add_subparsers(dest='command', required=True)
@@ -649,6 +738,24 @@ def main():
                                             'the project memory block into translation prompts; "none" '
                                             'suppresses it entirely.')
 
+    chapter_batch_parser = chapter_sub.add_parser('batch', help='Run batch chapter translation for multiple source files')
+    chapter_batch_parser.add_argument('--source', type=Path, required=True, action='append',
+                                      help='Path to chapter source text file (repeatable, required). Each source '
+                                           'gets its own default output path derived from its filename.')
+    chapter_batch_parser.add_argument('--service-url', type=str, default=None,
+                                      help='URL of translation service (e.g., http://localhost:8000). If not provided, use local mock.')
+    chapter_batch_parser.add_argument('--allow-mock-fallback', action='store_true',
+                                      help='If service fails, allow falling back to local mock translation.')
+    chapter_batch_parser.add_argument('--assets-mode', dest='assets_mode',
+                                      choices=list(ASSETS_MODES), default=DEFAULT_ASSETS_MODE,
+                                      help='Project-asset injection mode. "full" (default) injects '
+                                           'the project memory block into translation prompts; "none" '
+                                           'suppresses it entirely.')
+    chapter_batch_parser.add_argument('--resume', action='store_true',
+                                      help='Attempt to resume each chapter from its saved manifest.')
+    chapter_batch_parser.add_argument('--no-clobber', action='store_true',
+                                      help='Skip chapters whose output file already exists.')
+
     args = parser.parse_args()
 
     if args.command == 'run':
@@ -687,6 +794,15 @@ def main():
                 service_url=args.service_url,
                 allow_mock_fallback=args.allow_mock_fallback,
                 assets_mode=args.assets_mode,
+            )
+        elif args.chapter_command == 'batch':
+            run_chapter_batch(
+                source_paths=args.source,
+                service_url=args.service_url,
+                allow_mock_fallback=args.allow_mock_fallback,
+                assets_mode=args.assets_mode,
+                resume=args.resume,
+                no_clobber=args.no_clobber,
             )
     else:
         parser.print_help()

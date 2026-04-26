@@ -15,6 +15,7 @@ import shutil
 from app.cli import (
     _derive_output_path,
     _report_chapter_result,
+    run_chapter_batch,
     run_chapter_pipeline,
     run_chapter_stream,
     run_pipeline,
@@ -1591,3 +1592,228 @@ def test_run_pipeline_with_explicit_output_unchanged(tmp_path):
 if __name__ == "__main__":
     # Run simple smoke test
     print("CLI tests passed (mocked).")
+
+
+# ── chapter batch ─────────────────────────────────────────────────────
+
+
+def test_chapter_batch_single_source(tmp_path, capsys):
+    """Batch with one source should run chapter pipeline for that source."""
+    source = tmp_path / "chapter1.txt"
+    source.write_text("第一章\n\nTest content.", encoding='utf-8')
+
+    mock_result = ChapterResult(
+        chapter_title="第一章",
+        source_text="第一章\n\nTest content.",
+        aggregated_translation="Output.",
+        segment_statuses={"1": SegmentStatus.COMPLETED},
+        chapter_status=ChapterStatus.COMPLETED,
+    )
+
+    with patch('app.cli.ChapterOrchestrator') as mock_orch_cls:
+        mock_orch = MagicMock()
+        mock_orch_cls.return_value = mock_orch
+        mock_orch.load_manifest.return_value = None
+        mock_plan = MagicMock()
+        mock_plan.chapter_title = "第一章"
+        mock_plan.segment_count = 1
+        mock_orch.plan.return_value = mock_plan
+        mock_orch.run_with_manifest.return_value = mock_result
+
+        run_chapter_batch(source_paths=[source])
+
+    captured = capsys.readouterr()
+    assert "Batch translation:" in captured.out
+    assert "Batch Summary" in captured.out
+    assert "COMPLETED" in captured.out
+    assert source.name in captured.out
+
+
+def test_chapter_batch_two_sources(tmp_path, capsys):
+    """Batch with two sources should run chapter pipeline for each."""
+    s1 = tmp_path / "ch1.txt"
+    s2 = tmp_path / "ch2.txt"
+    s1.write_text("第一章\n\nContent.", encoding='utf-8')
+    s2.write_text("第二章\n\nContent.", encoding='utf-8')
+
+    mock_result = lambda title: ChapterResult(
+        chapter_title=title,
+        source_text="content",
+        aggregated_translation="Output.",
+        segment_statuses={"1": SegmentStatus.COMPLETED},
+        chapter_status=ChapterStatus.COMPLETED,
+    )
+
+    with patch('app.cli.ChapterOrchestrator') as mock_orch_cls:
+        mock_orch = MagicMock()
+        mock_orch_cls.return_value = mock_orch
+        mock_orch.load_manifest.return_value = None
+        mock_plan = MagicMock()
+        mock_plan.chapter_title = "Title"
+        mock_plan.segment_count = 1
+        mock_orch.plan.return_value = mock_plan
+        mock_orch.run_with_manifest.side_effect = [
+            mock_result("第一章"), mock_result("第二章"),
+        ]
+
+        run_chapter_batch(source_paths=[s1, s2])
+
+    captured = capsys.readouterr()
+    assert "[1/2]" in captured.out
+    assert "[2/2]" in captured.out
+    assert "2 source(s)" in captured.out
+    assert "2 completed" in captured.out
+    assert s1.name in captured.out
+    assert s2.name in captured.out
+
+
+def test_chapter_batch_one_fails_continues(tmp_path, capsys):
+    """When one chapter fails (source not found), the batch continues."""
+    missing = tmp_path / "nope.txt"
+    good = tmp_path / "ok.txt"
+    good.write_text("第一章\n\nContent.", encoding='utf-8')
+
+    mock_result = ChapterResult(
+        chapter_title="第一章",
+        source_text="Content.",
+        aggregated_translation="Output.",
+        segment_statuses={"1": SegmentStatus.COMPLETED},
+        chapter_status=ChapterStatus.COMPLETED,
+    )
+
+    with patch('app.cli.ChapterOrchestrator') as mock_orch_cls:
+        mock_orch = MagicMock()
+        mock_orch_cls.return_value = mock_orch
+        mock_orch.load_manifest.return_value = None
+        mock_plan = MagicMock()
+        mock_plan.chapter_title = "第一章"
+        mock_plan.segment_count = 1
+        mock_orch.plan.return_value = mock_plan
+        mock_orch.run_with_manifest.return_value = mock_result
+
+        run_chapter_batch(source_paths=[missing, good])
+
+    captured = capsys.readouterr()
+    assert "1 completed" in captured.out
+    assert "1 failed" in captured.out
+    assert "FAILED" in captured.out
+    assert "COMPLETED" in captured.out
+    assert missing.name in captured.out
+    assert good.name in captured.out
+
+
+
+
+
+
+def _invoke_batch_main_with_argv(argv):
+    """Run main() with sys.argv patched for chapter batch."""
+    from app import cli
+
+    captured = {}
+
+    def fake_run_chapter_batch(source_paths, service_url, allow_mock_fallback,
+                                assets_mode, resume, no_clobber):
+        captured['source_paths'] = source_paths
+        captured['service_url'] = service_url
+        captured['allow_mock_fallback'] = allow_mock_fallback
+        captured['assets_mode'] = assets_mode
+        captured['resume'] = resume
+        captured['no_clobber'] = no_clobber
+
+    with patch('sys.argv', argv):
+        with patch.object(cli, 'run_chapter_batch', side_effect=fake_run_chapter_batch):
+            cli.main()
+    return captured
+
+
+def test_chapter_batch_main_routing():
+    """chapter batch should route args to run_chapter_batch."""
+    captured = _invoke_batch_main_with_argv([
+        'cli', 'chapter', 'batch', '--source', '/tmp/ch1.txt', '--source', '/tmp/ch2.txt',
+    ])
+    assert len(captured['source_paths']) == 2
+    assert Path('/tmp/ch1.txt') in captured['source_paths']
+    assert Path('/tmp/ch2.txt') in captured['source_paths']
+    assert captured['service_url'] is None
+    assert captured['allow_mock_fallback'] is False
+    assert captured['assets_mode'] == 'full'
+    assert captured['resume'] is False
+    assert captured['no_clobber'] is False
+
+
+def test_chapter_batch_main_requires_source():
+    """chapter batch without --source should exit with code 2."""
+    from app import cli
+
+    with pytest.raises(SystemExit) as exc:
+        with patch('sys.argv', ['cli', 'chapter', 'batch']):
+            cli.main()
+    assert exc.value.code == 2
+
+
+def test_chapter_batch_main_passthrough_flags():
+    """chapter batch should forward shared flags to run_chapter_batch."""
+    captured = _invoke_batch_main_with_argv([
+        'cli', 'chapter', 'batch', '--source', '/tmp/ch1.txt',
+        '--service-url', 'http://example:9000',
+        '--allow-mock-fallback',
+        '--assets-mode', 'none',
+        '--resume',
+        '--no-clobber',
+    ])
+    assert captured['service_url'] == 'http://example:9000'
+    assert captured['allow_mock_fallback'] is True
+    assert captured['assets_mode'] == 'none'
+    assert captured['resume'] is True
+    assert captured['no_clobber'] is True
+
+
+def test_chapter_batch_keyboard_interrupt_propagates(tmp_path):
+    """KeyboardInterrupt must propagate through run_chapter_batch, not be swallowed."""
+    source = tmp_path / "test.txt"
+    source.write_text("test", encoding='utf-8')
+
+    with patch('app.cli.run_chapter_pipeline', side_effect=KeyboardInterrupt):
+        with pytest.raises(KeyboardInterrupt):
+            run_chapter_batch(source_paths=[source])
+
+
+def test_chapter_batch_passthrough_to_pipeline(tmp_path):
+    """run_chapter_batch must forward shared flags and output path to run_chapter_pipeline."""
+    source = tmp_path / "ch1.txt"
+    source.write_text("test", encoding='utf-8')
+    # run_chapter_pipeline internally needs the output to exist for COMPLETED
+    output = _derive_output_path(source)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text("dummy", encoding='utf-8')
+
+    captured = {}
+
+    def fake_pipeline(source_path, output_path, service_url, allow_mock_fallback,
+                      assets_mode, resume, no_clobber, **kw):
+        captured['source_path'] = source_path
+        captured['output_path'] = output_path
+        captured['service_url'] = service_url
+        captured['allow_mock_fallback'] = allow_mock_fallback
+        captured['assets_mode'] = assets_mode
+        captured['resume'] = resume
+        captured['no_clobber'] = no_clobber
+
+    with patch('app.cli.run_chapter_pipeline', side_effect=fake_pipeline):
+        run_chapter_batch(
+            source_paths=[source],
+            service_url="http://example:9000",
+            allow_mock_fallback=True,
+            assets_mode="none",
+            resume=True,
+            no_clobber=True,
+        )
+
+    assert captured['source_path'] == source
+    assert captured['output_path'] == output
+    assert captured['service_url'] == "http://example:9000"
+    assert captured['allow_mock_fallback'] is True
+    assert captured['assets_mode'] == "none"
+    assert captured['resume'] is True
+    assert captured['no_clobber'] is True
