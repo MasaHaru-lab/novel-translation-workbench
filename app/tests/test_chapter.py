@@ -125,6 +125,53 @@ def test_format_aggregated_skips_empty():
     assert "Only this." in out
 
 
+# ── Output format contract (Batch 5A) ────────────────────────────────────
+
+
+def test_format_aggregated_does_not_prepend_chinese_chapter_title():
+    """Contract rule 1: orchestrator must NOT inject the raw Chinese
+    ``chapter_title`` as a heading on the aggregated output.
+
+    The visible heading is whatever the segment-level translator produced
+    inside segment 1.
+    """
+    results = [
+        TranslationOutput(
+            segment_id="1",
+            draft_translation="",
+            polished_translation="# Chapter 1: The Arrival\n\nShe walked into the room.",
+        ),
+        TranslationOutput(
+            segment_id="2",
+            draft_translation="",
+            polished_translation="The room was quiet.",
+        ),
+    ]
+    out = format_aggregated_translation("第一章 到来", results)
+    first_line = out.splitlines()[0]
+    assert "第一章" not in first_line
+    assert first_line == "# Chapter 1: The Arrival"
+
+
+def test_format_aggregated_first_line_has_no_cjk_when_segment_translates_heading():
+    """Contract rule 2: when the segment-level translator produces an
+    English heading, no CJK characters appear in the first non-empty line.
+    """
+    results = [
+        TranslationOutput(
+            segment_id="1",
+            draft_translation="",
+            polished_translation="Chapter 1: The Arrival\n\nShe walked into the room.",
+        ),
+    ]
+    out = format_aggregated_translation("第一章 到来", results)
+
+    first_non_empty = next((l for l in out.splitlines() if l.strip()), "")
+    assert first_non_empty == "Chapter 1: The Arrival"
+    # No CJK characters in the first non-empty line.
+    assert all(not ('一' <= ch <= '鿿') for ch in first_non_empty)
+
+
 # ── ChapterOrchestrator.plan ─────────────────────────────────────────────
 
 def test_plan_single_segment():

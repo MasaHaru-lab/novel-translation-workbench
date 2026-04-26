@@ -60,6 +60,81 @@ def test_title_translated_does_not_trigger_title_rule():
     assert "title_untranslated" not in report.codes()
 
 
+def test_title_untranslated_skips_leading_blank_lines():
+    """Leading blank lines must not mask a Chinese first non-empty line."""
+    result = ChapterResult(
+        chapter_title="Chapter 1",
+        source_text="第一章\n\n她走进房间。",
+        segment_results=[_seg("1", "She walked into the room.")],
+        aggregated_translation="\n\n第一章\n\nShe walked into the room.",
+    )
+    report = validate_chapter_output(result)
+    assert "title_untranslated" in report.codes()
+
+
+# ── Output format contract alignment (Batch 5A) ──────────────────────────
+
+
+def test_quality_and_consistency_agree_on_chinese_title_leak():
+    """Contract alignment: when the raw Chinese ``chapter_title`` leaks
+    into the first line of the aggregated output, BOTH the quality gate
+    (``title_untranslated``) and the consistency audit (``TITLE_FORMAT``)
+    must flag it. Neither may stay silent, neither may auto-fix it
+    mechanically.
+    """
+    from app.chapter.consistency import (
+        ChapterConsistencyAuditor,
+        ConsistencyIssueCategory,
+    )
+
+    aggregated = "# 第一章\n\nShe walked into the room."
+    chapter_title = "第一章"
+
+    result = ChapterResult(
+        chapter_title=chapter_title,
+        source_text="第一章\n\n她走进房间。",
+        segment_results=[_seg("1", "She walked into the room.")],
+        aggregated_translation=aggregated,
+    )
+    report = validate_chapter_output(result)
+    assert "title_untranslated" in report.codes()
+
+    auditor = ChapterConsistencyAuditor()
+    audit = auditor.audit(aggregated, chapter_title, [])
+    title_issues = audit.issues_by_category(ConsistencyIssueCategory.TITLE_FORMAT)
+    assert len(title_issues) == 1
+    assert title_issues[0].auto_fixable is False
+
+
+def test_quality_and_consistency_agree_on_clean_english_first_line():
+    """Contract alignment: when the segment-level translator produces an
+    English heading and the Chinese metadata stays out of the visible
+    output, NEITHER gate may flag the chapter.
+    """
+    from app.chapter.consistency import (
+        ChapterConsistencyAuditor,
+        ConsistencyIssueCategory,
+    )
+
+    aggregated = "# Chapter 1: The Arrival\n\nShe walked into the room."
+    chapter_title = "第一章 到来"  # Chinese metadata stays metadata
+
+    result = ChapterResult(
+        chapter_title=chapter_title,
+        source_text="第一章 到来\n\n她走进房间。",
+        segment_results=[_seg("1", "Chapter 1: The Arrival\n\nShe walked into the room.")],
+        aggregated_translation=aggregated,
+    )
+    report = validate_chapter_output(result)
+    assert "title_untranslated" not in report.codes()
+    assert report.passed
+
+    auditor = ChapterConsistencyAuditor()
+    audit = auditor.audit(aggregated, chapter_title, [])
+    title_issues = audit.issues_by_category(ConsistencyIssueCategory.TITLE_FORMAT)
+    assert len(title_issues) == 0
+
+
 # ── Chapter-level CJK residue ────────────────────────────────────────────
 
 

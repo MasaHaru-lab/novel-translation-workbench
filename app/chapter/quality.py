@@ -16,6 +16,16 @@ target the failure types observed in real-run quality reviews:
 A non-empty :class:`QualityReport` means the chapter run completed but
 quality validation flagged at least one issue. Callers MUST treat such a
 result as "not green".
+
+This module is one of three that together enforce the chapter Markdown
+output format contract documented on
+``app.chapter.orchestrator.format_aggregated_translation``. The
+``title_untranslated`` rule below enforces contract rule 2 (no CJK in
+the first non-empty line of the final visible output); the consistency
+audit's ``TITLE_FORMAT`` check enforces the related "raw source title
+must not leak verbatim" rule. The two checks are aligned and must not
+contradict each other — see that contract docstring before changing
+either gate.
 """
 from __future__ import annotations
 
@@ -97,17 +107,25 @@ def validate_chapter_output(result: ChapterResult) -> QualityReport:
     final_text = result.final_translation or ""
 
     # ── Title preservation ─────────────────────────────────────────────
-    # The first line of the output should not be Chinese — the title is
-    # part of the first segment's input and should be translated by the
-    # segment-level translator like any other content.
-    first_line = (result.final_translation or "").splitlines()[0] if result.final_translation else ""
-    if first_line and _count_cjk(first_line) >= 1:
+    # The first non-empty line of the output should not be Chinese — the
+    # title is part of the first segment's input and should be translated
+    # by the segment-level translator like any other content. Skipping
+    # leading blank lines keeps this gate aligned with the consistency
+    # audit's TITLE_FORMAT check (see orchestrator output format
+    # contract).
+    first_non_empty = ""
+    for line in (result.final_translation or "").splitlines():
+        stripped = line.strip()
+        if stripped:
+            first_non_empty = stripped
+            break
+    if first_non_empty and _count_cjk(first_non_empty) >= 1:
         issues.append(
             QualityIssue(
                 code="title_untranslated",
                 severity="error",
                 message=(
-                    f"Output first line still in Chinese: {first_line!r}. "
+                    f"Output first line still in Chinese: {first_non_empty!r}. "
                     "The chapter heading was not translated."
                 ),
             )

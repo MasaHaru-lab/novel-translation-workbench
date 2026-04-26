@@ -73,10 +73,44 @@ def format_aggregated_translation(
 ) -> str:
     """Concatenate polished translations into a flowing full chapter.
 
-    Each segment's polished result becomes a section, separated by a blank
-    line for readability. The chapter title is NOT prepended as a heading
-    here — the first segment's input already contains it, and the
-    segment-level translator renders it in English naturally.
+    Output format contract (Batch 5A — chapter Markdown final output)
+    -----------------------------------------------------------------
+    The aggregated chapter Markdown returned by this function, and the
+    ``final_translation`` derived from it (post-consistency-pass when
+    available), must satisfy the following minimum rules:
+
+    1. The orchestrator MUST NOT prepend the source-derived
+       ``chapter_title`` (which is the raw first line of the source — for
+       Chinese source novels this is Chinese, e.g. ``"第一章"``) as a
+       heading on the aggregated output. The chapter heading visible in
+       the final Markdown is whatever the segment-level translator
+       produced inside segment 1.
+    2. The first non-empty line of the final visible output MUST NOT
+       contain CJK characters from the source title. Specifically: the
+       raw ``chapter_title`` literal must not appear as the first line
+       (with or without a leading ``#``).
+    3. The raw Chinese ``chapter_title`` is metadata only. It is allowed
+       to live in ``ChapterPlan.chapter_title``, ``ChapterResult.
+       chapter_title``, manifest records, and source-bookkeeping logs;
+       it must not surface as visible Markdown.
+    4. Heading shape (``# Title`` vs plain English first line) is the
+       segment-level translator's responsibility, not the orchestrator's.
+       The orchestrator does not enforce a particular Markdown level.
+    5. Segment polished outputs are joined in segment_id order with a
+       blank line between sections. Empty polished outputs are skipped.
+
+    Cross-module enforcement of this contract:
+
+    * ``app.chapter.quality.validate_chapter_output`` enforces rule 2 via
+      the ``title_untranslated`` and ``cjk_residue`` quality gates.
+    * ``app.chapter.consistency.ChapterConsistencyAuditor._check_title_
+      format`` enforces rule 1 (raw source-title leak) at audit time and
+      MUST NOT propose corrections that would re-introduce the source
+      ``chapter_title`` into the visible output.
+
+    These three modules must agree on this contract; if you change the
+    rule set here, update the consistency audit and quality gate in the
+    same change.
     """
     parts = []
     for out in segment_results:

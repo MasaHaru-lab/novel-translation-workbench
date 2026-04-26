@@ -261,28 +261,112 @@ def test_audit_skips_canonical_only_text():
 
 
 def test_audit_title_format_correct():
-    """No issue when title heading is correctly formatted."""
+    """No issue when the first non-empty line is a translated heading.
+
+    Heading shape (with or without leading ``#``) is the segment-level
+    translator's responsibility per the chapter Markdown output format
+    contract. The consistency audit must not flag a well-formed English
+    first line.
+    """
     auditor = ChapterConsistencyAuditor()
     audit = auditor.audit("# Chapter 1", "Chapter 1", [])
     title_issues = audit.issues_by_category(ConsistencyIssueCategory.TITLE_FORMAT)
     assert len(title_issues) == 0
 
 
-def test_audit_title_format_missing():
-    """Issue raised when title heading is missing or wrong."""
+def test_audit_title_format_no_heading_marker_is_ok():
+    """A plain English first line (no ``#``) is not a TITLE_FORMAT issue.
+
+    The orchestrator does not inject a heading; whatever the segment-level
+    translator produced is the visible heading. A plain English first
+    line is contract-compliant and must not be flagged.
+    """
     auditor = ChapterConsistencyAuditor()
     audit = auditor.audit("Chapter 1\n\ncontent.", "Chapter 1", [])
     title_issues = audit.issues_by_category(ConsistencyIssueCategory.TITLE_FORMAT)
-    assert len(title_issues) >= 1
-    assert title_issues[0].auto_fixable is True
+    assert len(title_issues) == 0
+
+
+def test_audit_title_format_chinese_metadata_does_not_false_positive():
+    """Chinese ``chapter_title`` metadata + English first line is OK.
+
+    This is the realistic case: ``ChapterPlan.chapter_title`` carries the
+    raw Chinese source title (``"第一章"``), while the segment-level
+    translator produces an English heading (``"# Chapter 1"``). The
+    consistency audit must NOT propose to overwrite the English first
+    line with the Chinese metadata — that would corrupt the output.
+    """
+    auditor = ChapterConsistencyAuditor()
+    audit = auditor.audit(
+        "# Chapter 1: The Arrival\n\nShe walked into the room.",
+        "第一章 到来",
+        [],
+    )
+    title_issues = audit.issues_by_category(ConsistencyIssueCategory.TITLE_FORMAT)
+    assert len(title_issues) == 0
+
+
+def test_audit_title_format_chinese_leak_flagged_not_autofixed():
+    """When the raw Chinese source title leaks into the first line, flag
+    it but do NOT mark it auto_fixable.
+
+    A leaked source title is a structural translation failure; mechanical
+    string replacement cannot recover the missing English heading.
+    """
+    auditor = ChapterConsistencyAuditor()
+    audit = auditor.audit(
+        "# 第一章\n\nShe walked into the room.",
+        "第一章",
+        [],
+    )
+    title_issues = audit.issues_by_category(ConsistencyIssueCategory.TITLE_FORMAT)
+    assert len(title_issues) == 1
+    assert title_issues[0].auto_fixable is False
+
+
+def test_audit_title_format_chinese_leak_without_hash():
+    """Leaked title is detected even without a leading ``#`` marker."""
+    auditor = ChapterConsistencyAuditor()
+    audit = auditor.audit(
+        "第一章\n\nShe walked into the room.",
+        "第一章",
+        [],
+    )
+    title_issues = audit.issues_by_category(ConsistencyIssueCategory.TITLE_FORMAT)
+    assert len(title_issues) == 1
+    assert title_issues[0].auto_fixable is False
 
 
 def test_audit_title_format_empty():
-    """Issue raised when aggregated text is empty."""
+    """Issue raised when aggregated text is empty (and not auto-fixable)."""
     auditor = ChapterConsistencyAuditor()
     audit = auditor.audit("", "Chapter 1", [])
     title_issues = audit.issues_by_category(ConsistencyIssueCategory.TITLE_FORMAT)
     assert len(title_issues) >= 1
+    assert title_issues[0].auto_fixable is False
+
+
+def test_corrector_does_not_corrupt_english_heading_with_chinese_metadata():
+    """Regression: a leaked-title issue must not cause the corrector to
+    overwrite the English first line with raw Chinese metadata.
+
+    Before Batch 5A, ``_check_title_format`` raised an auto-fixable issue
+    whenever the first line did not match ``# {chapter_title}`` literally.
+    With Chinese ``chapter_title`` metadata that meant the corrector
+    would replace the model's English heading with the raw source
+    title — corrupting the chapter.
+    """
+    auditor = ChapterConsistencyAuditor()
+    corrector = ChapterCorrector()
+    aggregated = "# Chapter 1: The Arrival\n\nShe walked into the room."
+    audit = auditor.audit(aggregated, "第一章 到来", [])
+
+    corrected, summary = corrector.correct(aggregated, audit)
+
+    assert corrected == aggregated
+    assert "第一章" not in corrected
+    assert "Chapter 1: The Arrival" in corrected
+    assert not summary.has_corrections
 
 
 # ═════════════════════════════════════════════════════════════════════════

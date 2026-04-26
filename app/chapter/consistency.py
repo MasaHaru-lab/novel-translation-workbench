@@ -26,6 +26,17 @@ from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
 from app.translate.project_context import ASSET_NAMES, load_asset
+from app.translate.translator import _count_cjk
+
+
+def _contains_cjk(text: str) -> bool:
+    """True if ``text`` contains at least one CJK character.
+
+    Used by the chapter Markdown output format contract to decide whether
+    a source ``chapter_title`` carries Chinese metadata that must not
+    leak into the visible aggregated output.
+    """
+    return _count_cjk(text or "") > 0
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +57,13 @@ class ConsistencyIssueCategory(str, Enum):
     """A glossary term appears in a non-canonical variant."""
 
     TITLE_FORMAT = "title_format"
-    """The chapter title heading is missing, misformatted, or inconsistent."""
+    """The raw source ``chapter_title`` (e.g. the Chinese first line of
+    the source) leaked into the visible aggregated output, or the
+    aggregated output is empty. Heading shape (``#`` level, exact wording)
+    is intentionally NOT checked here — that is the segment-level
+    translator's responsibility, per the chapter Markdown output format
+    contract documented on
+    ``app.chapter.orchestrator.format_aggregated_translation``."""
 
     SEGMENT_BOUNDARY = "segment_boundary"
     """An adjacent-segment boundary has an obvious inconsistency (e.g. repeated
@@ -432,42 +449,78 @@ class ChapterConsistencyAuditor:
     def _check_title_format(
         self, aggregated_text: str, chapter_title: str
     ) -> List[ConsistencyIssue]:
-        """Check that the chapter title heading is present and correctly formatted."""
+        """Check the chapter Markdown output format contract.
+
+        Per the contract documented on
+        ``app.chapter.orchestrator.format_aggregated_translation``:
+
+        * The aggregated text must not be empty.
+        * The raw source ``chapter_title`` (which for a Chinese source is
+          a Chinese string like ``"第一章"``) must not surface as the
+          first non-empty line, with or without a leading ``# ``.
+
+        Heading shape, level, and wording are NOT checked here; the
+        segment-level translator owns that. Issues raised by this check
+        are deliberately ``auto_fixable=False`` — re-introducing the raw
+        source title literal into the visible output would corrupt the
+        chapter, so any fix requires re-translation rather than
+        mechanical replacement.
+        """
         issues = []
-        first_line = aggregated_text.splitlines()[0] if aggregated_text else ""
 
-        expected_heading = f"# {chapter_title}"
-
-        if not first_line:
+        if not aggregated_text:
             issues.append(ConsistencyIssue(
                 category=ConsistencyIssueCategory.TITLE_FORMAT,
                 segment_id="",
                 term=chapter_title,
                 found="(empty)",
-                expected=expected_heading,
-                detail="Chapter text is empty.",
+                expected="non-empty translated chapter Markdown",
+                detail="Aggregated chapter output is empty.",
+                auto_fixable=False,
             ))
-        elif first_line != expected_heading:
-            # Check if it's close but different (e.g. wrong heading level)
-            if first_line.startswith("#"):
+            return issues
+
+        first_non_empty = ""
+        for line in aggregated_text.splitlines():
+            stripped = line.strip()
+            if stripped:
+                first_non_empty = stripped
+                break
+
+        if not first_non_empty:
+            issues.append(ConsistencyIssue(
+                category=ConsistencyIssueCategory.TITLE_FORMAT,
+                segment_id="",
+                term=chapter_title,
+                found="(empty)",
+                expected="non-empty translated chapter Markdown",
+                detail="Aggregated chapter output has no non-empty lines.",
+                auto_fixable=False,
+            ))
+            return issues
+
+        # Only treat a verbatim title match as a "leak" when the source
+        # chapter_title contains CJK characters. For projects whose source
+        # title already happens to be English (or for English-only test
+        # fixtures), a matching first line is the desired outcome, not a
+        # contract violation.
+        title_stripped = (chapter_title or "").strip()
+        if title_stripped and _contains_cjk(title_stripped):
+            normalized = first_non_empty.lstrip("#").strip()
+            if normalized == title_stripped:
                 issues.append(ConsistencyIssue(
                     category=ConsistencyIssueCategory.TITLE_FORMAT,
                     segment_id="",
                     term=chapter_title,
-                    found=first_line,
-                    expected=expected_heading,
-                    detail=f"Title heading format differs: got {first_line!r}, expected {expected_heading!r}.",
-                    auto_fixable=True,
-                ))
-            else:
-                issues.append(ConsistencyIssue(
-                    category=ConsistencyIssueCategory.TITLE_FORMAT,
-                    segment_id="",
-                    term=chapter_title,
-                    found=first_line,
-                    expected=expected_heading,
-                    detail=f"Title heading missing: first line is {first_line!r}, expected {expected_heading!r}.",
-                    auto_fixable=True,
+                    found=first_non_empty,
+                    expected="translated chapter heading (English first line)",
+                    detail=(
+                        f"Raw source chapter_title {chapter_title!r} appears "
+                        f"verbatim as the first line of the aggregated output. "
+                        f"This violates the chapter Markdown output format "
+                        f"contract: segment 1 must produce a translated heading."
+                    ),
+                    auto_fixable=False,
                 ))
 
         return issues
