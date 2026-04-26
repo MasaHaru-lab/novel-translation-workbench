@@ -269,6 +269,10 @@ Use the enactment record to drive post‑run reporting or adaptive behavior in l
 
 **Batch 4B completed (2026-04-23):** Strategy enactment minimal closed loop. All existing chapter-level tests pass (37 tests). Enactment record is attached to `ChapterResult`.
 
-**Next batch (Batch 5):** chapter-level CLI/HTTP integration — expose the orchestrator as the main user entry point, keeping segment-level workflow as the execution layer.
+**Batch 5A completed (2026-04-26):** chapter Markdown output format contract sealed. Squash-merged into `main` as `9e74299 Seal chapter output format contract`. Test suite: 312 passed.
+
+**Batch 5B (scope-alignment, no code change):** scope check found chapter-level CLI integration was already shipped by earlier batches (`chapter run`, `chapter stream`, dry-run, confirm, resume, no-clobber, manifest/resume preservation, ~46 CLI tests). No new CLI feature was added; stale next-batch pointers were corrected instead.
+
+**Next batch (Batch 5C):** minimal chapter-level HTTP/API integration — expose the existing `ChapterOrchestrator` through a minimal tested HTTP entry point, preserving manifest/resume semantics and not changing translation quality logic.
 
 **Current focus:** improve the chapter-level path within Phase A only. Do not expand into Phase B/C/D yet.

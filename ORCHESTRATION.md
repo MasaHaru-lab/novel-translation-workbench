@@ -76,7 +76,11 @@ The orchestrator invokes the segment-level workflow defined in `WORKFLOW.md` for
 
 **Batch 4B completed (2026-04-23):** Strategy enactment minimal closed loop. All existing chapter-level tests pass (37 tests). Enactment record is attached to `ChapterResult`.
 
-**Next batch (Batch 5):** chapter-level CLI/HTTP integration — expose the orchestrator as the main user entry point.
+**Batch 5A completed (2026-04-26):** chapter Markdown output format contract sealed (commit `9e74299`).
+
+**Batch 5B (scope-alignment, no code change):** scope check confirmed chapter-level CLI integration is already shipped (`chapter run`, `chapter stream`, dry-run, confirm, resume, no-clobber).
+
+**Next batch (Batch 5C):** minimal chapter-level HTTP/API integration — expose the existing `ChapterOrchestrator` through a minimal tested HTTP entry point, preserving manifest/resume semantics.
 
 **Current focus:** improve the chapter-level path within Phase A only. Do not expand into Phase B/C/D yet.
 

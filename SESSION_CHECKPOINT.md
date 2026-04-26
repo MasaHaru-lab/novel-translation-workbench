@@ -1,79 +1,67 @@
-# Session Checkpoint — 2026-04-26 (long-run workflow infra)
+# Session Checkpoint — 2026-04-26 (Batch 5A merge + Batch 5B scope-alignment)
 
 ## Current focus
-Batch completed: established the local PR-style long-run workflow for this repo (branch model, pre-merge gate script, Fishhead/3090 usage boundary). Pure infrastructure — no application logic touched. Batch 5A is **not** started; that remains the next planning candidate.
+Two batches closed in this session:
 
-## Long-run workflow (this batch)
-- **`CLAUDE.md`** — added "Local PR-style long-run workflow" section: `main` as seal point, `work/<topic>` for施工, squash-merge back to main, gate-before-merge rule, Fishhead/3090 boundary (read-only health / contract / synthetic only; no real-sample acceptance without per-batch approval), and explicit non-authorizations (no Batch 5A, no GH Actions, no auto-push/merge).
-- **`scripts/checks/pre_merge_gate.sh`** (new, executable) — offline merge-readiness gate. Checks: inside git repo, working tree clean, `data/output` / `data/exports` / `outputs` not tracked, branch is `work/<topic>` (warn on main / detached). Exits 1 on FAIL, 0 on PASS. Does **not** run pytest, call models, or contact Fishhead.
-- **Fishhead health check (this session)**: `ssh Fishhead-Core 'hostname && nvidia-smi'` returned `Permission denied (publickey,password)` — TCP/SSH reachable on `192.168.68.61`, host is up, but key auth not configured for this shell. Treated as connectivity-only signal; no model verification performed. No artifacts generated.
-- **Fishhead IP**: `192.168.68.61` is current and already correct in `STATUS.md` / `SESSION_CHECKPOINT.md`. No fact update needed.
+1. **Batch 5A — Chapter Output Format Contract Seal** — squash-merged into `main` as `9e74299 Seal chapter output format contract`. Test suite: **312 passed**. Pre-merge gate: PASS.
+2. **Batch 5B — Minimal chapter-level CLI integration** — closed as a **scope-alignment batch**, not a feature batch. Discovery found chapter-level CLI integration was already shipped by earlier batches; the only action needed was correcting stale next-batch pointers in project-state docs.
 
-## Prior batch (preserved for resume context)
-Earlier focus: chapter-level quality gate hardened so a "completed" run cannot mask a failed quality check. Operator-visible (CLI) and persistent (manifest JSON) signals wired in. Committed.
+No product/code behavior changed in Batch 5B. Only documentation was reconciled.
 
-## Confirmed done
+## Why Batch 5B was a scope-alignment, not a feature, batch
 
-### Quality gate hardening (this batch) — committed `9360892`
-- **`app/chapter/quality.py`** — deterministic post-hoc gates (chapter-level CJK residue, untranslated title, per-segment empty, per-segment CJK residue). `QualityReport.to_summary()` gives a stable JSON shape.
-- **Orchestrator wiring** (`app/chapter/orchestrator.py`) — both `execute()` and `run_with_manifest()` call `validate_chapter_output()` and attach `result.quality_report`. `run_with_manifest()` additionally writes the summary into `manifest.quality_summary` and re-saves the manifest after aggregation.
-- **`ChapterResult.quality_report`** field added (`app/chapter/models.py`).
-- **`RunManifest.quality_summary`** field added with full JSON serialize / deserialize support (`app/chapter/manifest.py`). Persisted manifest JSON now carries `{passed, error_count, warning_count, codes}`.
-- **CLI visibility** (`app/cli.py`) — `_report_chapter_result()` prints a `Quality:` line right after `Status:`. On fail: `Quality: FAILED — N error(s) [codes...]` plus per-error message lines. On pass: `Quality: passed`.
-- **Coverage gate enrichment** (`app/translate/translator.py`) — `check_segment_coverage()` extended with CJK residue rule and glossary-enforcement rule; uses shared `_CJK_RE` / `_count_cjk` helpers.
-- **`.gitignore`** — `data/output/` added so generated runs never enter git status.
-- **Tests** — `app/tests/test_quality.py` (13 cases incl. CLI capsys tests + manifest persistence test using `tmp_path`); `app/tests/test_translator.py` extended with CJK residue + glossary enforcement cases.
-- **Validation**: `venv/bin/python -m pytest app/tests/ -q` → **303 passed** (was 299 baseline).
-- **Files in commit (10)**: `.gitignore`, `app/chapter/manifest.py`, `app/chapter/models.py`, `app/chapter/orchestrator.py`, `app/chapter/quality.py` (new), `app/cli.py`, `app/tests/test_quality.py` (new), `app/tests/test_translator.py`, `app/translate/translator.py`, `data/source/one_chapter_quality_source.txt`.
+Stale text in `CLAUDE.md`, `STATUS.md`, and `ORCHESTRATION.md` declared "chapter-level CLI/HTTP integration" as the next batch. Inspection of the working tree showed:
 
-### Chapter heading aggregation fix (Batch 4C) — pending commit
-- **`app/chapter/orchestrator.py`**: aggregation no longer prepends raw `# {chapter_title}`.
-- **`app/chapter/quality.py`**: `title_untranslated` checks final output first line, not metadata title.
-- **`app/tests/test_chapter.py` and `app/tests/test_quality.py`**: updated coverage.
-- **Validation**: `venv/bin/python -m pytest app/tests/ -q` → 303 passed.
-- **Known residual**: `app/chapter/consistency.py` TITLE_FORMAT deferred to later chapter output format contract work.
+- `app/cli.py` already wires `chapter run` and `chapter stream` subcommands backed by `ChapterOrchestrator`.
+- Existing flags: `--source`, `--output`, `--service-url`, `--allow-mock-fallback`, `--assets-mode`, `--resume`, `--dry-run`, `--confirm`, `--no-clobber`, `--max-retries`, `--retry-delay-seconds`, `--no-auto-retry-on-resume`.
+- Manifest/resume semantics preserved end-to-end.
+- `app/tests/test_cli.py` (~1,500 lines, ~46 CLI tests) covers dry-run, confirm, resume, no-clobber, stream stdout/stderr contract, mock/stub backed.
+- Live-calibrated against a real Fishhead chapter run (recorded in the prior checkpoint).
 
-## Live calibration (2026-04-25, no code change)
-- Real Fishhead chapter run on `data/source/one_chapter_quality_source.txt` (with `MODEL_BACKEND_URL` set, `--service-url http://localhost:8000`) confirms gate behavior end-to-end.
-- CLI prints `Status: completed` together with `Quality: FAILED — 2 error(s) [title_untranslated, cjk_residue]` plus per-error lines — completion no longer masks quality failure.
-- Manifest `quality_summary` persisted correctly in `data/output/q_run.manifest.json`: `{passed: false, error_count: 2, warning_count: 0, codes: [title_untranslated, cjk_residue]}` alongside `status: completed`.
-- Gate surfaced two real defects: chapter heading left untranslated (line 1) and bilingual paraphrasing residue (`无情(heartless)`, `恩(goodwill)`) in body.
-- Threshold judgment: chapter-level residue threshold (8) is correctly tuned. The 22 CJK count is dominated by the 16-char title; body alone (~6) sits below threshold, leaving body-residue detection to the title-specific rule when only the heading fails. **No threshold adjustment needed.**
-- Generated outputs (`data/output/q_run.md`, `data/output/q_run.manifest.json`) are gitignored and will not be committed.
+Inventing a new CLI flag or subcommand to satisfy the stale batch label would have violated `CLAUDE.md` Scope Discipline. The correct move was to align the docs.
 
-## Still pending / blocked / unverified
-- ~~Real-model verification not done.~~ Done — see "Live calibration" above. Thresholds verified against real Fishhead output; no change.
-- ~~CLI quality output never exercised against a live `chapter run`.~~ Done — verified in live run.
-- **`execute()` path doesn't persist quality** (no manifest in that path). Only `run_with_manifest()` persists. Acceptable today because production CLI uses `run_with_manifest()`, but worth noting if `execute()` is ever exposed.
-- **Glossary enforcement rule is exact-substring**, no normalization (case, plural, possessive). May fire on legitimate paraphrases.
-- **Source data file** `data/source/one_chapter_quality_source.txt` was truncated as part of an earlier batch and is now committed in that shorter form. If the original full text is wanted, restore from git history before `9360892`.
-- **STATUS.md not yet updated** to reflect this batch's additions.
+## Doc edits in this batch (Batch 5B)
+- **`SESSION_CHECKPOINT.md`** (this file) — replaces the prior 2026-04-26 long-run-workflow-infra checkpoint.
+- **`CLAUDE.md`** — `Chapter-level orchestration` section: "Next batch" line updated from "chapter-level CLI/HTTP integration" to **Batch 5C: minimal chapter-level HTTP/API integration**, with explicit note that CLI integration is already shipped. `Boundaries` section: "starting Batch 5A (chapter-level CLI/HTTP integration)" updated to "starting Batch 5C (chapter-level HTTP/API integration)" so the long-run-workflow infra section's non-authorization still refers to the actual next big work batch.
+- **`STATUS.md`** — `Batch status summary` section: added Batch 5A completion entry, Batch 5B scope-alignment entry, and Batch 5C as next batch.
+- **`ORCHESTRATION.md`** — `Batch status` section: added Batch 5A completion entry, Batch 5B scope-alignment entry, and Batch 5C as next batch.
 
-## Next starting action
-Mainline seal point is commit `901eb89` (Batch 4C: chapter heading fix).
+No application files, prompts, tests, or product behavior were modified.
 
-Next session: do big-picture project orientation first — prioritize between Batch 5 (chapter-level CLI/HTTP integration, per ORCHESTRATION.md) and the chapter output format contract residual (`consistency.py` TITLE_FORMAT). Do not execute directly; assess and decide before committing to a batch.
+## Mainline seal point
+`9e74299 Seal chapter output format contract` (Batch 5A, on `main`).
 
-Secondary: update `STATUS.md` to add a "Quality gate (post-hoc)" row under Current Capabilities.
+## Test gate (post-doc-edit)
+- Command: `python -m pytest app/tests/ -q`
+- Result: **312 passed**
+- No test changed. Result is identical to the post-Batch-5A merge result, as expected — Batch 5B touched no code.
 
-## Checkpoint saved to
-`SESSION_CHECKPOINT.md` (replaced — was the prior coverage-gate checkpoint dated 2026-04-25).
+## Next batch
+**Batch 5C — minimal chapter-level HTTP/API integration**
 
-## Checkpoint file and key artifacts
-- `SESSION_CHECKPOINT.md` (this file)
-- Source of truth for capabilities: `STATUS.md`
-- Quality module: `app/chapter/quality.py`
-- Manifest schema: `app/chapter/manifest.py` (`RunManifest.quality_summary`)
-- CLI report function: `app/cli.py` `_report_chapter_result()`
-- Quality tests: `app/tests/test_quality.py`
-- Last commit: `9360892 Harden quality gates and surface chapter quality status`
+One-sentence scope: expose the existing `ChapterOrchestrator` through a minimal tested HTTP entry point, preserving manifest/resume semantics and not changing translation quality logic.
+
+Boundaries (carried forward from Batch 5B prompt rules):
+- HTTP only; do not change CLI behavior beyond what HTTP integration strictly requires.
+- Do not modify Prompt A / Prompt B.
+- Do not modify orchestrator core, consistency, or quality modules.
+- Do not run real-model translation, full chapter live run, or smoke/live runs.
+- Do not commit generated outputs (`data/output/`, `data/exports/`, `outputs/`).
+- Tests must use mock/stub, not real backends.
+- Must work on `work/batch-5c-chapter-http-integration` and pass the pre-merge gate before squash-merge.
+
+## Long-run workflow status (carried forward)
+- `main` is the seal point (commit `9e74299`).
+- `work/<topic>` branches are required for batch work.
+- `scripts/checks/pre_merge_gate.sh` is the merge-readiness check (offline; no pytest, no model).
+- Fishhead/3090 boundary unchanged: read-only health / contract / synthetic only without per-batch user approval.
 
 ## Validation status
-- Tests/checks run: yes — `pytest app/tests/ -q` → 303 passed
-- Repo/worktree relevant: yes
-- Worktree clean: yes (post-commit, `git status --short` empty)
-- Confidence: high (for the wiring); medium (for real-data calibration)
-- Notes: No real model invocation in this batch. CLI block was tested via capsys, not a live run.
+- Tests/checks run: yes — `pytest app/tests/ -q` → 312 passed.
+- Repo/worktree relevant: yes.
+- Worktree clean: yes (post-commit).
+- Confidence: high — pure doc reconciliation, no behavioral surface.
+- Notes: No real model invocation. No generated outputs created.
 
 ## Checkpoint summary
-Quality gate is now operator-visible and persistent. Manifest cannot say "completed" while quality fails. Suite green at 303. Worktree clean. Real-model calibration of residue thresholds is the obvious next gap.
+Batch 5A is sealed on `main`. Batch 5B closed cleanly as a scope-alignment batch — no fabricated CLI feature, no product change, only stale next-batch pointers corrected. Project state now consistently points to Batch 5C (chapter-level HTTP/API integration) as the next real work batch. Suite green at 312. Worktree clean.

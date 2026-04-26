@@ -100,7 +100,7 @@ The project includes a chapter-level orchestrator kernel (`app/chapter/orchestra
 - Limited consistency audit/correction pass
 - Strategy enactment minimal closed loop (budget, consistency intensity, enactment record)
 
-**Next batch:** chapter-level CLI/HTTP integration (expose orchestrator as user entry point).
+**Next batch:** Batch 5C — minimal chapter-level HTTP/API integration. Expose the existing `ChapterOrchestrator` through a minimal tested HTTP entry point, preserving manifest/resume semantics and not changing translation quality logic. (Chapter-level CLI integration — `chapter run`, `chapter stream`, dry-run, confirm, resume, no-clobber — already shipped in earlier batches; Batch 5B scope check confirmed no further CLI work is needed.)
 
 **Orchestrator relationship to WORKFLOW.md:**
 The orchestrator invokes the segment-level workflow defined in `WORKFLOW.md` for each segment. `WORKFLOW.md` remains the segment-level execution protocol.
@@ -346,7 +346,7 @@ This workflow section is infrastructure, not a feature. It does not
 authorize:
 - modifying application logic, orchestrator, consistency/quality
   modules, Prompt A, or Prompt B
-- starting Batch 5A (chapter-level CLI/HTTP integration)
+- starting Batch 5C (chapter-level HTTP/API integration)
 - enabling continuous gstack checkpointing, GitHub Actions, remote
   PRs, auto-push, or auto-merge bots
 - automated long-task scheduling
