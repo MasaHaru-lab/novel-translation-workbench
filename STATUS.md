@@ -87,13 +87,30 @@ All 266 tests should pass (46 CLI + 37 chapter + others).
 - **Boundary map** documented (frozen surfaces vs open vs gated areas)
 - **No application code or prompt files modified** in this kickoff slice
 
-### Next executable step
+### Prompt Change Gate — facial-color direction (complete)
 
-Run the Prompt Change Gate for the two identified Type C candidates:
-1. Facial-color direction (脸色黑了 → "pale", should be "darkened")
-2. Hallucinated scene-closing commentary (narrative stance rule ignored)
+**Gate outcome:** Resolved — Type C enforcement already in place.
 
-Both are documented in `outputs/quality_loop_closure_report.md` with observations across v1–v5 runs. They require Step 1–5 of the gate before any prompt edits.
+**Evidence (gate Step 1):** Facial-color reversal for 脸色都黑了 observed across
+multiple runs (v1: "turned pale" ✗; v3: "turned pale, clearly displeased" ✗;
+v2/v4/v5: correct). Two failures meet the multi-occurrence bar.
+
+**Lower-level check (gate Step 2):** Type B (style note at §45-47 of
+`4. style_notes.md`) was tried and failed in v3 — model captured the displeasure
+emotion but reversed the color signal ("pale" instead of "darkened").
+
+**Change proposal (gate Step 3):** The Type C rule already exists at Prompt A
+line 69: *"Do not reverse facial-color emotional signals. 黑了 means the face
+darkened (with displeasure), not turned pale."* Added in commit `06e04cd`
+before the gate was formalized.
+
+**Verification plan (gate Step 4):** Run v6 on the approved sample, check
+秦老太太一呛，脸色都黑了 passage for "darkened" (not "pale") rendering.
+
+### Remaining Type C candidate
+
+**Narrative stance / hallucinated scene-closing commentary** — gate not yet run.
+Requires a separate batch.
 
 ## HTTP Translation Service (New)
 

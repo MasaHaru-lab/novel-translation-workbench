@@ -24,5 +24,18 @@
 - Script: `scripts/checks/pre_merge_gate.sh`
 - Status: PENDING
 
+## This batch — Prompt Change Gate: facial-color direction (DONE)
+
+Evidence:
+- 2 of 5 quality runs reversed the color signal (v1, v3) — sufficient for Step 1
+- Type B style note tried and failed in v3 (model said "turned pale" despite rule)
+- Type C enforcement ALREADY EXISTS at Prompt A line 69 (`06e04cd`) — no new edit needed
+- Gate Steps 1–5 completed; gate outcome: resolved — rule already in place
+- Verification plan (Step 4) documented: v6 run, check 脸色都黑了 → "darkened"
+
+No prompt, style-note, or glossary changes in this batch.
+No application code changes.
+No Phase A surface touched.
+
 ## Next batch
-Execute Prompt Change Gate for the first Type C candidate (facial-color direction for 脸色黑了). Requires: change proposal → verification plan → gate approval → prompt edit → v-next run.
+Run Prompt Change Gate for narrative stance / hallucinated scene-closing commentary.
