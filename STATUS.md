@@ -75,9 +75,25 @@ python -m pytest app/tests/
 
 All 266 tests should pass (46 CLI + 37 chapter + others).
 
-## Next Steps
+## Phase B — Quality Loop
 
-Phase B — quality loop: run/inspect real translated output and feed recurring issues back into zh_to_en style rules, roles, or book assets. No architecture redesign.
+**Phase B is active as of 2026-04-26.** The quality-loop methodology and Prompt Change Gate are documented in `docs/QUALITY_LOOP.md`.
+
+### Current slice: Prompt Change Gate established
+
+- **Quality review methodology** documented (run → inspect → classify → gate → revise → verify)
+- **Finding classification** defined: Type A (glossary/lexical), Type B (style notes), Type C (prompt-level enforcement)
+- **Prompt Change Gate** defined: required 7-step review process before any modification to Prompt A or Prompt B
+- **Boundary map** documented (frozen surfaces vs open vs gated areas)
+- **No application code or prompt files modified** in this kickoff slice
+
+### Next executable step
+
+Run the Prompt Change Gate for the two identified Type C candidates:
+1. Facial-color direction (脸色黑了 → "pale", should be "darkened")
+2. Hallucinated scene-closing commentary (narrative stance rule ignored)
+
+Both are documented in `outputs/quality_loop_closure_report.md` with observations across v1–v5 runs. They require Step 1–5 of the gate before any prompt edits.
 
 ## HTTP Translation Service (New)
 
