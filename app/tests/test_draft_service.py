@@ -198,7 +198,11 @@ def test_translate_chapter_endpoint_basic(mock_orchestrator_class):
 
     # Verify orchestrator was called correctly
     mock_orchestrator_class.assert_called_once()
-    mock_orchestrator.run_with_manifest.assert_called_once_with(source_text="测试章节内容")
+    mock_orchestrator.run_with_manifest.assert_called_once()
+    kwargs = mock_orchestrator.run_with_manifest.call_args.kwargs
+    assert kwargs["source_text"] == "测试章节内容"
+    assert kwargs.get("manifest_path") is None
+    assert kwargs.get("existing_manifest") is None
 
 
 def test_translate_chapter_endpoint_empty_source():
@@ -336,6 +340,7 @@ def test_chapter_readable_summary_partial(mock_orchestrator_class):
     mock_orchestrator_class.return_value = mock_orchestrator
     mock_manifest = MagicMock()
     mock_manifest.manifest_path = "/tmp/test.manifest.json"
+    mock_manifest.run_id = "partial_run"
     mock_manifest.segments = {}
 
     segs = [
@@ -377,6 +382,7 @@ def test_chapter_readable_summary_all_failed(mock_orchestrator_class):
     mock_orchestrator_class.return_value = mock_orchestrator
     mock_manifest = MagicMock()
     mock_manifest.manifest_path = "/tmp/failed.manifest.json"
+    mock_manifest.run_id = "failed_run"
     mock_manifest.segments = {}
 
     seg = TranslationOutput(segment_id="1", draft_translation="", polished_translation="")
@@ -492,6 +498,199 @@ def test_translate_chapter_endpoint_missing_source_text_field():
     payload = {}
     response = client.post("/translate/chapter", json=payload)
     assert response.status_code == 422
+
+
+# ── Manifest / resume semantics (Batch 5C) ────────────────────────────────
+
+
+def _make_completed_result(manifest=None, run_id="run_xyz", manifest_path=None):
+    """Helper to build a minimal completed ChapterResult for endpoint tests."""
+    seg = TranslationOutput(segment_id="1", draft_translation="", polished_translation="Done.")
+    if manifest is None:
+        manifest = MagicMock()
+        manifest.run_id = run_id
+        manifest.manifest_path = manifest_path
+        manifest.segments = {}
+    return ChapterResult(
+        chapter_title="Test",
+        source_text="src",
+        segment_results=[seg],
+        aggregated_translation="Done.",
+        chapter_status=ChapterStatus.COMPLETED,
+        segment_statuses={"1": SegmentStatus.COMPLETED},
+        manifest=manifest,
+        failed_segment_ids=[],
+        resumable=False,
+    )
+
+
+@patch('app.service.draft_service.ChapterOrchestrator')
+def test_chapter_endpoint_fresh_run_with_manifest_path(mock_cls):
+    """manifest_path is forwarded to orchestrator and surfaces in the response."""
+    mock_orch = MagicMock()
+    mock_cls.return_value = mock_orch
+
+    fake_manifest = MagicMock()
+    fake_manifest.run_id = "abcd1234"
+    fake_manifest.manifest_path = "/tmp/test.manifest.json"
+    fake_manifest.segments = {}
+    mock_orch.run_with_manifest.return_value = _make_completed_result(manifest=fake_manifest)
+
+    payload = {
+        "source_text": "测试",
+        "manifest_path": "/tmp/test.manifest.json",
+    }
+    response = client.post("/translate/chapter", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["manifest_path"] == "/tmp/test.manifest.json"
+    assert data["run_id"] == "abcd1234"
+
+    # Orchestrator was called with manifest_path forwarded; no resume.
+    mock_orch.run_with_manifest.assert_called_once()
+    kwargs = mock_orch.run_with_manifest.call_args.kwargs
+    assert kwargs["manifest_path"] == "/tmp/test.manifest.json"
+    assert kwargs["source_text"] == "测试"
+    assert kwargs.get("existing_manifest") is None
+    # No resume_config overrides were sent → orchestrator gets None (defaults).
+    assert kwargs.get("resume_config") is None
+    mock_orch.load_manifest.assert_not_called()
+
+
+@patch('app.service.draft_service.ChapterOrchestrator')
+def test_chapter_endpoint_fresh_run_without_manifest_path(mock_cls):
+    """Default fresh run without manifest_path stays in-memory (no persistence)."""
+    mock_orch = MagicMock()
+    mock_cls.return_value = mock_orch
+    mock_orch.run_with_manifest.return_value = _make_completed_result()
+
+    response = client.post("/translate/chapter", json={"source_text": "src"})
+    assert response.status_code == 200
+    kwargs = mock_orch.run_with_manifest.call_args.kwargs
+    assert kwargs["manifest_path"] is None
+
+
+@patch('app.service.draft_service.ChapterOrchestrator')
+def test_chapter_endpoint_resume_requires_manifest_path(mock_cls):
+    """resume=true without manifest_path is a 400 client error."""
+    response = client.post("/translate/chapter", json={
+        "source_text": "src",
+        "resume": True,
+    })
+    assert response.status_code == 400
+    assert "manifest_path is required" in response.json()["detail"]
+    mock_cls.assert_not_called()
+
+
+@patch('app.service.draft_service.ChapterOrchestrator')
+def test_chapter_endpoint_resume_manifest_missing(mock_cls):
+    """resume=true with a missing manifest is a 404."""
+    mock_orch = MagicMock()
+    mock_cls.return_value = mock_orch
+    mock_orch.load_manifest.return_value = None
+
+    response = client.post("/translate/chapter", json={
+        "source_text": "src",
+        "resume": True,
+        "manifest_path": "/tmp/missing.manifest.json",
+    })
+    assert response.status_code == 404
+    assert "/tmp/missing.manifest.json" in response.json()["detail"]
+    mock_orch.run_with_manifest.assert_not_called()
+
+
+@patch('app.service.draft_service.ChapterOrchestrator')
+def test_chapter_endpoint_resume_manifest_not_resumable(mock_cls):
+    """resume=true on a non-resumable (e.g. completed) manifest is a 409."""
+    mock_orch = MagicMock()
+    mock_cls.return_value = mock_orch
+
+    completed_manifest = MagicMock()
+    completed_manifest.is_resumable.return_value = False
+    completed_manifest.status = ChapterStatus.COMPLETED
+    mock_orch.load_manifest.return_value = completed_manifest
+
+    response = client.post("/translate/chapter", json={
+        "source_text": "src",
+        "resume": True,
+        "manifest_path": "/tmp/done.manifest.json",
+    })
+    assert response.status_code == 409
+    assert "not resumable" in response.json()["detail"]
+    mock_orch.run_with_manifest.assert_not_called()
+
+
+@patch('app.service.draft_service.ChapterOrchestrator')
+def test_chapter_endpoint_resume_continues_from_existing_manifest(mock_cls):
+    """resume=true on a resumable manifest forwards it as existing_manifest."""
+    mock_orch = MagicMock()
+    mock_cls.return_value = mock_orch
+
+    saved_manifest = MagicMock()
+    saved_manifest.is_resumable.return_value = True
+    saved_manifest.status = ChapterStatus.PARTIAL
+    saved_manifest.run_id = "saved_run"
+    saved_manifest.manifest_path = "/tmp/wip.manifest.json"
+    saved_manifest.segments = {}
+    mock_orch.load_manifest.return_value = saved_manifest
+    mock_orch.run_with_manifest.return_value = _make_completed_result(manifest=saved_manifest)
+
+    response = client.post("/translate/chapter", json={
+        "source_text": "src",
+        "resume": True,
+        "manifest_path": "/tmp/wip.manifest.json",
+    })
+    assert response.status_code == 200
+    data = response.json()
+    assert data["run_id"] == "saved_run"
+    assert data["manifest_path"] == "/tmp/wip.manifest.json"
+
+    mock_orch.load_manifest.assert_called_once_with("/tmp/wip.manifest.json")
+    kwargs = mock_orch.run_with_manifest.call_args.kwargs
+    assert kwargs["existing_manifest"] is saved_manifest
+    assert kwargs["manifest_path"] == "/tmp/wip.manifest.json"
+
+
+@patch('app.service.draft_service.ChapterOrchestrator')
+def test_chapter_endpoint_resume_config_overrides_forwarded(mock_cls):
+    """ResumeConfig overrides on a fresh run are forwarded to the orchestrator."""
+    mock_orch = MagicMock()
+    mock_cls.return_value = mock_orch
+    mock_orch.run_with_manifest.return_value = _make_completed_result()
+
+    response = client.post("/translate/chapter", json={
+        "source_text": "src",
+        "max_retries": 5,
+        "retry_delay_seconds": 0,
+        "auto_retry_on_resume": False,
+    })
+    assert response.status_code == 200
+    kwargs = mock_orch.run_with_manifest.call_args.kwargs
+    rc = kwargs["resume_config"]
+    assert rc is not None
+    assert rc.max_retries == 5
+    assert rc.retry_delay_seconds == 0
+    assert rc.auto_retry_on_resume is False
+
+
+def test_chapter_endpoint_invalid_max_retries():
+    """Negative max_retries returns a 400 before the orchestrator runs."""
+    response = client.post("/translate/chapter", json={
+        "source_text": "src",
+        "max_retries": -1,
+    })
+    assert response.status_code == 400
+    assert "max_retries" in response.json()["detail"]
+
+
+def test_chapter_endpoint_invalid_retry_delay():
+    """Negative retry_delay_seconds returns a 400 before the orchestrator runs."""
+    response = client.post("/translate/chapter", json={
+        "source_text": "src",
+        "retry_delay_seconds": -0.5,
+    })
+    assert response.status_code == 400
+    assert "retry_delay_seconds" in response.json()["detail"]
 
 
 if __name__ == "__main__":

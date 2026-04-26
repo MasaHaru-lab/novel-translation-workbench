@@ -80,13 +80,13 @@ The orchestrator invokes the segment-level workflow defined in `WORKFLOW.md` for
 
 **Batch 5B (scope-alignment, no code change):** scope check confirmed chapter-level CLI integration is already shipped (`chapter run`, `chapter stream`, dry-run, confirm, resume, no-clobber).
 
-**Next batch (Batch 5C):** minimal chapter-level HTTP/API integration — expose the existing `ChapterOrchestrator` through a minimal tested HTTP entry point, preserving manifest/resume semantics.
+**Batch 5C completed (2026-04-26):** minimal chapter-level HTTP/API integration. `POST /translate/chapter` endpoint exposes `ChapterOrchestrator.run_with_manifest()` with full manifest/resume semantics, consistency audit, strategy summary, and readable output. 26 endpoint tests (all mocked, no real-model execution).
 
 **Current focus:** improve the chapter-level path within Phase A only. Do not expand into Phase B/C/D yet.
 
 ## Limitations
 
-- No CLI or HTTP entry point yet (orchestrator is internal-only)
+- HTTP entry point exists (`POST /translate/chapter`) but still requires the service to be running separately
 - No user control over strategy parameters
 - No parallel execution
 - No mature resilience features beyond basic manifest/resume

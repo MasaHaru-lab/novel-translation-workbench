@@ -28,13 +28,19 @@ Run/inspect real translated output and feed recurring issues back into `zh_to_en
   - Per-segment progress logging during fresh-run execution
   - Plan preview with segment count, complexity, budget, consistency intensity
   - Manifest-based resume with failure isolation, retry, and guidance
+- ✅ **Chapter-level HTTP API** (`POST /translate/chapter`)
+  - Full manifest/resume semantics (fresh run, resume with existing manifest)
+  - Direct access to `ChapterOrchestrator.run_with_manifest()`
+  - Returns structured JSON: aggregated translation, consistency audit, strategy, enactment, readable summary
+  - 26 endpoint tests (mocked, no real-model execution)
+  - No quality-gate bypass, no CLI logic duplication
 - ✅ **Chapter orchestration** (plan → execute → aggregate → consistency pass)
   - Chapter plan generation with pre-execution strategy assessment
   - Segment-level execution via existing translation engine
   - Strategy enactment closed loop (budget/consistency resolved from plan, record attached to `ChapterResult`)
 - ✅ **Consistency audit** (term unification, limited automated correction)
 - ✅ **Advanced CLI output** — strategy overview, consistency summary, resume guidance
-- ✅ **266 tests passing** (46 CLI + 37 chapter + others)
+- ✅ **321 tests passing** (26 service + 46 CLI + 37 chapter + others)
 
 ## What's Still Missing
 
@@ -73,7 +79,7 @@ All 266 tests should pass (46 CLI + 37 chapter + others).
 
 ## Next Immediate Steps
 
-1. Operator-facing improvements to the chapter-level CLI (currently: plan preview, dry-run, per-segment progress, resume).
+1. Phase B exploration or polish endpoint (`POST /translate/polish`) for the HTTP surface.
 
 ## HTTP Translation Service (New)
 
@@ -273,6 +279,6 @@ Use the enactment record to drive post‑run reporting or adaptive behavior in l
 
 **Batch 5B (scope-alignment, no code change):** scope check found chapter-level CLI integration was already shipped by earlier batches (`chapter run`, `chapter stream`, dry-run, confirm, resume, no-clobber, manifest/resume preservation, ~46 CLI tests). No new CLI feature was added; stale next-batch pointers were corrected instead.
 
-**Next batch (Batch 5C):** minimal chapter-level HTTP/API integration — expose the existing `ChapterOrchestrator` through a minimal tested HTTP entry point, preserving manifest/resume semantics and not changing translation quality logic.
+**Batch 5C completed (2026-04-26):** minimal chapter-level HTTP/API integration. `POST /translate/chapter` endpoint exposes `ChapterOrchestrator.run_with_manifest()` with full manifest/resume semantics, consistency audit, strategy summary, and readable output. 26 endpoint tests (all mocked, no real-model execution). Test suite: 321 passed.
 
-**Current focus:** improve the chapter-level path within Phase A only. Do not expand into Phase B/C/D yet.
+**Next batch:** Explore Phase B direction or address remaining gaps in the chapter-level HTTP surface (e.g., `POST /translate/plan` endpoint, `POST /translate/polish`).

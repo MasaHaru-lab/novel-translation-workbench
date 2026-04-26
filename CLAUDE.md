@@ -100,7 +100,9 @@ The project includes a chapter-level orchestrator kernel (`app/chapter/orchestra
 - Limited consistency audit/correction pass
 - Strategy enactment minimal closed loop (budget, consistency intensity, enactment record)
 
-**Next batch:** Batch 5C — minimal chapter-level HTTP/API integration. Expose the existing `ChapterOrchestrator` through a minimal tested HTTP entry point, preserving manifest/resume semantics and not changing translation quality logic. (Chapter-level CLI integration — `chapter run`, `chapter stream`, dry-run, confirm, resume, no-clobber — already shipped in earlier batches; Batch 5B scope check confirmed no further CLI work is needed.)
+**Batch 5C completed (2026-04-26):** minimal chapter-level HTTP/API integration. `POST /translate/chapter` endpoint in `app/service/draft_service.py` with 26 mocked tests. Test suite: 321 passed.
+
+**Next batch:** Phase B direction or polish endpoint (`POST /translate/polish`) for the HTTP surface.
 
 **Orchestrator relationship to WORKFLOW.md:**
 The orchestrator invokes the segment-level workflow defined in `WORKFLOW.md` for each segment. `WORKFLOW.md` remains the segment-level execution protocol.

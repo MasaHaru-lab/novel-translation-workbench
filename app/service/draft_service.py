@@ -13,6 +13,7 @@ from app.translate.backend_adapter import translate_draft_with_backend
 from app.config import config
 from app.chapter.orchestrator import ChapterOrchestrator
 from app.chapter.models import ChapterResult
+from app.chapter.manifest import ResumeConfig
 
 
 app = FastAPI(
@@ -54,9 +55,25 @@ class TranslationOutputModel(BaseModel):
 
 
 class ChapterRequestModel(BaseModel):
-    """Request model for chapter translation endpoint."""
+    """Request model for chapter translation endpoint.
+
+    Manifest/resume semantics mirror the chapter CLI:
+
+    - ``manifest_path`` — when set, the run manifest is persisted at this
+      path so progress survives interruptions. Required when ``resume`` is
+      true. When omitted, the run is in-memory only and cannot be resumed.
+    - ``resume`` — when true, load the manifest at ``manifest_path`` and
+      continue the prior run instead of starting fresh.
+    - ``max_retries`` / ``retry_delay_seconds`` / ``auto_retry_on_resume``
+      — optional ``ResumeConfig`` overrides for fresh runs. Ignored on
+      resume because the saved manifest carries its own ``ResumeConfig``.
+    """
     source_text: str
-    # Additional parameters could be added later (e.g., glossary, custom strategy)
+    manifest_path: Optional[str] = None
+    resume: bool = False
+    max_retries: Optional[int] = None
+    retry_delay_seconds: Optional[float] = None
+    auto_retry_on_resume: Optional[bool] = None
 
 
 class ChapterResponseModel(BaseModel):
@@ -74,6 +91,8 @@ class ChapterResponseModel(BaseModel):
     failed_segment_ids: List[str] = Field(default_factory=list)
     resumable: bool
     readable_summary: str = ""
+    manifest_path: Optional[str] = None
+    run_id: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -217,9 +236,46 @@ def _format_chapter_summary(result: ChapterResult) -> str:
     return "\n".join(lines)
 
 
+def _build_resume_config(request: ChapterRequestModel) -> Optional[ResumeConfig]:
+    """Build a ResumeConfig from request overrides.
+
+    Returns None when no override is supplied so the orchestrator falls back
+    to ResumeConfig defaults. Validates non-negative numeric bounds.
+    """
+    if (request.max_retries is None
+            and request.retry_delay_seconds is None
+            and request.auto_retry_on_resume is None):
+        return None
+
+    if request.max_retries is not None and request.max_retries < 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"max_retries must be >= 0, got {request.max_retries}",
+        )
+    if request.retry_delay_seconds is not None and request.retry_delay_seconds < 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"retry_delay_seconds must be >= 0, got {request.retry_delay_seconds}",
+        )
+
+    defaults = ResumeConfig()
+    return ResumeConfig(
+        max_retries=request.max_retries if request.max_retries is not None else defaults.max_retries,
+        retry_delay_seconds=request.retry_delay_seconds if request.retry_delay_seconds is not None else defaults.retry_delay_seconds,
+        auto_retry_on_resume=request.auto_retry_on_resume if request.auto_retry_on_resume is not None else defaults.auto_retry_on_resume,
+    )
+
+
 @app.post("/translate/chapter", response_model=ChapterResponseModel)
 async def post_translate_chapter(request: ChapterRequestModel) -> ChapterResponseModel:
-    """Translate a full chapter using the chapter-level orchestrator."""
+    """Translate a full chapter using the chapter-level orchestrator.
+
+    Manifest/resume semantics:
+      - resume=True requires manifest_path; if the manifest does not exist
+        it returns 404; if the manifest is not resumable it returns 409.
+      - resume=False starts a fresh run; manifest_path (when set) is where
+        the manifest is persisted and the run is later resumable from.
+    """
     # Validate input
     if not request.source_text.strip():
         raise HTTPException(
@@ -227,10 +283,43 @@ async def post_translate_chapter(request: ChapterRequestModel) -> ChapterRespons
             detail="source_text cannot be empty"
         )
 
+    if request.resume and not request.manifest_path:
+        raise HTTPException(
+            status_code=400,
+            detail="manifest_path is required when resume=true",
+        )
+
+    resume_config = _build_resume_config(request)
+    orchestrator = ChapterOrchestrator()
+
     try:
-        orchestrator = ChapterOrchestrator()
-        # Use default parameters for glossary, translate_draft_fn, assets_mode, etc.
-        result = orchestrator.run_with_manifest(source_text=request.source_text)
+        if request.resume:
+            existing = orchestrator.load_manifest(request.manifest_path)
+            if existing is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"No manifest found at {request.manifest_path}",
+                )
+            if not existing.is_resumable():
+                raise HTTPException(
+                    status_code=409,
+                    detail=(
+                        f"Manifest is not resumable (status={existing.status.value}); "
+                        "the saved run is already complete or in a terminal state"
+                    ),
+                )
+            result = orchestrator.run_with_manifest(
+                source_text=request.source_text,
+                resume_config=resume_config,
+                manifest_path=request.manifest_path,
+                existing_manifest=existing,
+            )
+        else:
+            result = orchestrator.run_with_manifest(
+                source_text=request.source_text,
+                resume_config=resume_config,
+                manifest_path=request.manifest_path,
+            )
     except HTTPException:
         raise
     except Exception as e:
@@ -239,12 +328,12 @@ async def post_translate_chapter(request: ChapterRequestModel) -> ChapterRespons
             detail=f"Internal server error during chapter translation: {str(e)}"
         )
 
-    # Map ChapterResult to ChapterResponseModel
+    manifest = result.manifest
     return ChapterResponseModel(
         chapter_title=result.chapter_title,
         aggregated_translation=result.aggregated_translation,
         corrected_translation=result.corrected_translation,
-        chapter_status=result.chapter_status.value,  # enum to string
+        chapter_status=result.chapter_status.value,
         consistency_audit=result.consistency_audit,
         correction_summary=result.correction_summary,
         strategy_plan_summary=result.strategy_plan_summary,
@@ -254,6 +343,8 @@ async def post_translate_chapter(request: ChapterRequestModel) -> ChapterRespons
         failed_segment_ids=result.failed_segment_ids,
         resumable=result.resumable,
         readable_summary=_format_chapter_summary(result),
+        manifest_path=manifest.manifest_path if manifest else None,
+        run_id=manifest.run_id if manifest else None,
     )
 
 
