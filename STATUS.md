@@ -1,4 +1,6 @@
-# Status: Phase A — Chapter-Level CLI
+# Status: Phase A Sealed
+
+**Phase A is frozen as of 2026-04-26.** All Phase A surfaces (CLI, HTTP, output format, framework migration, quality gate) are sealed. No further Phase A work will be opened.
 
 ## Framework Migration Complete (2026-04-25)
 
@@ -14,10 +16,6 @@ The translation framework has been migrated to a reusable, direction-agnostic sk
 - **Migration commits**:
   - `f754654` — docs: add SKILL_INTEGRATION explaining fishhead-literary-translator mapping
   - `e685c10` — docs: add versioned snapshot of fishhead-literary-translator skill
-
-### Next phase: Quality Loop
-
-Run/inspect real translated output and feed recurring issues back into `zh_to_en` style rules, roles, or book assets. No further architecture redesign.
 
 ---
 
@@ -42,13 +40,13 @@ Run/inspect real translated output and feed recurring issues back into `zh_to_en
 - ✅ **Advanced CLI output** — strategy overview, consistency summary, resume guidance
 - ✅ **321 tests passing** (26 service + 46 CLI + 37 chapter + others)
 
-## What's Still Missing
+## What's Still Missing (Phase B and later)
 
-- Real translation models (currently mocked for tests)
-- Sentence‑level splitting for long paragraphs (splits by character boundary)
-- Configuration file for segment size, model paths
-- Batch processing of multiple chapters
-- HTTP polish endpoint (`POST /translate/polish`)
+- **Phase B**: Real translation models (currently mocked for tests)
+- **Phase B+**: Sentence‑level splitting for long paragraphs (splits by character boundary)
+- **Phase B+**: Configuration file for segment size, model paths
+- **Phase B+**: Batch processing of multiple chapters
+- **Phase B+**: HTTP polish endpoint (`POST /translate/polish`)
 
 ## Known Limitations
 
@@ -77,9 +75,9 @@ python -m pytest app/tests/
 
 All 266 tests should pass (46 CLI + 37 chapter + others).
 
-## Next Immediate Steps
+## Next Steps
 
-1. Phase B exploration or polish endpoint (`POST /translate/polish`) for the HTTP surface.
+Phase B — quality loop: run/inspect real translated output and feed recurring issues back into zh_to_en style rules, roles, or book assets. No architecture redesign.
 
 ## HTTP Translation Service (New)
 
@@ -235,12 +233,12 @@ and project-asset plumbing work.
   `POST /translate/draft` exists; polish currently runs only via the local
   pipeline path (`polish_translation` → `translate_polish_with_backend`).
 
-### Next natural step
+### Next natural step (Phase B+)
 
 Expose polish through the HTTP service (a `POST /translate/polish` endpoint
 that mirrors the draft endpoint's shape and uses `translate_polish_with_backend`),
 so the service surface matches the local pipeline's two-stage behavior. This
-is intentionally out of scope for this batch.
+is Phase B+ scope; not part of the sealed Phase A contract.
 
 ## Batch 4B: Strategy Enactment Minimal Closed Loop (2026-04-23)
 
@@ -281,4 +279,4 @@ Use the enactment record to drive post‑run reporting or adaptive behavior in l
 
 **Batch 5C completed (2026-04-26):** minimal chapter-level HTTP/API integration. `POST /translate/chapter` endpoint exposes `ChapterOrchestrator.run_with_manifest()` with full manifest/resume semantics, consistency audit, strategy summary, and readable output. 26 endpoint tests (all mocked, no real-model execution). Test suite: 321 passed.
 
-**Next batch:** Explore Phase B direction or address remaining gaps in the chapter-level HTTP surface (e.g., `POST /translate/plan` endpoint, `POST /translate/polish`).
+**Next batch:** Phase B — quality loop. No further Phase A HTTP/CLI/integration work.

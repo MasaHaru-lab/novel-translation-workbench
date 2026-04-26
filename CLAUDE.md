@@ -92,17 +92,21 @@ For translation quality bar and style constraints, see `SKILL.md`.
 
 The project includes a chapter-level orchestrator kernel (`app/chapter/orchestrator.py`) that reuses the existing segment-level translation functions.
 
-**Current state (Batch 4B completed):**
+**Phase A sealed (2026-04-26):** All Phase A surfaces are now frozen.
 - Chapter plan generation with pre-execution strategy assessment
 - Segment-level execution via the existing translation engine
 - Aggregation of segment results into full chapter output
 - Basic manifest/resume support for interrupted runs
 - Limited consistency audit/correction pass
 - Strategy enactment minimal closed loop (budget, consistency intensity, enactment record)
+- Chapter-level CLI (`chapter run`, `chapter stream`, `--dry-run`, `--resume`)
+- Chapter-level HTTP API (`POST /translate/chapter` with manifest/resume semantics)
+- Output format contract (Markdown chapter output, run manifest, readable summary)
+- 321 tests passing (26 service + 46 CLI + 37 chapter + others)
 
-**Batch 5C completed (2026-04-26):** minimal chapter-level HTTP/API integration. `POST /translate/chapter` endpoint in `app/service/draft_service.py` with 26 mocked tests. Test suite: 321 passed.
+**Frozen:** No further work on CLI, HTTP, output-format, or quality-gate surfaces. These are sealed for the duration of Phase A.
 
-**Next batch:** Phase B direction or polish endpoint (`POST /translate/polish`) for the HTTP surface.
+**Phase B (next):** Quality loop — run/inspect real translated output, feed recurring issues back into zh_to_en style rules, roles, or book assets. No architecture redesign.
 
 **Orchestrator relationship to WORKFLOW.md:**
 The orchestrator invokes the segment-level workflow defined in `WORKFLOW.md` for each segment. `WORKFLOW.md` remains the segment-level execution protocol.

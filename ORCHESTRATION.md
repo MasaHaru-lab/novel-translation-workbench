@@ -82,7 +82,7 @@ The orchestrator invokes the segment-level workflow defined in `WORKFLOW.md` for
 
 **Batch 5C completed (2026-04-26):** minimal chapter-level HTTP/API integration. `POST /translate/chapter` endpoint exposes `ChapterOrchestrator.run_with_manifest()` with full manifest/resume semantics, consistency audit, strategy summary, and readable output. 26 endpoint tests (all mocked, no real-model execution).
 
-**Current focus:** improve the chapter-level path within Phase A only. Do not expand into Phase B/C/D yet.
+**Phase A sealed (2026-04-26):** All Phase A surfaces frozen. No further CLI/HTTP/integration work in scope.
 
 ## Limitations
 

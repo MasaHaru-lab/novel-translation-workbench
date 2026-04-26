@@ -36,15 +36,15 @@ Relevant project assets include:
 
 The project includes a chapter-level orchestrator kernel (`app/chapter/orchestrator.py`) that reuses the existing segment-level translation functions.
 
-**Current state (Batch 4B completed):**
-- Chapter plan generation with pre-execution strategy assessment
-- Segment-level execution via the existing translation engine
-- Aggregation of segment results into full chapter output
-- Basic manifest/resume support for interrupted runs
-- Limited consistency audit/correction pass
-- Strategy enactment minimal closed loop (budget, consistency intensity, enactment record)
+**Phase A sealed (2026-04-26):**
+- Chapter plan generation, segment-level execution, aggregation
+- Manifest/resume support for interrupted runs
+- Consistency audit/correction pass
+- Chapter-level CLI (`chapter run`, `chapter stream`, `--dry-run`, `--resume`)
+- Chapter-level HTTP API (`POST /translate/chapter` with manifest/resume semantics)
+- Strategy enactment closed loop
 
-**Next batch:** chapter-level CLI/HTTP integration (expose orchestrator as user entry point).
+**Phase B (next):** quality loop — run/inspect real translated output, feed recurring issues back into zh_to_en style rules, roles, or book assets. No architecture redesign.
 
 **Orchestrator relationship to WORKFLOW.md:**
 The orchestrator invokes the segment-level workflow defined in `WORKFLOW.md` for each segment. `WORKFLOW.md` remains the segment-level execution protocol.
@@ -276,14 +276,14 @@ python -m pytest app/tests/test_segmenter.py
 
 ## Next Steps
 
-**Immediate (Batch 5):** chapter-level CLI/HTTP integration — expose the orchestrator as the main user entry point.
+**Phase B (next):** quality loop — run/inspect real translated output and feed recurring issues back into zh_to_en style rules, roles, or book assets.
 
-**Beyond current batch:**
-- Replace mock translation with actual translation models (e.g., locally hosted LLM).
-- Add configuration for segment size, model parameters.
-- Support multiple chapters and batch processing.
-- Add post‑editing UI for human refinement.
-- Integrate terminology/glossary management.
+**Beyond Phase B:**
+- Sentence‑level splitting for long paragraphs (currently splits by character boundary)
+- Configuration file for segment size, model parameters
+- Batch processing of multiple chapters
+- HTTP polish endpoint (`POST /translate/polish`)
+- Add post‑editing UI for human refinement
 
 ## License
 
