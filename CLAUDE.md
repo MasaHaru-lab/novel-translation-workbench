@@ -318,6 +318,25 @@ batch-level acceptance), not gate concerns.
 Fishhead (the local 3090 host) is a controlled engineering resource,
 not an automated quality oracle.
 
+#### Fishhead SSH target-resolution rule
+
+Before any Fishhead remote call, resolve the active SSH target with
+`ssh -G` rather than hard-coding an IP.
+
+- Do not use stale `192.168.68.61`.
+- The current working Fishhead address is expected to end in `.51`,
+  not `.61`.
+- Prefer configured SSH aliases such as `Fishhead-Core` or `fishhead`.
+- Inspect the active target with:
+  `ssh -G Fishhead-Core | grep -E '^(hostname|user|port|identityfile) '`
+  and/or:
+  `ssh -G fishhead | grep -E '^(hostname|user|port|identityfile) '`
+- Trust `ssh -G` output over stale docs, memory, or checkpoint text.
+- If Fishhead is not required for the current batch, do not block the
+  batch on Fishhead access.
+- If Fishhead is required and resolution/auth fails, report it as a
+  remote-access blocker, not as proof that Fishhead itself is unreachable.
+
 Allowed without prior per-batch approval:
 - read-only health / connectivity checks
   (`ssh Fishhead-Core 'hostname && nvidia-smi'`)
