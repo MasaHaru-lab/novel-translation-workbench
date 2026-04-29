@@ -27,6 +27,7 @@ from app.translate.translator import (
     translate_draft,
 )
 from app.translate.schema import TranslationInput, TranslationOutput
+from app.translate.backend_adapter import translate_draft_with_profile
 from app.config import config
 
 
@@ -87,6 +88,7 @@ def run_pipeline(
     service_url: Optional[str] = None,
     allow_mock_fallback: bool = False,
     assets_mode: AssetsMode = DEFAULT_ASSETS_MODE,
+    model_profile: Optional[str] = None,
 ):
     """Run the translation pipeline.
 
@@ -96,6 +98,45 @@ def run_pipeline(
     semantics.
     """
     _validate_assets_mode(assets_mode)
+
+    # Profile-based path takes priority
+    if model_profile:
+        from app.translate.model_profiles import get_profile, list_profiles
+        from app.config_loader import load_env_local
+
+        load_env_local()
+        try:
+            profile = get_profile(model_profile)
+        except KeyError:
+            known = list_profiles()
+            print(f"  Error: Unknown model profile {model_profile!r}.")
+            print(f"  Available profiles: {', '.join(sorted(known))}")
+            sys.exit(1)
+
+        def profile_fn(inp):
+            return translate_draft_with_profile(inp, profile, assets_mode=assets_mode)
+
+        print(f"Reading source from {source_path}")
+        text = read_source_file(source_path)
+        print(f"Loaded {len(text)} characters.")
+        print("Segmenting text...")
+        segments = create_segments(text)
+        print(f"Created {len(segments)} segments.")
+        print(f"Translating using profile: {model_profile}...")
+
+        glossary = mock_glossary()
+        translation_outputs = []
+        for seg in segments:
+            print(f"  Segment {seg.segment_id}...")
+            inp = build_translation_input(seg, glossary)
+            draft_out = profile_fn(inp)
+            final_out = polish_translation(inp, draft_out, assets_mode=assets_mode)
+            translation_outputs.append(final_out)
+        print(f"Writing output to {output_path}")
+        write_markdown(output_path, segments, translation_outputs)
+        print("Done.")
+        return
+
     print(f"Reading source from {source_path}")
     text = read_source_file(source_path)
     print(f"Loaded {len(text)} characters.")
@@ -182,13 +223,38 @@ def _resolve_translate_fn(
     service_url: Optional[str],
     allow_mock_fallback: bool,
     assets_mode: AssetsMode,
+    model_profile: Optional[str] = None,
 ) -> tuple[Optional[Callable[[TranslationInput], TranslationOutput]], str]:
-    """Resolve which translate function to use: service client or local.
+    """Resolve which translate function to use: service client, profile-based, or local.
+
+    When ``model_profile`` is set, uses the profile-based adapter path.
+    Otherwise falls through to the existing service/local resolution.
 
     Returns (translate_fn, mode_label).
-    ``translate_fn`` is None when neither service nor local is available.
+    ``translate_fn`` is None when neither service, profile, nor local is available.
     """
     _validate_assets_mode(assets_mode)
+
+    # Profile-based path takes priority when explicitly selected
+    if model_profile:
+        from app.translate.model_profiles import get_profile, list_profiles
+        from app.config_loader import load_env_local
+
+        load_env_local()
+
+        try:
+            profile = get_profile(model_profile)
+        except KeyError:
+            known = list_profiles()
+            print(f"  Error: Unknown model profile {model_profile!r}.")
+            print(f"  Available profiles: {', '.join(sorted(known))}")
+            return None, "error"
+
+        def profile_translate_fn(inp: TranslationInput) -> TranslationOutput:
+            return translate_draft_with_profile(inp, profile, assets_mode=assets_mode)
+
+        return profile_translate_fn, f"profile: {model_profile}"
+
     from app.translate.translator import translate_draft as local_translate_draft
 
     def local_fn(inp):
@@ -220,6 +286,7 @@ def run_chapter_pipeline(
     service_url: Optional[str] = None,
     allow_mock_fallback: bool = False,
     assets_mode: AssetsMode = DEFAULT_ASSETS_MODE,
+    model_profile: Optional[str] = None,
     resume: bool = False,
     dry_run: bool = False,
     max_retries: int = 2,
@@ -284,7 +351,7 @@ def run_chapter_pipeline(
         if dry_run and not confirm:
             return
 
-    translate_fn, mode = _resolve_translate_fn(service_url, allow_mock_fallback, assets_mode)
+    translate_fn, mode = _resolve_translate_fn(service_url, allow_mock_fallback, assets_mode, model_profile=model_profile)
     if translate_fn is None:
         print(f"  Error: Service unavailable. Exiting.")
         sys.exit(1)
@@ -563,6 +630,7 @@ def run_chapter_stream(
     service_url: Optional[str] = None,
     allow_mock_fallback: bool = False,
     assets_mode: AssetsMode = DEFAULT_ASSETS_MODE,
+    model_profile: Optional[str] = None,
     smoke_test: bool = False,
 ) -> None:
     """Stream chapter translation: read source, translate, output final text to stdout.
@@ -583,7 +651,7 @@ def run_chapter_stream(
         sys.exit(1)
 
     # Resolve translation function (same logic as chapter pipeline)
-    translate_fn, mode = _resolve_translate_fn(service_url, allow_mock_fallback, assets_mode)
+    translate_fn, mode = _resolve_translate_fn(service_url, allow_mock_fallback, assets_mode, model_profile=model_profile)
     if translate_fn is None:
         sys.stderr.write("ERROR: Service unavailable and fallback not allowed.\n")
         sys.exit(1)
@@ -627,6 +695,7 @@ def run_chapter_batch(
     service_url: Optional[str] = None,
     allow_mock_fallback: bool = False,
     assets_mode: AssetsMode = DEFAULT_ASSETS_MODE,
+    model_profile: Optional[str] = None,
     resume: bool = False,
     no_clobber: bool = False,
     smoke_test: bool = False,
@@ -657,6 +726,7 @@ def run_chapter_batch(
                 service_url=service_url,
                 allow_mock_fallback=allow_mock_fallback,
                 assets_mode=assets_mode,
+                model_profile=model_profile,
                 resume=resume,
                 no_clobber=no_clobber,
                 smoke_test=smoke_test,
@@ -722,6 +792,9 @@ def main():
                             help='Project-asset injection mode. "full" (default) injects '
                                  'the project memory block into translation prompts; "none" '
                                  'suppresses it entirely.')
+    run_parser.add_argument('--model-profile', type=str, default=None,
+                            help='Select a model profile (e.g. local-qwen, deepseek-v4-flash, '
+                                 'deepseek-v4-pro). When set, overrides MODEL_BACKEND_URL.')
 
     chapter_parser = subparsers.add_parser('chapter', help='Translate a full chapter (auto-segment -> auto-translate -> aggregate -> consistency)')
     chapter_sub = chapter_parser.add_subparsers(dest='chapter_command', required=True)
@@ -739,6 +812,9 @@ def main():
                                     help='Project-asset injection mode. "full" (default) injects '
                                          'the project memory block into translation prompts; "none" '
                                          'suppresses it entirely.')
+    chapter_run_parser.add_argument('--model-profile', type=str, default=None,
+                                    help='Select a model profile (e.g. local-qwen, deepseek-v4-flash, '
+                                         'deepseek-v4-pro). When set, overrides --service-url and MODEL_BACKEND_URL.')
     # --resume and --dry-run are mutually exclusive
     resume_group = chapter_run_parser.add_mutually_exclusive_group()
     resume_group.add_argument('--resume', action='store_true',
@@ -781,6 +857,9 @@ def main():
                                        help='Project-asset injection mode. "full" (default) injects '
                                             'the project memory block into translation prompts; "none" '
                                             'suppresses it entirely.')
+    chapter_stream_parser.add_argument('--model-profile', type=str, default=None,
+                                       help='Select a model profile (e.g. local-qwen, deepseek-v4-flash, '
+                                            'deepseek-v4-pro).')
     chapter_stream_parser.add_argument('--smoke-test', action='store_true',
                                        help='Run in smoke-test mode (no real model backend required). '
                                             'Output is mock — not a real translation.')
@@ -798,6 +877,9 @@ def main():
                                       help='Project-asset injection mode. "full" (default) injects '
                                            'the project memory block into translation prompts; "none" '
                                            'suppresses it entirely.')
+    chapter_batch_parser.add_argument('--model-profile', type=str, default=None,
+                                      help='Select a model profile (e.g. local-qwen, deepseek-v4-flash, '
+                                           'deepseek-v4-pro).')
     chapter_batch_parser.add_argument('--resume', action='store_true',
                                       help='Attempt to resume each chapter from its saved manifest.')
     chapter_batch_parser.add_argument('--smoke-test', action='store_true',
@@ -820,6 +902,7 @@ def main():
             args.service_url,
             args.allow_mock_fallback,
             assets_mode=args.assets_mode,
+            model_profile=args.model_profile,
         )
     elif args.command == 'chapter':
         if args.chapter_command == 'run':
@@ -831,6 +914,7 @@ def main():
                 args.service_url,
                 args.allow_mock_fallback,
                 assets_mode=args.assets_mode,
+                model_profile=args.model_profile,
                 resume=args.resume,
                 dry_run=args.dry_run,
                 max_retries=args.max_retries,
@@ -846,6 +930,7 @@ def main():
                 service_url=args.service_url,
                 allow_mock_fallback=args.allow_mock_fallback,
                 assets_mode=args.assets_mode,
+                model_profile=args.model_profile,
                 smoke_test=args.smoke_test,
             )
         elif args.chapter_command == 'batch':
@@ -854,6 +939,7 @@ def main():
                 service_url=args.service_url,
                 allow_mock_fallback=args.allow_mock_fallback,
                 assets_mode=args.assets_mode,
+                model_profile=args.model_profile,
                 resume=args.resume,
                 no_clobber=args.no_clobber,
                 smoke_test=args.smoke_test,

@@ -159,3 +159,76 @@ def translate_draft_with_backend(
         polished_translation="",
         notes=[f"Backend: {config.MODEL_BACKEND_URL}"]
     )
+
+
+def translate_draft_with_profile(
+    input: TranslationInput,
+    profile: "ModelProfile",
+    assets_mode: "str" = "full",
+) -> TranslationOutput:
+    """Translate a draft using the specified model profile.
+
+    Routes to the appropriate adapter based on the profile's provider:
+
+    * ``prompt-http`` — legacy prompt-only request (``call_model_backend``)
+    * ``openai-compat`` — chat-completions style request (``call_chat_completion``)
+
+    Metadata (profile name, provider, model) is recorded in ``TranslationOutput.notes``
+    instead of raw URLs or secret values. The resolved API key is never written to
+    output, logs, or manifests.
+
+    Args:
+        input:      Translation input.
+        profile:    The model profile to use.
+        assets_mode: Asset injection mode (``"full"`` or ``"none"``).
+
+    Returns:
+        TranslationOutput with profile metadata in notes.
+
+    Raises:
+        RuntimeError: if the backend call or profile resolution fails.
+        ValueError:   if assets_mode is not recognized.
+    """
+    from app.translate.translator import (
+        build_draft_prompt as _build_draft_prompt,
+        clean_draft_output,
+        apply_glossary,
+        DRAFT_MAX_TOKENS,
+    )
+    from app.translate.model_profiles import resolve_base_url
+
+    prompt = _build_draft_prompt(input, assets_mode)
+
+    if profile.provider == "prompt-http":
+        base_url = resolve_base_url(profile)
+        # Legacy prompt-HTTP path: send prompt to MODEL_BACKEND_URL directly
+        # using the existing call_model_backend function.
+        draft_text = call_model_backend(prompt, max_tokens=DRAFT_MAX_TOKENS)
+    elif profile.provider == "openai-compat":
+        from app.translate.deepseek_adapter import call_chat_completion
+
+        draft_text = call_chat_completion(
+            profile, prompt, max_tokens=DRAFT_MAX_TOKENS,
+        )
+    else:
+        raise RuntimeError(
+            f"Unknown provider {profile.provider!r} in profile {profile.name!r}"
+        )
+
+    draft_text = clean_draft_output(draft_text)
+
+    if input.glossary_terms:
+        draft_text = apply_glossary(draft_text, input.glossary_terms)
+
+    # Non-secret metadata only — no API keys, no raw URLs
+    metadata_parts = [f"Profile: {profile.name}", f"Provider: {profile.provider}"]
+    if profile.default_model:
+        metadata_parts.append(f"Model: {profile.default_model}")
+    notes = ["; ".join(metadata_parts)]
+
+    return TranslationOutput(
+        segment_id=input.segment_id,
+        draft_translation=draft_text,
+        polished_translation="",
+        notes=notes,
+    )

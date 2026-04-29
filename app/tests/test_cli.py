@@ -165,7 +165,7 @@ def _invoke_main_with_argv(argv):
     captured = {}
 
     def fake_run_pipeline(source, output, service_url, allow_mock_fallback,
-                         *, assets_mode):
+                         *, assets_mode, model_profile=None):
         captured['source'] = source
         captured['output'] = output
         captured['service_url'] = service_url
@@ -262,7 +262,7 @@ def _invoke_chapter_main_with_argv(argv):
     captured = {}
 
     def fake_run_chapter_pipeline(source, output, service_url, allow_mock_fallback,
-                                 *, assets_mode, resume, dry_run, max_retries, retry_delay_seconds, auto_retry_on_resume, no_clobber, confirm, smoke_test=False):
+                                 *, assets_mode, model_profile=None, resume=False, dry_run=False, max_retries=2, retry_delay_seconds=1.0, auto_retry_on_resume=True, no_clobber=False, confirm=False, smoke_test=False):
         captured['source'] = source
         captured['output'] = output
         captured['service_url'] = service_url
@@ -786,11 +786,12 @@ def _invoke_chapter_stream_main_with_argv(argv):
     from app import cli
     captured = {}
 
-    def fake_run_chapter_stream(source_path, service_url, allow_mock_fallback, assets_mode, smoke_test=False):
+    def fake_run_chapter_stream(source_path, service_url, allow_mock_fallback, assets_mode, model_profile=None, smoke_test=False):
         captured['source_path'] = source_path
         captured['service_url'] = service_url
         captured['allow_mock_fallback'] = allow_mock_fallback
         captured['assets_mode'] = assets_mode
+        captured['model_profile'] = model_profile
         captured['smoke_test'] = smoke_test
 
     with patch('sys.argv', argv):
@@ -1715,7 +1716,7 @@ def _invoke_batch_main_with_argv(argv):
     captured = {}
 
     def fake_run_chapter_batch(source_paths, service_url, allow_mock_fallback,
-                                assets_mode, resume, no_clobber, smoke_test=False):
+                                assets_mode, model_profile=None, resume=False, no_clobber=False, smoke_test=False):
         captured['source_paths'] = source_paths
         captured['service_url'] = service_url
         captured['allow_mock_fallback'] = allow_mock_fallback
