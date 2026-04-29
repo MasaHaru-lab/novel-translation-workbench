@@ -34,6 +34,14 @@ ENV/
 
 # OS
 .DS_Store
+
+# AI coding assistant artifacts
+.agents/
+.omc/
+.qwen/
+.claude/skills/
+skills/
+skills-lock.json
 Thumbs.db
 
 # Project specific

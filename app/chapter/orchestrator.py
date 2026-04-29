@@ -334,6 +334,7 @@ class ChapterOrchestrator:
         resume_config: Optional[ResumeConfig] = None,
         manifest_path: Optional[str] = None,
         existing_manifest: Optional[RunManifest] = None,
+        smoke_test: bool = False,
     ) -> ChapterResult:
         """Resilient chapter pipeline with manifest-based progress tracking.
 
@@ -359,6 +360,8 @@ class ChapterOrchestrator:
                 output path if not provided.
             existing_manifest: When provided, resume from this manifest
                 instead of starting fresh.
+            smoke_test: When True, skip consistency pass and quality gate.
+                Output is mock translation — not a real translation.
 
         Returns:
             ChapterResult with runtime status (chapter_status, segment_statuses,
@@ -392,6 +395,7 @@ class ChapterOrchestrator:
                 segment_ids=segment_ids,
                 resume_config=resume_config,
                 manifest_path=manifest_path,
+                smoke_test=smoke_test,
             )
             segment_ids_to_run = list(segment_ids)
 
@@ -463,12 +467,16 @@ class ChapterOrchestrator:
         ]
 
         # Batch 3: consistency pass on the aggregated output.
-        audit_summary, correction_summary, corrected_text = self._apply_consistency_pass(
-            aggregated_text=aggregated,
-            chapter_title=plan.chapter_title,
-            ordered_results=ordered_results,
-            consistency_intensity=consistency_intensity,
-        )
+        # Skipped in smoke-test mode (output is mock, not real translation).
+        if smoke_test:
+            audit_summary, correction_summary, corrected_text = None, None, None
+        else:
+            audit_summary, correction_summary, corrected_text = self._apply_consistency_pass(
+                aggregated_text=aggregated,
+                chapter_title=plan.chapter_title,
+                ordered_results=ordered_results,
+                consistency_intensity=consistency_intensity,
+            )
 
         result = ChapterResult(
             chapter_title=plan.chapter_title,
@@ -488,6 +496,7 @@ class ChapterOrchestrator:
             corrected_translation=corrected_text,
             # Batch 4A strategy visibility
             strategy_plan_summary=plan.strategy_plan,
+            smoke_test=smoke_test,
         )
         seg_granularity = (
             plan.strategy_plan.get("overall_strategy", {}).get("segmentation_granularity")
@@ -500,11 +509,17 @@ class ChapterOrchestrator:
             segmentation_granularity=seg_granularity,
             segment_count=len(plan.segments),
         )
-        from app.chapter.quality import validate_chapter_output
-        result.quality_report = validate_chapter_output(result)
-        # Persist the quality summary into the manifest so the manifest
-        # cannot say "completed" while the quality gate failed.
-        manifest.quality_summary = result.quality_report.to_summary()
+        if not smoke_test:
+            from app.chapter.quality import validate_chapter_output
+            result.quality_report = validate_chapter_output(result)
+            # Persist the quality summary into the manifest so the manifest
+            # cannot say "completed" while the quality gate failed.
+            manifest.quality_summary = result.quality_report.to_summary()
+        else:
+            # Smoke-test runs do not produce real translations, so the quality
+            # gate is not meaningful. Record the mode in the manifest so a
+            # "completed" smoke manifest cannot pass as a normal quality pass.
+            manifest.quality_summary = {"smoke_test": True, "passed": False}
         if manifest.manifest_path:
             manifest.save()
         return result
@@ -797,4 +812,5 @@ class ChapterOrchestrator:
             assets_mode=assets_mode,
             existing_manifest=manifest,
             manifest_path=manifest_path,
+            smoke_test=manifest.smoke_test,
         )

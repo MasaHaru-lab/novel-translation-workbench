@@ -97,6 +97,12 @@ class ChapterResult:
     Contains complexity level, risk assessments, and strategy decisions.
     None when strategy assessment was not performed or failed."""
 
+    smoke_test: bool = False
+    """True when this run was executed in smoke-test mode. Smoke-test runs
+    use mock translation, skip quality gates and consistency passes, and
+    their output is not a real translation. The smoke-test flag on a result
+    prevents the report from presenting output as a normal quality pass."""
+
     # Quality gate report (deterministic post-hoc validation).
     # Populated by the orchestrator after aggregation. ``None`` means the
     # gate was not run; an empty report means the chapter passed.

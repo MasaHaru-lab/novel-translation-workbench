@@ -23,6 +23,7 @@ from app.translate.translator import (
     build_translation_input,
     mock_glossary,
     polish_translation,
+    set_smoke_mode,
     translate_draft,
 )
 from app.translate.schema import TranslationInput, TranslationOutput
@@ -226,6 +227,7 @@ def run_chapter_pipeline(
     auto_retry_on_resume: bool = True,
     no_clobber: bool = False,
     confirm: bool = False,
+    smoke_test: bool = False,
 ):
     """Run the chapter-level translation pipeline.
 
@@ -236,6 +238,11 @@ def run_chapter_pipeline(
     output path and continue from where a previous run left off.
     When ``confirm=True``, shows the chapter plan and prompts for
     confirmation before executing.
+
+    When ``smoke_test=True``, runs with deterministic mock translation
+    (no real model backend required). Output is clearly labeled as
+    smoke test — it is not a real translation. Quality gates and
+    consistency passes are skipped.
     """
     _validate_assets_mode(assets_mode)
     # Validate resume configuration parameters
@@ -282,6 +289,10 @@ def run_chapter_pipeline(
         print(f"  Error: Service unavailable. Exiting.")
         sys.exit(1)
 
+    # Enable explicit smoke-test mode so the pipeline degrades visibly
+    # rather than producing a false green.
+    set_smoke_mode(smoke_test)
+
     manifest_path = RunManifest.default_manifest_path(str(output_path))
     orchestrator = ChapterOrchestrator()
 
@@ -319,6 +330,7 @@ def run_chapter_pipeline(
                             translate_draft_fn=translate_fn,
                             assets_mode=assets_mode,
                             resume_config=resume_config,
+                            smoke_test=smoke_test,
                         )
                     except Exception as e:
                         print(f"  Error: Resume failed: {e}")
@@ -351,6 +363,7 @@ def run_chapter_pipeline(
                 assets_mode=assets_mode,
                 resume_config=resume_config,
                 manifest_path=manifest_path,
+                smoke_test=smoke_test,
             )
         except Exception as e:
             print(f"  Error: Chapter translation pipeline failed: {e}")
@@ -399,27 +412,38 @@ def _report_chapter_result(result: ChapterResult, output_path: Path, elapsed_sec
     breakdown when issues exist.
     """
     status_label = result.chapter_status.value
-    print(f"\nChapter '{result.chapter_title}' result:")
-    print(f"  Status:      {status_label}")
-    print(f"  Completed:   {result.success_count}/{result.segment_count} segments")
 
-    # Quality gate — surfaced before consistency so operators cannot miss a
-    # quality fail when the run is otherwise marked "completed".
-    quality = getattr(result, "quality_report", None)
-    if quality is not None:
-        if quality.passed and quality.error_count == 0 and quality.warning_count == 0:
-            print(f"  Quality:     passed")
-        elif quality.passed:
-            print(f"  Quality:     passed ({quality.warning_count} warning(s))")
-        else:
-            print(
-                f"  Quality:     FAILED — {quality.error_count} error(s) "
-                f"[{', '.join(quality.codes())}]"
-            )
-            for issue in quality.issues:
-                if issue.severity == "error":
-                    seg = f" (segment {issue.segment_id})" if issue.segment_id else ""
-                    print(f"    - {issue.code}{seg}: {issue.message}")
+    # Smoke-test mode: show prominent banner and override quality report to
+    # prevent the output from being mistaken for a normal quality pass.
+    if result.smoke_test:
+        print("\n■■■  SMOKE TEST MODE  ■■■")
+        print("  No real model backend. Output is mock — not a real translation.")
+        print(f"\nChapter '{result.chapter_title}' result:")
+        print(f"  Status:      {status_label} (smoke test)")
+        print(f"  Completed:   {result.success_count}/{result.segment_count} segments")
+        print(f"  Quality:     SKIPPED (smoke test)")
+    else:
+        print(f"\nChapter '{result.chapter_title}' result:")
+        print(f"  Status:      {status_label}")
+        print(f"  Completed:   {result.success_count}/{result.segment_count} segments")
+
+        # Quality gate — surfaced before consistency so operators cannot miss a
+        # quality fail when the run is otherwise marked "completed".
+        quality = getattr(result, "quality_report", None)
+        if quality is not None:
+            if quality.passed and quality.error_count == 0 and quality.warning_count == 0:
+                print(f"  Quality:     passed")
+            elif quality.passed:
+                print(f"  Quality:     passed ({quality.warning_count} warning(s))")
+            else:
+                print(
+                    f"  Quality:     FAILED — {quality.error_count} error(s) "
+                    f"[{', '.join(quality.codes())}]"
+                )
+                for issue in quality.issues:
+                    if issue.severity == "error":
+                        seg = f" (segment {issue.segment_id})" if issue.segment_id else ""
+                        print(f"    - {issue.code}{seg}: {issue.message}")
     if result.failed_segment_ids:
         if result.success_count == 0:
             # All segments failed — compact summary avoids noise
@@ -445,7 +469,10 @@ def _report_chapter_result(result: ChapterResult, output_path: Path, elapsed_sec
             if result.is_partial:
                 labels.append(f"partial — {result.success_count}/{result.segment_count} segments")
             suffix = f" ({', '.join(labels)})" if labels else ""
-            print(f"  Written to:  {output_path}{suffix}")
+            if result.smoke_test:
+                print(f"  Written to:  {output_path} (smoke test — not a real translation)")
+            else:
+                print(f"  Written to:  {output_path}{suffix}")
         else:
             print(f"  No output written: translation is empty.")
     else:
@@ -469,12 +496,15 @@ def _report_chapter_result(result: ChapterResult, output_path: Path, elapsed_sec
         print(f"  Next step:   run with --resume to retry all segments")
     elif manifest_path:
         # Completed or terminal — manifest is a run record
-        print(f"  Manifest:    {manifest_path}")
+        smoke_tag = " (smoke test)" if result.smoke_test else ""
+        print(f"  Manifest:    {manifest_path}{smoke_tag}")
 
     # Batch 3: consistency report — readable status summary
-    audit = result.consistency_audit
-    correction = result.correction_summary
-    if audit:
+    if result.smoke_test:
+        print(f"  Consistency:     SKIPPED (smoke test)")
+    elif result.consistency_audit:
+        audit = result.consistency_audit
+        correction = result.correction_summary
         total = audit['total_issues']
         auto_fixed = audit['auto_fixed']
         if total == 0:
@@ -522,7 +552,10 @@ def _report_chapter_result(result: ChapterResult, output_path: Path, elapsed_sec
     if elapsed_seconds is not None:
         print(f"Elapsed: {elapsed_seconds:.1f}s")
 
-    print("Done.")
+    if result.smoke_test:
+        print("Done (smoke test).")
+    else:
+        print("Done.")
 
 
 def run_chapter_stream(
@@ -530,6 +563,7 @@ def run_chapter_stream(
     service_url: Optional[str] = None,
     allow_mock_fallback: bool = False,
     assets_mode: AssetsMode = DEFAULT_ASSETS_MODE,
+    smoke_test: bool = False,
 ) -> None:
     """Stream chapter translation: read source, translate, output final text to stdout.
 
@@ -554,6 +588,8 @@ def run_chapter_stream(
         sys.stderr.write("ERROR: Service unavailable and fallback not allowed.\n")
         sys.exit(1)
 
+    set_smoke_mode(smoke_test)
+
     # Run chapter translation
     try:
         orchestrator = ChapterOrchestrator()
@@ -562,6 +598,7 @@ def run_chapter_stream(
             translate_draft_fn=translate_fn,
             assets_mode=assets_mode,
             manifest_path=None,  # No persistent manifest for stream mode
+            smoke_test=smoke_test,
         )
     except Exception as e:
         sys.stderr.write(f"Chapter translation failed: {e}\n")
@@ -592,6 +629,7 @@ def run_chapter_batch(
     assets_mode: AssetsMode = DEFAULT_ASSETS_MODE,
     resume: bool = False,
     no_clobber: bool = False,
+    smoke_test: bool = False,
 ) -> None:
     """Run chapter translation for multiple source files.
 
@@ -621,6 +659,7 @@ def run_chapter_batch(
                 assets_mode=assets_mode,
                 resume=resume,
                 no_clobber=no_clobber,
+                smoke_test=smoke_test,
             )
             # Check actual output: run_chapter_pipeline can return without
             # SystemExit even when translation failed (e.g., model backend
@@ -724,6 +763,11 @@ def main():
                                     help='Show chapter plan and wait for confirmation before executing. '
                                          'Useful after --dry-run to preview then decide, or standalone '
                                          'to see the plan before starting a fresh run.')
+    chapter_run_parser.add_argument('--smoke-test', action='store_true',
+                                    help='Run in smoke-test mode (no real model backend required). '
+                                         'Translates mechanically with mock output. Quality gates '
+                                         'and consistency passes are skipped. Output is clearly '
+                                         'labeled as smoke test — not a real translation.')
 
     chapter_stream_parser = chapter_sub.add_parser('stream', help='Stream chapter translation: read source, translate, output final translation to stdout')
     chapter_stream_parser.add_argument('--source', type=Path, default=None,
@@ -737,6 +781,9 @@ def main():
                                        help='Project-asset injection mode. "full" (default) injects '
                                             'the project memory block into translation prompts; "none" '
                                             'suppresses it entirely.')
+    chapter_stream_parser.add_argument('--smoke-test', action='store_true',
+                                       help='Run in smoke-test mode (no real model backend required). '
+                                            'Output is mock — not a real translation.')
 
     chapter_batch_parser = chapter_sub.add_parser('batch', help='Run batch chapter translation for multiple source files')
     chapter_batch_parser.add_argument('--source', type=Path, required=True, action='append',
@@ -753,6 +800,10 @@ def main():
                                            'suppresses it entirely.')
     chapter_batch_parser.add_argument('--resume', action='store_true',
                                       help='Attempt to resume each chapter from its saved manifest.')
+    chapter_batch_parser.add_argument('--smoke-test', action='store_true',
+                                      help='Run in smoke-test mode (no real model backend required). '
+                                           'Translates mechanically with mock output. Quality gates '
+                                           'and consistency passes are skipped.')
     chapter_batch_parser.add_argument('--no-clobber', action='store_true',
                                       help='Skip chapters whose output file already exists.')
 
@@ -787,6 +838,7 @@ def main():
                 auto_retry_on_resume=args.auto_retry_on_resume,
                 no_clobber=args.no_clobber,
                 confirm=args.confirm,
+                smoke_test=args.smoke_test,
             )
         elif args.chapter_command == 'stream':
             run_chapter_stream(
@@ -794,6 +846,7 @@ def main():
                 service_url=args.service_url,
                 allow_mock_fallback=args.allow_mock_fallback,
                 assets_mode=args.assets_mode,
+                smoke_test=args.smoke_test,
             )
         elif args.chapter_command == 'batch':
             run_chapter_batch(
@@ -803,6 +856,7 @@ def main():
                 assets_mode=args.assets_mode,
                 resume=args.resume,
                 no_clobber=args.no_clobber,
+                smoke_test=args.smoke_test,
             )
     else:
         parser.print_help()

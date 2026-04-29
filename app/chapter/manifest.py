@@ -140,6 +140,11 @@ class RunManifest:
     ``None`` means the quality gate was not run (e.g. older runs before
     the gate was wired in)."""
 
+    smoke_test: bool = False
+    """True when this run was executed in smoke-test mode (mock translation,
+    no real model backend). Smoke-test runs skip quality gates and
+    consistency passes; their output is not a real translation."""
+
     @staticmethod
     def create(
         chapter_title: str,
@@ -147,6 +152,7 @@ class RunManifest:
         segment_ids: List[str],
         resume_config: Optional[ResumeConfig] = None,
         manifest_path: Optional[str] = None,
+        smoke_test: bool = False,
     ) -> "RunManifest":
         """Create a new RunManifest for a chapter run.
 
@@ -172,6 +178,7 @@ class RunManifest:
             },
             resume_config=resume_config or ResumeConfig(),
             manifest_path=manifest_path,
+            smoke_test=smoke_test,
         )
 
     # ── Status helpers ─────────────────────────────────────────────────
@@ -341,6 +348,7 @@ class RunManifest:
             completed_at=d.get("completed_at"),
             manifest_path=d.get("manifest_path"),
             quality_summary=d.get("quality_summary"),
+            smoke_test=d.get("smoke_test", False),
         )
 
     @staticmethod

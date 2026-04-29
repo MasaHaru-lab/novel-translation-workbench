@@ -262,7 +262,7 @@ def _invoke_chapter_main_with_argv(argv):
     captured = {}
 
     def fake_run_chapter_pipeline(source, output, service_url, allow_mock_fallback,
-                                 *, assets_mode, resume, dry_run, max_retries, retry_delay_seconds, auto_retry_on_resume, no_clobber, confirm):
+                                 *, assets_mode, resume, dry_run, max_retries, retry_delay_seconds, auto_retry_on_resume, no_clobber, confirm, smoke_test=False):
         captured['source'] = source
         captured['output'] = output
         captured['service_url'] = service_url
@@ -275,6 +275,7 @@ def _invoke_chapter_main_with_argv(argv):
         captured['auto_retry_on_resume'] = auto_retry_on_resume
         captured['no_clobber'] = no_clobber
         captured['confirm'] = confirm
+        captured['smoke_test'] = smoke_test
 
     with patch('sys.argv', argv):
         with patch.object(cli, 'run_chapter_pipeline', side_effect=fake_run_chapter_pipeline):
@@ -785,11 +786,12 @@ def _invoke_chapter_stream_main_with_argv(argv):
     from app import cli
     captured = {}
 
-    def fake_run_chapter_stream(source_path, service_url, allow_mock_fallback, assets_mode):
+    def fake_run_chapter_stream(source_path, service_url, allow_mock_fallback, assets_mode, smoke_test=False):
         captured['source_path'] = source_path
         captured['service_url'] = service_url
         captured['allow_mock_fallback'] = allow_mock_fallback
         captured['assets_mode'] = assets_mode
+        captured['smoke_test'] = smoke_test
 
     with patch('sys.argv', argv):
         with patch.object(cli, 'run_chapter_stream', side_effect=fake_run_chapter_stream):
@@ -1713,13 +1715,14 @@ def _invoke_batch_main_with_argv(argv):
     captured = {}
 
     def fake_run_chapter_batch(source_paths, service_url, allow_mock_fallback,
-                                assets_mode, resume, no_clobber):
+                                assets_mode, resume, no_clobber, smoke_test=False):
         captured['source_paths'] = source_paths
         captured['service_url'] = service_url
         captured['allow_mock_fallback'] = allow_mock_fallback
         captured['assets_mode'] = assets_mode
         captured['resume'] = resume
         captured['no_clobber'] = no_clobber
+        captured['smoke_test'] = smoke_test
 
     with patch('sys.argv', argv):
         with patch.object(cli, 'run_chapter_batch', side_effect=fake_run_chapter_batch):

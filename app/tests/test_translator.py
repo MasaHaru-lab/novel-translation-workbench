@@ -1,11 +1,13 @@
 import sys
 import os
+import pytest
 from unittest.mock import patch
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
 from app.translate.schema import TranslationInput, TranslationOutput, GlossaryTerm
 from app.translate.translator import (
     apply_glossary,
+    set_smoke_mode,
     translate_draft,
     polish_translation,
     build_translation_input,
@@ -18,6 +20,7 @@ from app.translate.translator import (
     check_segment_coverage,
 )
 from app.segment.segmenter import Segment
+from app.config import config
 
 
 REVIEWER_SCAFFOLD_KEYS = (
@@ -589,3 +592,100 @@ if __name__ == "__main__":
     test_build_polish_prompt_without_guidance_has_no_review_section()
     test_build_translation_input()
     print("All translator tests passed.")
+
+
+# ── Smoke-test mode ─────────────────────────────────────────────────────────
+
+def test_translate_draft_fails_without_backend_during_test():
+    """Without MODEL_BACKEND_URL and without set_smoke_mode(), translate_draft
+    must raise RuntimeError — it must NOT silently produce mock output."""
+    original_url = config.MODEL_BACKEND_URL
+    config.MODEL_BACKEND_URL = ""
+    set_smoke_mode(False)
+    try:
+        inp = TranslationInput(
+            segment_id="1",
+            source_text="测试文字。",
+        )
+        with pytest.raises(RuntimeError, match="MODEL_BACKEND_URL not configured"):
+            translate_draft(inp)
+    finally:
+        config.MODEL_BACKEND_URL = original_url
+        set_smoke_mode(False)
+
+
+def test_translate_draft_with_smoke_mode_returns_output():
+    """With set_smoke_mode(True) and no MODEL_BACKEND_URL, translate_draft
+    must return a TranslationOutput (not fail) — the pipeline should complete
+    mechanically for smoke testing."""
+    original_url = config.MODEL_BACKEND_URL
+    config.MODEL_BACKEND_URL = ""
+    set_smoke_mode(True)
+    try:
+        inp = TranslationInput(
+            segment_id="1",
+            source_text="测试文字。",
+        )
+        result = translate_draft(inp)
+        assert result is not None
+        assert isinstance(result, TranslationOutput)
+        assert result.segment_id == "1"
+    finally:
+        config.MODEL_BACKEND_URL = original_url
+        set_smoke_mode(False)
+
+
+def test_smoke_draft_output_labeled():
+    """Smoke-test draft output must contain '[SMOKE TEST]' label to distinguish
+    it from real translation output."""
+    original_url = config.MODEL_BACKEND_URL
+    config.MODEL_BACKEND_URL = ""
+    set_smoke_mode(True)
+    try:
+        inp = TranslationInput(
+            segment_id="3",
+            source_text="测试文字。",
+        )
+        result = translate_draft(inp)
+        assert "SMOKE TEST" in result.draft_translation
+        assert "3" in result.draft_translation  # segment id visible
+    finally:
+        config.MODEL_BACKEND_URL = original_url
+        set_smoke_mode(False)
+
+
+def test_smoke_internal_review_returns_no_issue():
+    """Smoke-test internal review must report 'no major issue' so the polish
+    pass returns the draft unchanged — no real review was performed."""
+    original_url = config.MODEL_BACKEND_URL
+    config.MODEL_BACKEND_URL = ""
+    set_smoke_mode(True)
+    try:
+        from app.translate.translator import run_internal_review_with_backend
+        inp = TranslationInput(
+            segment_id="1",
+            source_text="测试文字。",
+        )
+        review = run_internal_review_with_backend(inp, "mock draft text")
+        assert "none" in review.lower()
+        assert "major_issue" in review.lower()
+    finally:
+        config.MODEL_BACKEND_URL = original_url
+        set_smoke_mode(False)
+
+
+def test_smoke_mode_resets_between_tests():
+    """set_smoke_mode(False) must disable the mode so the next normal call
+    raises RuntimeError (avoids cross-test contamination)."""
+    original_url = config.MODEL_BACKEND_URL
+    config.MODEL_BACKEND_URL = ""
+    set_smoke_mode(False)
+    try:
+        inp = TranslationInput(
+            segment_id="1",
+            source_text="测试文字。",
+        )
+        with pytest.raises(RuntimeError, match="MODEL_BACKEND_URL not configured"):
+            translate_draft(inp)
+    finally:
+        config.MODEL_BACKEND_URL = original_url

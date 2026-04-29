@@ -77,6 +77,51 @@ def _validate_assets_mode(mode: str) -> AssetsMode:
     return mode  # type: ignore[return-value]
 
 
+# ── Smoke-test mode ──────────────────────────────────────────────────────────
+
+_smoke_mode = False
+"""Module-level flag for explicit smoke-test (mock translation) mode.
+
+Only effective when ``set_smoke_mode()`` is called before any pipeline
+call. Default (False): the pipeline fails when MODEL_BACKEND_URL is
+missing, preserving product honesty."""
+
+
+def set_smoke_mode(active: bool = True) -> None:
+    """Enable or disable smoke-test mode.
+
+    In smoke-test mode, ``translate_draft``, ``run_internal_review_with_backend``,
+    and ``translate_polish_with_backend`` return deterministic mock output
+    when MODEL_BACKEND_URL is not configured, instead of raising.
+
+    Without this mode, a missing backend is a hard failure — the operator
+    must deliberately opt into mechanical smoke testing.
+    """
+    global _smoke_mode
+    _smoke_mode = active
+
+
+def _smoke_draft(input: TranslationInput) -> TranslationOutput:
+    """Deterministic smoke-test mock draft translation.
+
+    Strips CJK characters from source and wraps in a ``[SMOKE TEST]``
+    label.  The label ensures any downstream quality check cannot mistake
+    this mock output for a real translation.  Only reachable when
+    ``_smoke_mode is True`` and no real model backend is configured.
+    """
+    source = input.source_text or ""
+    clean = _CJK_RE.sub("", source).strip()
+    if not clean:
+        clean = f"[Segment {input.segment_id}]"
+    mock_text = f"[SMOKE TEST {input.segment_id}] {clean}"
+    return TranslationOutput(
+        segment_id=input.segment_id,
+        draft_translation=mock_text,
+        polished_translation="",
+        notes=["SMOKE TEST MODE: no MODEL_BACKEND_URL configured"],
+    )
+
+
 def translate_draft(
     input: TranslationInput,
     assets_mode: AssetsMode = DEFAULT_ASSETS_MODE,
@@ -106,9 +151,12 @@ def translate_draft(
 
     # Check if backend URL is configured
     if not config.MODEL_BACKEND_URL or not config.MODEL_BACKEND_URL.strip():
+        if _smoke_mode:
+            return _smoke_draft(input)
         raise RuntimeError(
             "MODEL_BACKEND_URL not configured. Draft translation requires a real backend. "
-            "Set MODEL_BACKEND_URL environment variable to enable draft step."
+            "Set MODEL_BACKEND_URL environment variable, or use --smoke-test "
+            "for a mechanical smoke test (output is not a real translation)."
         )
 
     # Backend configured: attempt real draft translation
@@ -839,6 +887,15 @@ def run_internal_review_with_backend(
     ``parse_review_findings`` — never surfaced to the user directly.
     """
     _validate_assets_mode(assets_mode)
+    # Smoke-test mode: return "no issue" review to let pipeline proceed mechanically
+    from app.config import config as _config
+    if not _config.MODEL_BACKEND_URL.strip():
+        if _smoke_mode:
+            return "major_issue: none\nwhy_it_matters: none\nrecommended_fix: none\noptional_notes: (smoke test mode)"
+        raise RuntimeError(
+            "MODEL_BACKEND_URL not configured. Internal review requires a real backend. "
+            "Set MODEL_BACKEND_URL environment variable, or use --smoke-test."
+        )
     _, call_model_backend = _require_configured_backend("internal review")
     prompt = build_review_prompt(input, draft_text, assets_mode)
     bc = budget_config or BudgetConfig()
@@ -869,6 +926,15 @@ def translate_polish_with_backend(
         ValueError: if assets_mode is not a recognized value.
     """
     _validate_assets_mode(assets_mode)
+    # Smoke-test mode: return draft unchanged (no real polish pass)
+    from app.config import config as _config
+    if not _config.MODEL_BACKEND_URL.strip():
+        if _smoke_mode:
+            return clean_polished_output(draft_text)
+        raise RuntimeError(
+            "MODEL_BACKEND_URL not configured. Polish requires a real backend. "
+            "Set MODEL_BACKEND_URL environment variable, or use --smoke-test."
+        )
     _, call_model_backend = _require_configured_backend("polish")
     prompt = build_polish_prompt(
         input, draft_text, assets_mode, review_guidance=review_guidance

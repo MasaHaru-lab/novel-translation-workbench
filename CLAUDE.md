@@ -135,6 +135,20 @@ For orchestrator design and current capabilities, see `ORCHESTRATION.md`.
 
 遇到看似要合并两者的"简化"机会，先停下问，这基本就是违规信号。
 
+## Reuse-first Principle (优先复用原则)
+
+设计新功能时默认复用而非重造。实现顺序：
+1. 先复用已有 CLI/API/工具/平台/模块
+2. 再写薄胶水层或适配层
+3. 再补规则、边界、错误处理、测试和验收
+4. 只有现成能力无法满足成本、隐私、稳定性、可控性、离线能力或关键边界时，才自研
+
+本项目关键约束：
+- `chapter run` / `chapter batch` 是既有执行入口，不要绕过它们重写执行流
+- hooks/tests/pre-merge gate 是安全层，不要用手工约定替代
+- OpenClaw 是调度层，不是底层能力重写层
+- 新方案必须说明复用了什么、新增了什么、为什么需要新增
+
 ## Frozen Designs
 
 以下设计主题已明确评估并冻结。除非用户明确重新打开该主题，否则不允许实现、预重构、或做任何前置准备。
@@ -229,6 +243,25 @@ In other words:
 
 - tool approval is a runtime/safety concern
 - whether something belongs to the current batch is an execution judgment you should usually make yourself
+
+### Batch approval rule
+
+For bounded batches with a stated goal, boundaries, acceptance criteria, and stop point, routine in-scope actions are pre-approved:
+
+- reading relevant files
+- editing in-scope files (including fixing test failures caused by in-scope changes)
+- running tests
+- checking git diff/status/log
+- preparing and making requested commits when acceptance is met
+- reporting final results
+
+Only stop and ask if:
+- the task scope needs to change
+- unrelated files must be touched
+- destructive actions are needed
+- secrets/network credentials are needed
+- merge to main/master is about to happen
+- a genuine product/architecture decision cannot be resolved from existing direction
 
 ## gstack (REQUIRED — global install)
 
