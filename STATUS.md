@@ -26,6 +26,11 @@ The translation framework has been migrated to a reusable, direction-agnostic sk
   - Per-segment progress logging during fresh-run execution
   - Plan preview with segment count, complexity, budget, consistency intensity
   - Manifest-based resume with failure isolation, retry, and guidance
+- ✅ **Book memory retrieval / context-pack layer (R2)**
+  - `build_context_pack(segment, memory)` for deterministic substring matching of entities, titles, and relationships
+  - Hard 4000-char context pack limit with priority-based truncation (confirmed kept over tentative)
+  - Status-preserving output with `[TENTATIVE]` and `[UNRESOLVED]` labels
+  - 36 dedicated tests, all passing; module is built, tested, but not yet wired into translation pipeline
 - ✅ **Chapter-level HTTP API** (`POST /translate/chapter`)
   - Full manifest/resume semantics (fresh run, resume with existing manifest)
   - Direct access to `ChapterOrchestrator.run_with_manifest()`
@@ -38,7 +43,7 @@ The translation framework has been migrated to a reusable, direction-agnostic sk
   - Strategy enactment closed loop (budget/consistency resolved from plan, record attached to `ChapterResult`)
 - ✅ **Consistency audit** (term unification, limited automated correction)
 - ✅ **Advanced CLI output** — strategy overview, consistency summary, resume guidance
-- ✅ **339 tests passing** (26 service + 74 CLI + 39 chapter + others)
+- ✅ **592 tests passing** (26 service + 74 CLI + 39 chapter + 36 retrieval + others)
 
 ## What's Still Missing (Phase B and later)
 
@@ -73,7 +78,7 @@ python -m app.cli run
 python -m pytest app/tests/
 ```
 
-All 339 tests should pass (74 CLI + 39 chapter + others).
+All 592 tests should pass (74 CLI + 39 chapter + 36 retrieval + others).
 
 ## Phase B — Quality Loop
 
@@ -342,7 +347,7 @@ Two changes to eliminate operator footguns in daily use:
 - **Default output derivation (#9):** Both `run` and `chapter run` now derive `--output` from `--source` when omitted (e.g. `data/source/chapter3.txt` → `data/exports/chapter3_en.md`), instead of always defaulting to `chapter1_en.md`. Prevents silent overwrites. 10 new tests. Commit `9369504`.
 - **`chapter batch` command (#10):** `python -m app.cli chapter batch --source path1 --source path2` runs chapter-level translation on multiple source files in one invocation. Each source gets a safe default output via the same derivation helper. Failure isolation — one failed chapter does not block the rest. Compact per-chapter summary after completion. KeyboardInterrupt/Ctrl+C propagates naturally. 8 dedicated batch tests. Commit `6e6c605`.
 
-Test suite: 339 passed (74 CLI + 39 chapter + 26 service + others).
+Test suite: 592 passed (74 CLI + 39 chapter + 36 retrieval + 26 service + others).
 
 **Next batch:** Phase B — quality loop. No further Phase A or Phase B+ operator-usability work.
 
