@@ -18,6 +18,7 @@ from app.chapter.consistency import (
     CorrectionSummary,
     build_consistency_reference,
     run_consistency_pass,
+    _ends_sentence_cleanly,
     _parse_character_refs,
     _parse_title_refs,
     _parse_glossary_refs,
@@ -403,6 +404,178 @@ def test_audit_clean_boundary():
     audit = auditor.audit("# Test", "Test", segment_texts)
     boundary_issues = audit.issues_by_category(ConsistencyIssueCategory.SEGMENT_BOUNDARY)
     assert len(boundary_issues) == 0
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# Truncation detection
+# ═════════════════════════════════════════════════════════════════════════
+
+
+class TestEndsSentenceCleanly:
+    """Unit tests for the _ends_sentence_cleanly helper."""
+
+    def test_empty_text(self):
+        assert not _ends_sentence_cleanly("")
+
+    def test_whitespace_only(self):
+        assert not _ends_sentence_cleanly("   ")
+
+    def test_none_input(self):
+        assert not _ends_sentence_cleanly(None)
+
+    def test_ends_with_period(self):
+        assert _ends_sentence_cleanly("She walked in.")
+
+    def test_ends_with_question_mark(self):
+        assert _ends_sentence_cleanly("Are you coming?")
+
+    def test_ends_with_exclamation(self):
+        assert _ends_sentence_cleanly("Watch out!")
+
+    def test_ends_with_ellipsis(self):
+        assert _ends_sentence_cleanly("She hesitated…")
+
+    def test_ends_with_em_dash(self):
+        assert _ends_sentence_cleanly("He turned—")
+
+    def test_ends_with_cjk_period(self):
+        assert _ends_sentence_cleanly("她走进来了。")
+
+    def test_ends_with_dialogue_quote(self):
+        """A closing double-quote after punctuation counts as clean."""
+        assert _ends_sentence_cleanly('"I agree."')
+
+    def test_ends_with_bare_quote(self):
+        """A bare closing quote (no prior sentence punctuation) counts as clean."""
+        assert _ends_sentence_cleanly('She said, "',)
+
+    def test_ends_with_cjk_closing_bracket(self):
+        assert _ends_sentence_cleanly("「我知道了」")
+
+    def test_ends_with_letter_truncated(self):
+        """Ending with an ASCII letter is a truncation signal."""
+        assert not _ends_sentence_cleanly("She walked into the room and")
+
+    def test_ends_with_cjk_truncated(self):
+        """Ending with a CJK character suggests truncation."""
+        assert not _ends_sentence_cleanly("她走进")
+
+    def test_ends_with_comma_truncated(self):
+        """Ending with a comma suggests mid-sentence cut."""
+        assert not _ends_sentence_cleanly("She walked in,")
+
+    def test_ends_with_semicolon(self):
+        assert not _ends_sentence_cleanly("She waited;")
+
+    def test_ends_with_digit(self):
+        assert not _ends_sentence_cleanly("Chapter 1")
+
+    def test_ends_with_newline_clean(self):
+        """Trailing newline is stripped; actual last char is checked."""
+        assert _ends_sentence_cleanly("She walked in.\n")
+
+    def test_trailing_whitespace_stripped(self):
+        assert _ends_sentence_cleanly("She walked in.  ")
+
+
+class TestAuditTruncation:
+    """Integration tests for truncation detection in the consistency auditor."""
+
+    def test_audit_detects_truncated_segment(self):
+        """A segment ending mid-word should be flagged."""
+        ref = _make_test_reference()
+        auditor = ChapterConsistencyAuditor(ref)
+
+        segment_texts = [
+            ("1", "She walked into the room and looked around carefully"),
+            ("2", "The old woman sat by the window, her hands folded."),
+        ]
+        audit = auditor.audit("# Test", "Test", segment_texts)
+        boundary_issues = audit.issues_by_category(
+            ConsistencyIssueCategory.SEGMENT_BOUNDARY
+        )
+        truncation_issues = [
+            i for i in boundary_issues if "truncated" in i.detail.lower()
+        ]
+        assert len(truncation_issues) == 1
+        assert truncation_issues[0].segment_id == "1"
+        assert not truncation_issues[0].auto_fixable
+
+    def test_audit_clean_all_segments(self):
+        """No truncation issues when all segments end properly."""
+        ref = _make_test_reference()
+        auditor = ChapterConsistencyAuditor(ref)
+
+        segment_texts = [
+            ("1", "Qin Liuxi walked through the garden."),
+            ("2", "Old Lady Qin sat by the window."),
+            ("3", "Lady Wang served tea."),
+        ]
+        audit = auditor.audit("# Test", "Test", segment_texts)
+        truncation_issues = [
+            i for i in audit.issues
+            if i.category == ConsistencyIssueCategory.SEGMENT_BOUNDARY
+            and "truncated" in i.detail.lower()
+        ]
+        assert len(truncation_issues) == 0
+
+    def test_audit_truncated_multiple_segments(self):
+        """Multiple truncated segments are each flagged separately."""
+        ref = _make_test_reference()
+        auditor = ChapterConsistencyAuditor(ref)
+
+        segment_texts = [
+            ("1", "She walked into the room and"),
+            ("2", "The old woman looked up and"),
+            ("3", "Lady Wang served tea."),
+        ]
+        audit = auditor.audit("# Test", "Test", segment_texts)
+        truncation_issues = [
+            i for i in audit.issues
+            if i.category == ConsistencyIssueCategory.SEGMENT_BOUNDARY
+            and "truncated" in i.detail.lower()
+        ]
+        assert len(truncation_issues) == 2
+        seg_ids = {i.segment_id for i in truncation_issues}
+        assert seg_ids == {"1", "2"}
+
+    def test_audit_truncation_provides_context_snippet(self):
+        """Truncation issues should include a useful context snippet."""
+        ref = _make_test_reference()
+        auditor = ChapterConsistencyAuditor(ref)
+
+        segment_texts = [
+            ("1", "She walked into the room"),
+            ("2", "and sat down."),
+        ]
+        audit = auditor.audit("# Test", "Test", segment_texts)
+        truncation_issues = [
+            i for i in audit.issues
+            if i.category == ConsistencyIssueCategory.SEGMENT_BOUNDARY
+            and "truncated" in i.detail.lower()
+        ]
+        assert len(truncation_issues) == 1
+        snippet = truncation_issues[0].context_snippet
+        assert len(snippet) > 0
+        assert "walked into the room" in snippet
+
+    def test_audit_truncation_with_cjk_characters(self):
+        """CJK text ending mid-sentence should be flagged."""
+        ref = _make_test_reference()
+        auditor = ChapterConsistencyAuditor(ref)
+
+        segment_texts = [
+            ("1", "她走进房间里，看着四周"),
+            ("2", "然后坐了下来。"),
+        ]
+        audit = auditor.audit("# Test", "Test", segment_texts)
+        truncation_issues = [
+            i for i in audit.issues
+            if i.category == ConsistencyIssueCategory.SEGMENT_BOUNDARY
+            and "truncated" in i.detail.lower()
+        ]
+        assert len(truncation_issues) == 1
+        assert truncation_issues[0].segment_id == "1"
 
 
 # ═════════════════════════════════════════════════════════════════════════

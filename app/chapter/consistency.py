@@ -67,7 +67,8 @@ class ConsistencyIssueCategory(str, Enum):
 
     SEGMENT_BOUNDARY = "segment_boundary"
     """An adjacent-segment boundary has an obvious inconsistency (e.g. repeated
-    information, contradictory statement, jarring transition)."""
+    information, contradictory statement, jarring transition, or a segment
+    that appears truncated mid-sentence)."""
 
 
 # ── Data Models ───────────────────────────────────────────────────────────
@@ -375,6 +376,46 @@ def _find_segment_boundaries(
         head = next_text.strip()[:300] if len(next_text.strip()) > 300 else next_text.strip()
         boundaries.append((int(seg_id), tail, head))
     return boundaries
+
+
+# ── Truncation Detection ──────────────────────────────────────────────────────────
+
+_SENTENCE_END_CHARS: set = {
+    ".", "!", "?", "…", "—",
+    "」", "』", "”", "’",
+    ")", "}", "]",
+    "。", "！", "？",
+}
+
+_CLOSING_PUNCTUATION: set = {
+    '"', "'", "“", "‘",
+    "」", "』",
+    ")", "}", "]",
+}
+
+
+def _ends_sentence_cleanly(text: str) -> bool:
+    """Check whether ``text`` ends with sentence-ending punctuation.
+
+    Returns True when the last non-whitespace character is a recognized
+    sentence-ending character (period, question mark, exclamation, ellipsis,
+    closing bracket after sentence punctuation, etc.). Empty or whitespace-only
+    strings return False.
+
+    This is deliberately conservative: a bare closing quote or bracket
+    (with no prior sentence-ending punctuation) still counts as a clean
+    end, since it likely closes dialogue or a parenthetical.
+    """
+    stripped = (text or "").strip()
+    if not stripped:
+        return False
+    last = stripped[-1]
+    if last in _SENTENCE_END_CHARS:
+        return True
+    # Closing punctuation alone still counts as clean (dialogue end, etc).
+    if last in _CLOSING_PUNCTUATION:
+        return True
+    return False
 
 
 class ChapterConsistencyAuditor:
@@ -700,14 +741,15 @@ class ChapterConsistencyAuditor:
     ) -> List[ConsistencyIssue]:
         """Check adjacent segment boundaries for obvious inconsistencies.
 
-        In v1, this is intentionally minimal — we check for:
-        - Repeated identical phrases at segment boundaries (suggesting overlap)
-        - Large gaps in entity reference density (suggesting drift)
+        Checks:
+        - Repeated identical phrases at segment boundaries (overlap)
+        - Per-segment mid-sentence truncation (segment ends mid-sentence)
         """
         issues = []
         boundaries = _find_segment_boundaries(segment_texts)
 
         for seg_id, tail, head in boundaries:
+            # ── Overlap detection ────────────────────────────────────────
             # Check if the start of the next segment appears in the tail of
             # the current segment (suggesting repeated content across the
             # segment boundary). Use a minimum match length of 25 chars.
@@ -736,6 +778,31 @@ class ChapterConsistencyAuditor:
                             f"{len(overlap_found)}-char overlap detected."
                         ),
                     ))
+
+        # ── Truncation detection ─────────────────────────────────────────
+        # Check each segment (except the last, which may end a chapter) for
+        # mid-sentence truncation. A segment that ends without sentence-ending
+        # punctuation likely had its output cut off during generation.
+        for seg_id, text in segment_texts:
+            if not _ends_sentence_cleanly(text):
+                lines = (text or "").strip().splitlines()
+                last_lines = lines[-3:] if len(lines) >= 3 else lines
+                snippet = "\n".join(last_lines) if last_lines else ""
+                # Trim the snippet to a reasonable preview length.
+                if len(snippet) > 120:
+                    snippet = snippet[-120:]
+                issues.append(ConsistencyIssue(
+                    category=ConsistencyIssueCategory.SEGMENT_BOUNDARY,
+                    segment_id=str(seg_id),
+                    term="", found="", expected="",
+                    context_snippet=snippet,
+                    auto_fixable=False,
+                    detail=(
+                        f"Segment {seg_id} may be truncated — output does not "
+                        f"end with sentence-ending punctuation. Last characters: "
+                        f"{repr(snippet[-40:]) if snippet else '(empty)'}"
+                    ),
+                ))
 
         return issues
 
