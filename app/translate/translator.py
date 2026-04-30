@@ -498,6 +498,10 @@ def build_draft_prompt(
         lines.append(input.next_context)
         lines.append("")
 
+    if input.prev_context or input.next_context:
+        lines.append("─── END OF CONTEXT BLOCK ───")
+        lines.append("")
+
     # Original source text
     lines.append("Original Chinese text:")
     lines.append(input.source_text)
@@ -553,6 +557,10 @@ def build_polish_prompt(
     if input.next_context:
         lines.append("Next segment (for context only, do not translate):")
         lines.append(input.next_context)
+        lines.append("")
+
+    if input.prev_context or input.next_context:
+        lines.append("─── END OF CONTEXT BLOCK ───")
         lines.append("")
 
     lines.append("Original Chinese text:")
@@ -621,6 +629,10 @@ def build_review_prompt(
     if input.next_context:
         lines.append("Next segment (for context only, do not translate):")
         lines.append(input.next_context)
+        lines.append("")
+
+    if input.prev_context or input.next_context:
+        lines.append("─── END OF CONTEXT BLOCK ───")
         lines.append("")
 
     lines.append("Original Chinese text:")
