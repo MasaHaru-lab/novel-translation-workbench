@@ -32,6 +32,36 @@ class Segment:
     next_segment_text: Optional[str] = None
 
 
+def clip_context(text: Optional[str], max_chars: int = 200) -> Optional[str]:
+    """Clip context text to a brief prefix for boundary coherence.
+
+    Reduces next_segment_text from full adjacent segment length (800-1200
+    chars) to ~max_chars, preferring to break at a sentence boundary.
+    This prevents the model from treating large context blocks as
+    translatable material (the known next_context spill pattern).
+
+    Only `next_context` is clipped — `prev_context` is already-translated
+    material and does not exhibit the same leakage.
+
+    Returns None if text is None, original text if already within max_chars.
+    """
+    if text is None:
+        return None
+    if len(text) <= max_chars:
+        return text
+    # Find the LAST sentence/paragraph boundary within [50, max_chars)
+    # so the clipped text is as long as possible while still ending cleanly.
+    best_pos = -1
+    for sep in ('\n', '。', '！', '？', '.', '!', '?'):
+        pos = text.rfind(sep, 50, max_chars)
+        if pos >= 50 and pos > best_pos:
+            best_pos = pos
+    if best_pos >= 50:
+        return text[:best_pos + 1].strip()
+    # Hard cut if no suitable boundary found.
+    return text[:max_chars].rstrip() + "…"
+
+
 def split_paragraphs(text: str) -> List[str]:
     """Split text into paragraphs (by blank lines)."""
     # Split by \n\n and also handle single newline if preceded by punctuation? Simpler: re.split(r'\n\s*\n', text)
@@ -83,7 +113,7 @@ def create_segments(text: str, max_chars: int = 1200, min_chars: int = 800) -> L
             segment_id=idx + 1,
             text=seg_text,
             prev_segment_text=prev,
-            next_segment_text=nxt
+            next_segment_text=clip_context(nxt)
         ))
 
     return segment_objects

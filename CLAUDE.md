@@ -10,11 +10,18 @@ Always use the project venv (`venv/bin/python`), not system `python3`.
 
 | Action | Command |
 |--------|---------|
-| Run tests | `python -m pytest app/tests/` |
-| Run pipeline | `python -m app.cli run` |
-| Start service | `python run_translation_service.py` |
+| Run tests | `venv/bin/python -m pytest app/tests/` |
+| Run pipeline | `venv/bin/python -m app.cli run` |
+| Start service | `venv/bin/python run_translation_service.py` |
 
-Commands assume `source venv/bin/activate` first. Without activation, prefix each command with `venv/bin/python` (e.g., `venv/bin/python -m pytest app/tests/`).
+Default to direct `venv/bin/python` calls for routine commands. Do NOT use `source venv/bin/activate && python ...` — the activation adds no value and creates unnecessary shell-approval friction. `activate` is reserved for interactive sessions only.
+
+### Proven patterns (reusable)
+
+- **Test commands**: Default to `venv/bin/python -m pytest app/tests/...`. Do not `source activate` first.
+- **Exit code 1 from pytest**: If pytest starts, collects, and shows PASSED/FAILED, Python is working. Exit 1 means test failure — identify the exact failed test name and reason. Do not report it as "Python unavailable" or an environment issue.
+- **CLI commands**: Default to `venv/bin/python -m app.<module>` without activation.
+- **Real model validator runs**: Use `venv/bin/python -m app.chapter.cli run ...` when available.
 
 ## Governing documents
 
