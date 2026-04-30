@@ -356,6 +356,12 @@ def run_chapter_pipeline(
         print(f"  Error: Service unavailable. Exiting.")
         sys.exit(1)
 
+    # Resolve the profile object for review/polish orchestration.
+    profile_obj = None
+    if model_profile:
+        from app.translate.model_profiles import get_profile
+        profile_obj = get_profile(model_profile)
+
     # Enable explicit smoke-test mode so the pipeline degrades visibly
     # rather than producing a false green.
     set_smoke_mode(smoke_test)
@@ -398,6 +404,7 @@ def run_chapter_pipeline(
                             assets_mode=assets_mode,
                             resume_config=resume_config,
                             smoke_test=smoke_test,
+                            model_profile=profile_obj,
                         )
                     except Exception as e:
                         print(f"  Error: Resume failed: {e}")
@@ -431,6 +438,7 @@ def run_chapter_pipeline(
                 resume_config=resume_config,
                 manifest_path=manifest_path,
                 smoke_test=smoke_test,
+                model_profile=profile_obj,
             )
         except Exception as e:
             print(f"  Error: Chapter translation pipeline failed: {e}")
@@ -656,6 +664,12 @@ def run_chapter_stream(
         sys.stderr.write("ERROR: Service unavailable and fallback not allowed.\n")
         sys.exit(1)
 
+    # Resolve the profile object for review/polish orchestration.
+    profile_obj = None
+    if model_profile:
+        from app.translate.model_profiles import get_profile
+        profile_obj = get_profile(model_profile)
+
     set_smoke_mode(smoke_test)
 
     # Run chapter translation
@@ -667,6 +681,7 @@ def run_chapter_stream(
             assets_mode=assets_mode,
             manifest_path=None,  # No persistent manifest for stream mode
             smoke_test=smoke_test,
+            model_profile=profile_obj,
         )
     except Exception as e:
         sys.stderr.write(f"Chapter translation failed: {e}\n")
@@ -779,7 +794,7 @@ def main():
 
     run_parser = subparsers.add_parser('run', help='Run translation pipeline')
     # Optional arguments for input/output paths
-    run_parser.add_argument('--source', type=Path, default=Path('data/source/chapter1.txt'),
+    run_parser.add_argument('--source', type=Path, default=Path('data/source/one_chapter_quality_source.txt'),
                             help='Path to source text file')
     run_parser.add_argument('--output', type=Path, default=None,
                             help='Path to output markdown file (default: derived from --source, e.g. data/exports/<source-stem>_en.md)')
@@ -799,7 +814,7 @@ def main():
     chapter_parser = subparsers.add_parser('chapter', help='Translate a full chapter (auto-segment -> auto-translate -> aggregate -> consistency)')
     chapter_sub = chapter_parser.add_subparsers(dest='chapter_command', required=True)
     chapter_run_parser = chapter_sub.add_parser('run', help='Run chapter-level translation pipeline')
-    chapter_run_parser.add_argument('--source', type=Path, default=Path('data/source/chapter1.txt'),
+    chapter_run_parser.add_argument('--source', type=Path, default=Path('data/source/one_chapter_quality_source.txt'),
                                     help='Path to full chapter source text file')
     chapter_run_parser.add_argument('--output', type=Path, default=None,
                                     help='Path to final chapter-level output file (default: derived from --source, e.g. data/exports/<source-stem>_en.md)')

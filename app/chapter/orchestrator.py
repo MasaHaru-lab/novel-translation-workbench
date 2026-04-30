@@ -15,6 +15,8 @@ Batch 3 extends this with:
 - Final output path: plan -> execute -> aggregate -> consistency pass
 """
 
+from __future__ import annotations
+
 import json
 import logging
 import time
@@ -246,12 +248,16 @@ class ChapterOrchestrator:
         glossary: Optional[List[GlossaryTerm]] = None,
         translate_draft_fn: Optional[Callable[[TranslationInput], TranslationOutput]] = None,
         assets_mode: AssetsMode = DEFAULT_ASSETS_MODE,
+        model_profile: Optional["ModelProfile"] = None,
     ) -> ChapterResult:
         """Phase 2 + 3: Execute each segment, then aggregate results.
 
         Each segment goes through the default workflow (draft -> review -> polish).
         ``translate_draft_fn`` lets callers inject a service-client or override
         for testing; when omitted the local ``translate_draft`` is used.
+
+        When ``model_profile`` is provided, both review and polish passes use
+        the profile's adapter path instead of ``MODEL_BACKEND_URL``.
 
         Batch 4B: resolves budget_config from plan's strategy_plan and passes
         it to translation functions. Builds an enactment record.
@@ -279,7 +285,7 @@ class ChapterOrchestrator:
             else:
                 draft_out = translate_draft(inp, assets_mode=assets_mode, budget_config=budget_config)
 
-            final_out = polish_translation(inp, draft_out, assets_mode=assets_mode, budget_config=budget_config)
+            final_out = polish_translation(inp, draft_out, assets_mode=assets_mode, budget_config=budget_config, model_profile=model_profile)
             segment_results.append(final_out)
 
         aggregated = format_aggregated_translation(
@@ -306,6 +312,7 @@ class ChapterOrchestrator:
         glossary: Optional[List[GlossaryTerm]] = None,
         translate_draft_fn: Optional[Callable[[TranslationInput], TranslationOutput]] = None,
         assets_mode: AssetsMode = DEFAULT_ASSETS_MODE,
+        model_profile: Optional["ModelProfile"] = None,
     ) -> ChapterResult:
         """Full chapter pipeline: plan -> execute -> aggregate.
 
@@ -320,6 +327,7 @@ class ChapterOrchestrator:
             glossary=glossary,
             translate_draft_fn=translate_draft_fn,
             assets_mode=assets_mode,
+            model_profile=model_profile,
         )
         return result
 
@@ -335,6 +343,7 @@ class ChapterOrchestrator:
         manifest_path: Optional[str] = None,
         existing_manifest: Optional[RunManifest] = None,
         smoke_test: bool = False,
+        model_profile: Optional["ModelProfile"] = None,
     ) -> ChapterResult:
         """Resilient chapter pipeline with manifest-based progress tracking.
 
@@ -426,6 +435,7 @@ class ChapterOrchestrator:
                 budget_config=budget_config,
                 manifest=manifest,
                 resume_config=resume_config,
+                model_profile=model_profile,
             )
 
             if result is not None:
@@ -533,8 +543,12 @@ class ChapterOrchestrator:
         budget_config: BudgetConfig,
         manifest: RunManifest,
         resume_config: ResumeConfig,
+        model_profile: Optional["ModelProfile"] = None,
     ) -> Optional[TranslationOutput]:
         """Execute a single segment with retry discipline.
+
+        When ``model_profile`` is provided, review and polish passes use
+        the profile's adapter path instead of ``MODEL_BACKEND_URL``.
 
         Returns the TranslationOutput on success, None if all retries failed.
         Updates the manifest with each attempt.
@@ -560,7 +574,7 @@ class ChapterOrchestrator:
                 else:
                     draft_out = translate_draft(inp, assets_mode=assets_mode, budget_config=budget_config)
 
-                final_out = polish_translation(inp, draft_out, assets_mode=assets_mode, budget_config=budget_config)
+                final_out = polish_translation(inp, draft_out, assets_mode=assets_mode, budget_config=budget_config, model_profile=model_profile)
                 manifest.mark_segment_completed(seg_id)
                 logger.info("  Segment %s completed.", seg_id)
                 return final_out
@@ -767,6 +781,7 @@ class ChapterOrchestrator:
         glossary: Optional[List[GlossaryTerm]] = None,
         translate_draft_fn: Optional[Callable[[TranslationInput], TranslationOutput]] = None,
         assets_mode: AssetsMode = DEFAULT_ASSETS_MODE,
+        model_profile: Optional["ModelProfile"] = None,
     ) -> Optional[ChapterResult]:
         """Resume an interrupted chapter run from its saved manifest.
 
@@ -776,6 +791,8 @@ class ChapterOrchestrator:
             glossary: Glossary terms.
             translate_draft_fn: Override for the draft translation function.
             assets_mode: Asset injection mode.
+            model_profile: When provided, review and polish passes use
+                the profile's adapter path instead of ``MODEL_BACKEND_URL``.
 
         Returns:
             ChapterResult if the manifest was loaded and run continued,
@@ -813,4 +830,5 @@ class ChapterOrchestrator:
             existing_manifest=manifest,
             manifest_path=manifest_path,
             smoke_test=manifest.smoke_test,
+            model_profile=model_profile,
         )

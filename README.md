@@ -61,12 +61,12 @@ Take one Chinese chapter (plain text), split it into segments (~800-1200 Chinese
 
 ## Scope
 
-- Input: `data/source/chapter1.txt` (plain text, UTF‑8)
+- Input: `data/source/one_chapter_quality_source.txt` (plain text, UTF‑8)
 - Segmentation: split into chunks ~800‑1200 characters, keeping paragraph boundaries
 - Translation:
   - `draft_translate`: uses a local model backend via HTTP service (configurable) or mock translation.
   - `polish_translate`: runs the default workflow (Prompt A → Prompt B internal review → one revision pass if needed) using the same model backend, producing polished prose.
-- Output: `data/exports/chapter1_en.md` (Markdown with segments, draft, polished)
+- Output: `data/exports/one_chapter_quality_source_en.md` (Markdown with segments, draft, polished)
 
 ## Project Structure
 
@@ -117,7 +117,7 @@ pip install -r requirements.txt
 # 3. Run tests
 python -m pytest app/tests/
 
-# 4. Run the translation pipeline (requires data/source/chapter1.txt)
+# 4. Run the translation pipeline (requires data/source/one_chapter_quality_source.txt)
 python -m app.cli run
 ```
 
@@ -145,7 +145,7 @@ The preferred path for full-chapter translation. Auto-segments, translates each 
 
 ```bash
 # Run chapter translation (auto-segment → auto-translate → aggregate → consistency)
-python -m app.cli chapter run --source data/source/chapter1.txt --output data/exports/chapter1_en.txt
+python -m app.cli chapter run --source data/source/one_chapter_quality_source.txt --output data/exports/one_chapter_quality_source_en.md
 ```
 
 #### Run lifecycle
@@ -162,7 +162,7 @@ Each `chapter run` creates two files alongside the output path:
 
 ```bash
 # Resume an interrupted or partial chapter run
-python -m app.cli chapter run --resume --source data/source/chapter1.txt --output data/exports/chapter1_en.txt
+python -m app.cli chapter run --resume --source data/source/one_chapter_quality_source.txt --output data/exports/one_chapter_quality_source_en.md
 ```
 
 **If a run completes successfully:**
@@ -171,13 +171,13 @@ python -m app.cli chapter run --resume --source data/source/chapter1.txt --outpu
 
 ```bash
 # Stream mode: read from file, output final translation to stdout
-python -m app.cli chapter stream --source data/source/chapter1.txt > chapter1_en.txt
+python -m app.cli chapter stream --source data/source/one_chapter_quality_source.txt > one_chapter_quality_source_en.md
 ```
 
 Stream mode also reads from stdin when `--source` is omitted:
 
 ```bash
-cat data/source/chapter1.txt | python -m app.cli chapter stream > chapter1_en.txt
+cat data/source/one_chapter_quality_source.txt | python -m app.cli chapter stream > one_chapter_quality_source_en.md
 ```
 
 ### Batch chapter translation
@@ -185,11 +185,11 @@ cat data/source/chapter1.txt | python -m app.cli chapter stream > chapter1_en.tx
 Translate multiple source files in a single command. Each source gets a safe default output derived from its filename. One failed chapter does not block subsequent chapters.
 
 ```bash
-# Run batch translation for two chapters
-python -m app.cli chapter batch --source data/source/chapter1.txt --source data/source/chapter2.txt
+# Run batch translation for two chapters (requires two source files)
+python -m app.cli chapter batch --source data/source/one_chapter_quality_source.txt --source data/source/test.txt
 ```
 
-Per-source output derivation: `data/source/chapter1.txt` → `data/exports/chapter1_en.md`, etc.
+Per-source output derivation: `data/source/one_chapter_quality_source.txt` → `data/exports/one_chapter_quality_source_en.md`, etc.
 
 The batch command accepts the same shared flags as `chapter run` (`--service-url`, `--allow-mock-fallback`, `--assets-mode`, `--resume`, `--no-clobber`). KeyboardInterrupt (Ctrl+C) propagates cleanly.
 
@@ -198,17 +198,17 @@ Produces a per-chapter compact summary after all sources are processed:
 ```
 Batch translation: 2 source(s)
 
-[1/2] chapter1.txt
-  Source:  data/source/chapter1.txt
-  Output:  data/exports/chapter1_en.md
+[1/2] one_chapter_quality_source.txt
+  Source:  data/source/one_chapter_quality_source.txt
+  Output:  data/exports/one_chapter_quality_source_en.md
   ...
-[2/2] chapter2.txt
-  Source:  data/source/chapter2.txt
-  Output:  data/exports/chapter2_en.md
+[2/2] test.txt
+  Source:  data/source/test.txt
+  Output:  data/exports/test_en.md
   ...
 --- Batch Summary ---
-  chapter1.txt              COMPLETED
-  chapter2.txt              COMPLETED
+  one_chapter_quality_source.txt   COMPLETED
+  test.txt                         COMPLETED
   (2 source(s) · 2 completed · 0 failed)
 ```
 

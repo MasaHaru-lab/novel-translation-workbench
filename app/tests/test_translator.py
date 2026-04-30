@@ -689,3 +689,192 @@ def test_smoke_mode_resets_between_tests():
             translate_draft(inp)
     finally:
         config.MODEL_BACKEND_URL = original_url
+
+
+# ── Profile-backed review/polish wiring ──────────────────────────────────
+
+
+def test_internal_review_with_profile_uses_profile_adapter():
+    """When model_profile is provided and MODEL_BACKEND_URL is empty,
+    run_internal_review_with_backend must use the profile adapter path
+    (call_chat_completion) instead of raising about missing MODEL_BACKEND_URL
+    or falling back."""
+    from app.translate.translator import run_internal_review_with_backend
+    from app.translate.model_profiles import DEEPSEEK_V4_FLASH
+
+    original_url = config.MODEL_BACKEND_URL
+    config.MODEL_BACKEND_URL = ""
+    set_smoke_mode(False)
+    try:
+        inp = TranslationInput(segment_id="1", source_text="测试文字。")
+        mock_review = (
+            "major_issue: none\n"
+            "why_it_matters: n/a\n"
+            "recommended_fix: n/a\n"
+        )
+        with patch(
+            "app.translate.deepseek_adapter.call_chat_completion",
+            return_value=mock_review,
+        ) as mock_chat:
+            review = run_internal_review_with_backend(
+                inp, "mock draft text",
+                model_profile=DEEPSEEK_V4_FLASH,
+            )
+            mock_chat.assert_called_once()
+            assert "none" in review.lower()
+            assert "major_issue" in review.lower()
+    finally:
+        config.MODEL_BACKEND_URL = original_url
+        set_smoke_mode(False)
+
+
+def test_internal_review_without_profile_still_requires_model_backend_url():
+    """No silent fallback: when model_profile is NOT provided and
+    MODEL_BACKEND_URL is empty, run_internal_review_with_backend
+    must still raise RuntimeError."""
+    from app.translate.translator import run_internal_review_with_backend
+
+    original_url = config.MODEL_BACKEND_URL
+    config.MODEL_BACKEND_URL = ""
+    set_smoke_mode(False)
+    try:
+        inp = TranslationInput(segment_id="1", source_text="测试文字。")
+        with pytest.raises(RuntimeError, match="MODEL_BACKEND_URL not configured"):
+            run_internal_review_with_backend(inp, "mock draft text")
+    finally:
+        config.MODEL_BACKEND_URL = original_url
+        set_smoke_mode(False)
+
+
+def test_translate_polish_with_backend_uses_profile_adapter():
+    """When model_profile is provided and MODEL_BACKEND_URL is empty,
+    translate_polish_with_backend must use the profile adapter path
+    instead of falling back to MODEL_BACKEND_URL."""
+    from app.translate.translator import translate_polish_with_backend
+    from app.translate.model_profiles import DEEPSEEK_V4_FLASH
+
+    original_url = config.MODEL_BACKEND_URL
+    config.MODEL_BACKEND_URL = ""
+    set_smoke_mode(False)
+    try:
+        inp = TranslationInput(segment_id="1", source_text="测试文字。")
+        mock_polish = "This is the polished translation text."
+        with patch(
+            "app.translate.deepseek_adapter.call_chat_completion",
+            return_value=mock_polish,
+        ) as mock_chat:
+            result = translate_polish_with_backend(
+                inp, "mock draft text",
+                model_profile=DEEPSEEK_V4_FLASH,
+            )
+            mock_chat.assert_called_once()
+            assert "polished translation" in result.lower()
+    finally:
+        config.MODEL_BACKEND_URL = original_url
+        set_smoke_mode(False)
+
+
+def test_translate_polish_with_backend_without_profile_requires_model_backend_url():
+    """No silent fallback: when model_profile is NOT provided and
+    MODEL_BACKEND_URL is empty, translate_polish_with_backend
+    must raise RuntimeError."""
+    from app.translate.translator import translate_polish_with_backend
+
+    original_url = config.MODEL_BACKEND_URL
+    config.MODEL_BACKEND_URL = ""
+    set_smoke_mode(False)
+    try:
+        inp = TranslationInput(segment_id="1", source_text="测试文字。")
+        with pytest.raises(RuntimeError, match="MODEL_BACKEND_URL not configured"):
+            translate_polish_with_backend(inp, "mock draft text")
+    finally:
+        config.MODEL_BACKEND_URL = original_url
+        set_smoke_mode(False)
+
+
+def test_polish_translation_with_profile_no_revision():
+    """When model_profile is provided and reviewer says no issue, the full
+    polish flow (review + optional revision) uses the profile adapter.
+    Only one backend call needed (review only)."""
+    from app.translate.translator import polish_translation as pt
+    from app.translate.model_profiles import DEEPSEEK_V4_FLASH
+
+    original_url = config.MODEL_BACKEND_URL
+    config.MODEL_BACKEND_URL = ""
+    set_smoke_mode(False)
+    try:
+        inp = TranslationInput(
+            segment_id="1",
+            source_text="大小姐 called 王爷",
+            glossary_terms=[
+                GlossaryTerm(zh="大小姐", en="Young Lady"),
+                GlossaryTerm(zh="王爷", en="Prince"),
+            ],
+        )
+        draft_output = TranslationOutput(
+            segment_id="1",
+            draft_translation="Young Lady called Prince.",
+            polished_translation="",
+            notes=[],
+        )
+        mock_review = (
+            "major_issue: none\n"
+            "why_it_matters: n/a\n"
+            "recommended_fix: n/a\n"
+        )
+        with patch(
+            "app.translate.deepseek_adapter.call_chat_completion",
+            return_value=mock_review,
+        ) as mock_chat:
+            result = pt(inp, draft_output, model_profile=DEEPSEEK_V4_FLASH)
+            mock_chat.assert_called_once()  # Only review, no revision
+            assert "Young Lady" in result.polished_translation
+            assert "Prince" in result.polished_translation
+    finally:
+        config.MODEL_BACKEND_URL = original_url
+        set_smoke_mode(False)
+
+
+def test_polish_translation_with_profile_full_revision_flow():
+    """With model_profile and reviewer flags a major issue, polish_translation
+    performs BOTH internal review AND revision pass via the profile adapter
+    (two backend calls), not via MODEL_BACKEND_URL."""
+    from app.translate.translator import polish_translation as pt
+    from app.translate.model_profiles import DEEPSEEK_V4_FLASH
+
+    original_url = config.MODEL_BACKEND_URL
+    config.MODEL_BACKEND_URL = ""
+    set_smoke_mode(False)
+    try:
+        inp = TranslationInput(
+            segment_id="2",
+            source_text="大小姐 called 王爷",
+            glossary_terms=[
+                GlossaryTerm(zh="大小姐", en="Young Lady"),
+                GlossaryTerm(zh="王爷", en="Prince"),
+            ],
+        )
+        draft_output = TranslationOutput(
+            segment_id="2",
+            draft_translation="[DRAFT] 大小姐 called 王爷",
+            polished_translation="",
+            notes=[],
+        )
+        mock_review = (
+            "major_issue: drift on form of address for 王爷\n"
+            "why_it_matters: breaks project consistency\n"
+            "recommended_fix: restore the glossary rendering\n"
+        )
+        mock_revision = "[POLISHED] Young Lady called Prince."
+        with patch(
+            "app.translate.deepseek_adapter.call_chat_completion",
+            side_effect=[mock_review, mock_revision],
+        ) as mock_chat:
+            result = pt(inp, draft_output, model_profile=DEEPSEEK_V4_FLASH)
+            assert mock_chat.call_count == 2  # review + revision
+            assert "[POLISHED]" in result.polished_translation
+            assert "Prince" in result.polished_translation
+            assert "Young Lady" in result.polished_translation
+    finally:
+        config.MODEL_BACKEND_URL = original_url
+        set_smoke_mode(False)

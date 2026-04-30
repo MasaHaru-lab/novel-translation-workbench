@@ -1554,7 +1554,7 @@ def test_chapter_run_without_output_default_source_backward_compat():
     captured = _invoke_chapter_main_with_argv([
         'cli', 'chapter', 'run',
     ])
-    assert captured['output'] == Path('data/exports/chapter1_en.md')
+    assert captured['output'] == Path('data/exports/one_chapter_quality_source_en.md')
 
 
 def test_chapter_run_with_explicit_output_unchanged():
@@ -1579,7 +1579,7 @@ def test_run_pipeline_without_output_default_source_backward_compat():
     captured = _invoke_main_with_argv([
         'cli', 'run',
     ])
-    assert captured['output'] == Path('data/exports/chapter1_en.md')
+    assert captured['output'] == Path('data/exports/one_chapter_quality_source_en.md')
 
 
 def test_run_pipeline_with_explicit_output_unchanged(tmp_path):

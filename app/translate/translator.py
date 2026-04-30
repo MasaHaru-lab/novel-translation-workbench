@@ -187,6 +187,7 @@ def polish_translation(
     draft_output: TranslationOutput,
     assets_mode: AssetsMode = DEFAULT_ASSETS_MODE,
     budget_config: Optional[BudgetConfig] = None,
+    model_profile: Optional["ModelProfile"] = None,  # noqa: F821
 ) -> TranslationOutput:
     """Run the default A → B → revise-if-needed workflow on a draft.
 
@@ -199,10 +200,14 @@ def polish_translation(
     When the reviewer reports no major issue, the draft is already considered
     final prose and is returned unchanged as the polished output.
 
+    When ``model_profile`` is provided, all backend calls (review and optional
+    revision) use the profile's adapter path instead of ``MODEL_BACKEND_URL``.
+
     See ``build_project_assets_block`` for ``assets_mode`` semantics.
 
     Raises:
-        RuntimeError: if MODEL_BACKEND_URL not configured or backend call fails.
+        RuntimeError: if neither model_profile nor MODEL_BACKEND_URL is
+                      configured (and smoke-test mode is not active).
         ValueError: if assets_mode is not a recognized value.
     """
     _validate_assets_mode(assets_mode)
@@ -210,7 +215,7 @@ def polish_translation(
     bc = budget_config or BudgetConfig()
 
     # Step 1 — internal review (Prompt B). Output stays internal.
-    review_raw = run_internal_review_with_backend(input, draft_text, assets_mode, budget_config=bc)
+    review_raw = run_internal_review_with_backend(input, draft_text, assets_mode, budget_config=bc, model_profile=model_profile)
     findings = parse_review_findings(review_raw)
 
     # Step 1.5 — coverage gate: catch omissions Prompt B may have missed.
@@ -226,7 +231,7 @@ def polish_translation(
     # Step 2 — revise once if a material issue was flagged, else keep draft.
     if findings.has_major_issue():
         polished_text = translate_polish_with_backend(
-            input, draft_text, assets_mode, review_guidance=findings, budget_config=bc
+            input, draft_text, assets_mode, review_guidance=findings, budget_config=bc, model_profile=model_profile
         )
     else:
         polished_text = draft_text
@@ -853,6 +858,29 @@ def parse_review_findings(text: str) -> ReviewFindings:
     )
 
 
+def _call_prompt_with_profile(
+    profile: "ModelProfile",  # noqa: F821 — forward ref, string annotation
+    prompt: str,
+    max_tokens: Optional[int] = None,
+) -> str:
+    """Call the model backend via the specified profile and return response text.
+
+    Dispatches to the appropriate adapter based on the profile's provider type
+    (``prompt-http`` → legacy ``call_model_backend``, ``openai-compat`` →
+    chat-completion style request).
+    """
+    if profile.provider == "prompt-http":
+        from app.translate.backend_adapter import call_model_backend
+        return call_model_backend(prompt, max_tokens=max_tokens)
+    elif profile.provider == "openai-compat":
+        from app.translate.deepseek_adapter import call_chat_completion
+        return call_chat_completion(profile, prompt, max_tokens=max_tokens)
+    else:
+        raise RuntimeError(
+            f"Unknown provider {profile.provider!r} in profile {profile.name!r}"
+        )
+
+
 def _require_configured_backend(op_label: str):
     """Return (config, call_model_backend) or raise RuntimeError."""
     try:
@@ -878,6 +906,7 @@ def run_internal_review_with_backend(
     draft_text: str,
     assets_mode: AssetsMode = DEFAULT_ASSETS_MODE,
     budget_config: Optional[BudgetConfig] = None,
+    model_profile: Optional["ModelProfile"] = None,  # noqa: F821
 ) -> str:
     """Call the backend with a Prompt B review prompt and return raw reviewer
     output.
@@ -885,8 +914,21 @@ def run_internal_review_with_backend(
     This is the Step 2 internal review pass. The return value contains
     reviewer scaffolding (``major_issue:`` etc.) and must be fed through
     ``parse_review_findings`` — never surfaced to the user directly.
+
+    When ``model_profile`` is provided, uses the profile's adapter path
+    instead of ``MODEL_BACKEND_URL``.
     """
     _validate_assets_mode(assets_mode)
+    bc = budget_config or BudgetConfig()
+    prompt = build_review_prompt(input, draft_text, assets_mode)
+
+    # Profile-based path takes priority.
+    if model_profile is not None:
+        try:
+            return _call_prompt_with_profile(model_profile, prompt, max_tokens=bc.review_max_tokens)
+        except Exception as e:
+            raise RuntimeError(f"Backend review call failed: {e}") from e
+
     # Smoke-test mode: return "no issue" review to let pipeline proceed mechanically
     from app.config import config as _config
     if not _config.MODEL_BACKEND_URL.strip():
@@ -897,8 +939,6 @@ def run_internal_review_with_backend(
             "Set MODEL_BACKEND_URL environment variable, or use --smoke-test."
         )
     _, call_model_backend = _require_configured_backend("internal review")
-    prompt = build_review_prompt(input, draft_text, assets_mode)
-    bc = budget_config or BudgetConfig()
     try:
         return call_model_backend(prompt, max_tokens=bc.review_max_tokens)
     except Exception as e:
@@ -911,6 +951,7 @@ def translate_polish_with_backend(
     assets_mode: AssetsMode = DEFAULT_ASSETS_MODE,
     review_guidance: Optional[ReviewFindings] = None,
     budget_config: Optional[BudgetConfig] = None,
+    model_profile: Optional["ModelProfile"] = None,  # noqa: F821
 ) -> str:
     """Call the backend with a Prompt A-based revision prompt and return
     cleaned prose.
@@ -921,11 +962,28 @@ def translate_polish_with_backend(
 
     See ``build_project_assets_block`` for ``assets_mode`` semantics.
 
+    When ``model_profile`` is provided, uses the profile's adapter path
+    instead of ``MODEL_BACKEND_URL``.
+
     Raises:
-        RuntimeError: if MODEL_BACKEND_URL is not configured or backend call fails.
+        RuntimeError: if neither model_profile nor MODEL_BACKEND_URL is configured,
+                      or if the backend call fails.
         ValueError: if assets_mode is not a recognized value.
     """
     _validate_assets_mode(assets_mode)
+    bc = budget_config or BudgetConfig()
+    prompt = build_polish_prompt(
+        input, draft_text, assets_mode, review_guidance=review_guidance
+    )
+
+    # Profile-based path takes priority.
+    if model_profile is not None:
+        try:
+            polished_text = _call_prompt_with_profile(model_profile, prompt, max_tokens=bc.polish_max_tokens)
+        except Exception as e:
+            raise RuntimeError(f"Backend polish call failed: {e}") from e
+        return clean_polished_output(polished_text)
+
     # Smoke-test mode: return draft unchanged (no real polish pass)
     from app.config import config as _config
     if not _config.MODEL_BACKEND_URL.strip():
@@ -936,10 +994,6 @@ def translate_polish_with_backend(
             "Set MODEL_BACKEND_URL environment variable, or use --smoke-test."
         )
     _, call_model_backend = _require_configured_backend("polish")
-    prompt = build_polish_prompt(
-        input, draft_text, assets_mode, review_guidance=review_guidance
-    )
-    bc = budget_config or BudgetConfig()
     try:
         polished_text = call_model_backend(prompt, max_tokens=bc.polish_max_tokens)
     except Exception as e:
