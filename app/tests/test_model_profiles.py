@@ -107,8 +107,8 @@ class TestProfileRegistry:
                 resolve_api_key(DEEPSEEK_V4_FLASH)
 
     def test_deepseek_profiles_have_default_model(self):
-        assert DEEPSEEK_V4_FLASH.default_model == "deepseek-chat"
-        assert DEEPSEEK_V4_PRO.default_model == "deepseek-reasoner"
+        assert DEEPSEEK_V4_FLASH.default_model == "deepseek-v4-flash"
+        assert DEEPSEEK_V4_PRO.default_model == "deepseek-v4-pro"
         assert LOCAL_QWEN.default_model is None
 
 
@@ -202,7 +202,7 @@ class TestDeepSeekProfile:
         headers = call_kwargs[1]["headers"]
 
         assert "/chat/completions" in url
-        assert body["model"] == "deepseek-chat"
+        assert body["model"] == "deepseek-v4-flash"
         assert len(body["messages"]) == 1
         assert body["messages"][0]["role"] == "user"
         assert "Translate this" in body["messages"][0]["content"]
@@ -226,7 +226,7 @@ class TestDeepSeekProfile:
         notes_str = "; ".join(output.notes)
         assert "Profile: deepseek-v4-flash" in notes_str
         assert "Provider: openai-compat" in notes_str
-        assert "Model: deepseek-chat" in notes_str
+        assert "Model: deepseek-v4-flash" in notes_str
         # No secrets in notes
         assert "sk-test123" not in notes_str
         assert "DEEPSEEK_API_KEY" not in notes_str
@@ -249,7 +249,7 @@ class TestDeepSeekProfile:
 
         assert output.draft_translation == "Pro response."
         body = mock_post.call_args[1]["json"]
-        assert body["model"] == "deepseek-reasoner"
+        assert body["model"] == "deepseek-v4-pro"
 
     @patch("app.translate.deepseek_adapter.requests.post")
     def test_deepseek_failure_no_silent_fallback(self, mock_post):

@@ -48,7 +48,7 @@ DEEPSEEK_V4_FLASH = ModelProfile(
     provider="openai-compat",
     api_base_env="DEEPSEEK_BASE_URL",
     api_key_env="DEEPSEEK_API_KEY",
-    default_model="deepseek-chat",
+    default_model="deepseek-v4-flash",
 )
 
 DEEPSEEK_V4_PRO = ModelProfile(
@@ -56,7 +56,7 @@ DEEPSEEK_V4_PRO = ModelProfile(
     provider="openai-compat",
     api_base_env="DEEPSEEK_BASE_URL",
     api_key_env="DEEPSEEK_API_KEY",
-    default_model="deepseek-reasoner",
+    default_model="deepseek-v4-pro",
 )
 
 # ── Registry ───────────────────────────────────────────────────────────────
