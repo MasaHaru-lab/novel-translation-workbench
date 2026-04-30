@@ -345,3 +345,8 @@ Two changes to eliminate operator footguns in daily use:
 Test suite: 339 passed (74 CLI + 39 chapter + 26 service + others).
 
 **Next batch:** Phase B — quality loop. No further Phase A or Phase B+ operator-usability work.
+
+## Tech Debt
+
+### Exports directory clutter
+`data/exports/` has accumulated many one-off experiment files across quality validation runs. Generated exports are gitignored but the directory is noisy. A cleanup policy (auto-clean files older than 15 days, or archive to a dated subfolder) should be implemented before exports become unmanageable. Adding to `project_assets/`, `outputs/`, and `data/outputs/` should also be considered in the same policy since those directories have similar accumulation. (ref: 2026-04-30 self-audit, DeepSeek profile validation run)
