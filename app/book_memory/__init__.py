@@ -37,6 +37,13 @@ from app.book_memory.serialization import (
     book_memory_to_dict,
     book_memory_from_dict,
 )
+from app.book_memory.retrieval import (
+    EntityMatch,
+    TitleMatch,
+    ContextPack,
+    build_context_pack,
+    DEFAULT_MAX_CHARS,
+)
 
 __all__ = [
     "EntityType",
@@ -64,4 +71,9 @@ __all__ = [
     "bootstrap_from_project_assets",
     "book_memory_to_dict",
     "book_memory_from_dict",
+    "EntityMatch",
+    "TitleMatch",
+    "ContextPack",
+    "build_context_pack",
+    "DEFAULT_MAX_CHARS",
 ]

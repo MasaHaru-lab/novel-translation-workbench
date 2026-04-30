@@ -118,60 +118,97 @@ Cross-reference validators check:
 - Chapter event `entities_involved` refer to known entity ids
 - Translation decision `entity_id` refers to a known entity or title id
 
-## Future: retrieval / context pack design (post-R1)
+## R2: Retrieval / context pack layer (built)
 
-The book memory is designed to support the following retrieval patterns
-without depending on vector databases or external services.
+The retrieval layer (`app/book_memory/retrieval.py`) is now implemented.
+Given a Chinese source segment and a `BookMemory`, it returns a compact
+advisory context pack suitable for Prompt A/B injection.
 
-### Pattern 1: Entity-centric context pack
+### Architecture
 
-When translating chapter N+1, the system can query:
+```
+app/book_memory/
+├── ...
+└── retrieval.py          # build_context_pack() + EntityMatch, TitleMatch, ContextPack
+```
 
-1. "Which confirmed entities appeared in chapters N-5 through N?" →
-   provides continuity for recurring characters.
-2. "Which translation decisions were made in those chapters?" →
-   prevents regression on settled renderings.
-3. "Which unresolved decisions are still open?" →
-   flags questions that the new chapter might resolve.
+### How it works
 
-This produces a small, targeted context snippet injected into the
-translation prompt (Prompt A), keeping the model aware of existing
-decisions without overwhelming it with the full book text.
+1. **Entity matching**: each entity's `name_zh` and `aliases` are checked
+   as substrings in the source segment. Longer matches are prioritised as
+   more specific. Places, factions, and institutions are matched identically
+   to characters.
 
-### Pattern 2: Relationship-aware entity summary
+2. **Title/term matching**: each `TitleRecord.name_zh` is checked as a
+   substring in the source segment.
 
-For an entity `E` appearing in a new chapter:
+3. **Relationship resolution**: all relationships where the matched
+   entity is either source or target are included.
 
-1. Collect all relationships where `E` is source or target.
-2. Collect the most recent chapter event summaries mentioning `E`.
-3. Collect the canonical rendering and known alternative renderings.
-4. Format as a structured entity card injected into the context pack.
+4. **Decision resolution**: `TranslationDecision` and `UnresolvedDecision`
+   records whose `entity_id` matches a matched entity or title id are
+   included.
 
-This prevents the translator from inventing new spellings, misattributing
-relationships, or flattening titles inconsistently.
+5. **Context pack assembly**: results are packed into a `ContextPack`
+   dataclass with metadata showing why each item was retrieved.
 
-### Pattern 3: Consistency pre-flight
+6. **Size bounding**: an estimated formatted size is calculated; if it
+   exceeds `max_chars` (default 4000), items are dropped from lowest
+   priority first:
+   - Unresolved decisions (droppped first)
+   - Translation decisions
+   - Relationships
+   - Tentative titles (confirmed titles kept)
+   - Tentative entities (confirmed entities kept)
 
-Before translating chapter N:
+7. **Uncertainty preservation**: the formatted output marks each record
+   with `[TENTATIVE]` or `[UNRESOLVED]` status labels. Confirmed records
+   are presented as established without labels.
 
-1. Query `chapter_events[N-1]` for the immediate preceding context.
-2. Query `translation_decisions` for any decisions involving entities
-   that appear in chapter N (inferred from source text mention).
-3. If unresolved decisions exist for those entities, flag them for the
-   reviewer.
+### ContextPack API
+
+```python
+pack = build_context_pack(source_segment, book_memory, max_chars=4000)
+
+pack.matched_entities      # List[EntityMatch] — entity + matched_on + matched_text
+pack.matched_titles        # List[TitleMatch]   — title + matched_on + matched_text
+pack.related_relationships # List[Relationship]
+pack.related_decisions     # List[TranslationDecision]
+pack.related_unresolved    # List[UnresolvedDecision]
+
+pack.is_empty              # True when nothing matched
+pack.truncated             # True if items were dropped due to size limit
+pack.total_chars           # Estimated formatted character count
+
+pack.format_text()         # Rendered text suitable for Prompt A/B injection
+```
+
+### Prompt A/B integration (future hook)
+
+The `ContextPack.format_text()` output is designed to be injected at a
+specific marker in Prompt A:
+
+```
+## Context Pack (retrieved from book memory)
+...formatted output...
+
+## Translation Instructions
+...existing instructions follow...
+```
+
+For Prompt B (review), the same pack can be included to verify
+consistency against known renderings and decisions.
 
 ### Integration boundary
 
-The context pack assembly layer is **not yet built**. R1 provides only
-the data model and storage — the retrieval logic that queries the graph
-and injects results into translation prompts comes in a later phase.
+The retrieval layer is **built but not yet wired into the translation
+pipeline**. Integration into Prompt A/B execution involves inserting
+`build_context_pack(segment, memory).format_text()` at the appropriate
+point in the segment-level translation workflow, and is a future step.
 
-Key design constraints for that future layer:
-- **Small context windows** (< 2000 tokens per pack) — the model prompt
-  has limited space; the pack builder must be selective.
-- **Priority by recency and role** — a protagonist appearing in the
-  previous chapter gets more context than a minor character last seen
-  100 chapters ago.
+Key design constraints for that future integration:
+- **Small context windows** — default 4000 characters (~1000 tokens), the
+  pack builder enforces this by dropping lower-priority items as needed.
 - **Chinese source is the arbiter** — if the graph says "Qin Liuxi" but
   the source says something different, the source wins. The graph flags
   the discrepancy, it does not override.
