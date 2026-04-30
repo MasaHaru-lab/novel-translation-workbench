@@ -17,6 +17,7 @@ class TranslationInput:
     prev_context: Optional[str] = None
     next_context: Optional[str] = None
     glossary_terms: List[GlossaryTerm] = None
+    context_pack_text: str = ""  # Pre-rendered ContextPack for Prompt A/B injection (R3)
 
     def __post_init__(self):
         if self.glossary_terms is None:

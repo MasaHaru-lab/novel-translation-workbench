@@ -402,8 +402,16 @@ def clean_polished_output(text: str) -> str:
     return text
 
 
-def build_translation_input(segment: Segment, glossary_terms: Optional[List[GlossaryTerm]] = None) -> TranslationInput:
-    """Convert a Segment to a TranslationInput."""
+def build_translation_input(
+    segment: Segment,
+    glossary_terms: Optional[List[GlossaryTerm]] = None,
+    context_pack_text: str = "",
+) -> TranslationInput:
+    """Convert a Segment to a TranslationInput.
+
+    ``context_pack_text`` is pre-rendered ``ContextPack.format_text()`` output
+    for injection into the draft/review/polish prompts (R3).
+    """
     if glossary_terms is None:
         glossary_terms = []
     return TranslationInput(
@@ -411,7 +419,8 @@ def build_translation_input(segment: Segment, glossary_terms: Optional[List[Glos
         source_text=segment.text,
         prev_context=segment.prev_segment_text,
         next_context=segment.next_segment_text,
-        glossary_terms=glossary_terms
+        glossary_terms=glossary_terms,
+        context_pack_text=context_pack_text,
     )
 
 
@@ -479,6 +488,12 @@ def build_draft_prompt(
         lines.append(assets_block)
         lines.append("")
 
+    # Context pack (R3) — retrieved book-memory context, injected here so
+    # project assets take priority over retrieved context in the prompt.
+    if input.context_pack_text:
+        lines.append(input.context_pack_text)
+        lines.append("")
+
     # Glossary terms if present
     if input.glossary_terms:
         lines.append("Glossary terms (use these exact translations):")
@@ -541,6 +556,11 @@ def build_polish_prompt(
     assets_block = build_project_assets_block(assets_mode)
     if assets_block:
         lines.append(assets_block)
+        lines.append("")
+
+    # Context pack (R3)
+    if input.context_pack_text:
+        lines.append(input.context_pack_text)
         lines.append("")
 
     if input.glossary_terms:
@@ -613,6 +633,11 @@ def build_review_prompt(
     assets_block = build_project_assets_block(assets_mode)
     if assets_block:
         lines.append(assets_block)
+        lines.append("")
+
+    # Context pack (R3)
+    if input.context_pack_text:
+        lines.append(input.context_pack_text)
         lines.append("")
 
     if input.glossary_terms:

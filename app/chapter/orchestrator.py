@@ -50,6 +50,7 @@ from app.translate.translator import (
     resolve_budget_config,
     translate_draft,
 )
+from app.book_memory.retrieval import build_context_pack
 from app.chapter.models import ChapterPlan, ChapterResult
 from app.chapter.strategy import (
     assess_chapter_complexity,
@@ -249,6 +250,7 @@ class ChapterOrchestrator:
         translate_draft_fn: Optional[Callable[[TranslationInput], TranslationOutput]] = None,
         assets_mode: AssetsMode = DEFAULT_ASSETS_MODE,
         model_profile: Optional["ModelProfile"] = None,
+        book_memory: Optional["BookMemory"] = None,
     ) -> ChapterResult:
         """Phase 2 + 3: Execute each segment, then aggregate results.
 
@@ -277,7 +279,11 @@ class ChapterOrchestrator:
         segment_results: List[TranslationOutput] = []
 
         for seg in plan.segments:
-            inp = build_translation_input(seg, glossary)
+            # Build context pack from book memory if available (R3)
+            context_pack_text = ""
+            if book_memory is not None:
+                context_pack_text = build_context_pack(seg.text, book_memory).format_text()
+            inp = build_translation_input(seg, glossary, context_pack_text=context_pack_text)
             logger.info("  Translating segment %s ...", inp.segment_id)
 
             if translate_draft_fn is not None:
@@ -313,6 +319,7 @@ class ChapterOrchestrator:
         translate_draft_fn: Optional[Callable[[TranslationInput], TranslationOutput]] = None,
         assets_mode: AssetsMode = DEFAULT_ASSETS_MODE,
         model_profile: Optional["ModelProfile"] = None,
+        book_memory: Optional["BookMemory"] = None,
     ) -> ChapterResult:
         """Full chapter pipeline: plan -> execute -> aggregate.
 
@@ -328,6 +335,7 @@ class ChapterOrchestrator:
             translate_draft_fn=translate_draft_fn,
             assets_mode=assets_mode,
             model_profile=model_profile,
+            book_memory=book_memory,
         )
         return result
 
@@ -342,6 +350,7 @@ class ChapterOrchestrator:
         resume_config: Optional[ResumeConfig] = None,
         manifest_path: Optional[str] = None,
         existing_manifest: Optional[RunManifest] = None,
+        book_memory: Optional["BookMemory"] = None,
         smoke_test: bool = False,
         model_profile: Optional["ModelProfile"] = None,
     ) -> ChapterResult:
@@ -427,6 +436,11 @@ class ChapterOrchestrator:
                 logger.warning("Segment %s not found in plan; skipping.", seg_id)
                 continue
 
+            # Build context pack from book memory if available (R3)
+            context_pack_text = ""
+            if book_memory is not None:
+                context_pack_text = build_context_pack(seg.text, book_memory).format_text()
+
             result = self._execute_segment_with_retry(
                 seg=seg,
                 glossary=glossary,
@@ -436,6 +450,7 @@ class ChapterOrchestrator:
                 manifest=manifest,
                 resume_config=resume_config,
                 model_profile=model_profile,
+                context_pack_text=context_pack_text,
             )
 
             if result is not None:
@@ -550,6 +565,7 @@ class ChapterOrchestrator:
         manifest: RunManifest,
         resume_config: ResumeConfig,
         model_profile: Optional["ModelProfile"] = None,
+        context_pack_text: str = "",
     ) -> Optional[TranslationOutput]:
         """Execute a single segment with retry discipline.
 
@@ -561,7 +577,7 @@ class ChapterOrchestrator:
         """
         seg_id = str(seg.segment_id)
         logger.info("  Segment %s starting...", seg_id)
-        inp = build_translation_input(seg, glossary)
+        inp = build_translation_input(seg, glossary, context_pack_text=context_pack_text)
         manifest.mark_segment_running(seg_id)
 
         for attempt in range(1 + resume_config.max_retries):
