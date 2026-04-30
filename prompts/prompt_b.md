@@ -36,6 +36,7 @@ Check for:
 - over-compression that loses nuance or texture
 - loss of hierarchy or address function
 - unnecessary shortening that flattens scene pressure
+- CJK residue — Chinese characters left untranslated in the English output
 
 ## What NOT to reward
 

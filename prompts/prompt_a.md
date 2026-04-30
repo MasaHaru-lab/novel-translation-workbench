@@ -70,6 +70,21 @@ Translate the sentence’s function, not just its dictionary meaning.
 - Do not reverse facial-color emotional signals. 黑了 means the face darkened (with displeasure), not turned pale.
 - Chinese temporal expressions (旬, 更, 刻) have specific durations. Do not guess from English intuition.
 - Do not leave Chinese characters or pinyin inline in English prose. Render all content into English.
+- CJK characters in the final output are a reader-blocking defect. Every Chinese character, idiom, technical term, saying, or proper noun without an established English rendering
+  must be translated into English.
+
+  Strategies for difficult cases:
+
+  * **Idioms and classical sayings** (e.g. 旁观者清): Translate the meaning naturally — "the onlooker
+    sees the game best" or equivalent natural phrasing in context.
+  * **Technical/cultural terms** (e.g. physiognomy terms like 禄/权/忌, TCM terminology, Daoist
+    concepts): Provide a contextual interpretive phrase that conveys the function and meaning in the
+    scene. Explain the concept through context; do not leave the Chinese characters as a shortcut.
+  * **Compact classical phrasing**: When the Chinese uses dense classical constructions, expand them
+    into readable English prose. Do not leave the original characters inline.
+
+  If unsure how to render a term: choose the best natural approximation based on context. Leaving
+  Chinese characters in the English output is never an acceptable default.
 
 ## Anti-translationese rules
 

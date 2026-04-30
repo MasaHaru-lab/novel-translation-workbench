@@ -344,6 +344,18 @@ def test_run_preserves_source_text():
 
 # ── helpers ───────────────────────────────────────────────────────────
 
+# Realistic-length mock text used by multiple mock draft functions so the
+# quality gate short-output check does not fire on mock pipeline data.
+_MOCK_LONG_TEXT = (
+    "The translated content for this segment is long enough to pass "
+    "the quality gate minimum output length requirements for test mode. "
+    "It includes sufficient English text so the segment coverage gate "
+    "does not fire on mock pipeline data. The segment source text is "
+    "typically eight hundred to twelve hundred Chinese characters, so "
+    "the draft output needs to be at least two hundred characters long "
+    "to satisfy the coverage length ratio check."
+)
+
 def _mock_backend_review_ok(prompt, max_tokens=None, **extra):
     """Mock backend review response — no major issue, keep draft as-is."""
     return "major_issue: none\nwhy_it_matters: n/a\nrecommended_fix: none\noptional_notes: n/a"
@@ -371,7 +383,7 @@ def _make_mock_draft_fn() -> Callable:
     def fn(inp: TranslationInput) -> TranslationOutput:
         return TranslationOutput(
             segment_id=inp.segment_id,
-            draft_translation=f"[DRAFT {inp.segment_id}]",
+            draft_translation=f"[DRAFT {inp.segment_id}] {_MOCK_LONG_TEXT}",
             polished_translation="",
         )
     return fn
@@ -500,7 +512,7 @@ def test_resume_from_manifest(tmp_path):
             raise RuntimeError("Transient error on seg 2")
         return TranslationOutput(
             segment_id=inp.segment_id,
-            draft_translation=f"[DRAFT {inp.segment_id}]",
+            draft_translation=f"[DRAFT {inp.segment_id}] {_MOCK_LONG_TEXT}",
             polished_translation="",
         )
 
@@ -523,7 +535,7 @@ def test_resume_from_manifest(tmp_path):
     def mock_draft_fn_v2(inp: TranslationInput) -> TranslationOutput:
         return TranslationOutput(
             segment_id=inp.segment_id,
-            draft_translation=f"[DRAFT {inp.segment_id}]",
+            draft_translation=f"[DRAFT {inp.segment_id}] {_MOCK_LONG_TEXT}",
             polished_translation="",
         )
 
@@ -560,7 +572,7 @@ def test_resume_from_manifest_preserves_prior_completed(tmp_path):
             raise RuntimeError("Fail seg 2")
         return TranslationOutput(
             segment_id=inp.segment_id,
-            draft_translation=f"[DRAFT {inp.segment_id}]",
+            draft_translation=f"[DRAFT {inp.segment_id}] {_MOCK_LONG_TEXT}",
             polished_translation="",
         )
 
@@ -580,7 +592,7 @@ def test_resume_from_manifest_preserves_prior_completed(tmp_path):
         execution_order.append(inp.segment_id)
         return TranslationOutput(
             segment_id=inp.segment_id,
-            draft_translation=f"[DRAFT {inp.segment_id}]",
+            draft_translation=f"[DRAFT {inp.segment_id}] {_MOCK_LONG_TEXT}",
             polished_translation="",
         )
 
@@ -632,7 +644,7 @@ def test_retry_succeeds_on_second_attempt():
             raise RuntimeError("Transient error")
         return TranslationOutput(
             segment_id=inp.segment_id,
-            draft_translation=f"[DRAFT {inp.segment_id}]",
+            draft_translation=f"[DRAFT {inp.segment_id}] {_MOCK_LONG_TEXT}",
             polished_translation="",
         )
 

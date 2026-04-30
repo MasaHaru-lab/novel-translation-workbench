@@ -456,14 +456,16 @@ class ChapterOrchestrator:
             if sid in segment_results:
                 ordered_results.append(segment_results[sid])
             elif sid in completed_ids:
-                # This segment was completed in a prior run (on resume).
-                # We don't have its actual TranslationOutput in memory,
-                # so emit a status marker.
+                # Reconstruct the TranslationOutput from manifest-stored
+                # polished text so the quality gate sees actual output,
+                # not an empty stub.
+                rec = manifest.segments.get(sid)
+                polished = rec.polished_text if rec else ""
                 ordered_results.append(
                     TranslationOutput(
                         segment_id=sid,
                         draft_translation="",
-                        polished_translation="",
+                        polished_translation=polished,
                     )
                 )
 
@@ -525,6 +527,10 @@ class ChapterOrchestrator:
             # Persist the quality summary into the manifest so the manifest
             # cannot say "completed" while the quality gate failed.
             manifest.quality_summary = result.quality_report.to_summary()
+            # Demote status on quality failure so "COMPLETED" is honest.
+            if not result.quality_report.passed:
+                result.chapter_status = ChapterStatus.PARTIAL
+                manifest.status = ChapterStatus.PARTIAL
         else:
             # Smoke-test runs do not produce real translations, so the quality
             # gate is not meaningful. Record the mode in the manifest so a
@@ -575,6 +581,7 @@ class ChapterOrchestrator:
                     draft_out = translate_draft(inp, assets_mode=assets_mode, budget_config=budget_config)
 
                 final_out = polish_translation(inp, draft_out, assets_mode=assets_mode, budget_config=budget_config, model_profile=model_profile)
+                manifest.segments[seg_id].polished_text = final_out.polished_translation or ""
                 manifest.mark_segment_completed(seg_id)
                 logger.info("  Segment %s completed.", seg_id)
                 return final_out

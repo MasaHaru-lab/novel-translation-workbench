@@ -12,6 +12,8 @@ target the failure types observed in real-run quality reviews:
   * ``segment_residue`` — per-segment polished output retains CJK
     characters above the segment-level threshold.
   * ``empty_segments`` — segment-level polished output is empty/whitespace.
+  * ``segment_overlap`` — adjacent segment outputs share text at their boundary.
+  * ``short_output`` — segment polished output is suspiciously short (< 30 chars).
 
 A non-empty :class:`QualityReport` means the chapter run completed but
 quality validation flagged at least one issue. Callers MUST treat such a
@@ -36,12 +38,22 @@ from app.chapter.models import ChapterResult
 from app.translate.translator import _CJK_RE, _count_cjk
 
 
-# Chapter-level absolute threshold. Aggregated output is large, so a single
-# stray name should not trip the gate; many residue spans should.
-_CHAPTER_RESIDUE_THRESHOLD = 8
+# Chapter-level absolute threshold. A 4-char idiom like 旁观者清 is clearly
+# untranslated content and must be caught. Isolated 1-2 char remnants
+# (e.g. 王爷 in a long passage) are below this bar.
+_CHAPTER_RESIDUE_THRESHOLD = 4
 
-# Segment-level threshold mirrors the segment coverage gate.
-_SEGMENT_RESIDUE_THRESHOLD = 5
+# Segment-level threshold catches per-segment CJK leakage at the idiom
+# level. A 3-char span (e.g. 禄/权/忌) in one segment triggers.
+_SEGMENT_RESIDUE_THRESHOLD = 3
+
+# A segment whose polished output has fewer than this many non-whitespace
+# characters is suspiciously short — likely a failed/truncated translation.
+_SHORT_OUTPUT_THRESHOLD = 30
+
+# Minimum overlap length (characters) at a segment boundary to fire the
+# overlap gate. Aligns with the consistency auditor's segment-boundary check.
+_OVERLAP_MIN_LENGTH = 25
 
 
 @dataclass
@@ -103,6 +115,7 @@ def validate_chapter_output(result: ChapterResult) -> QualityReport:
     :class:`QualityReport` describing every failure it found.
     """
     issues: List[QualityIssue] = []
+    seg_results = result.segment_results
 
     final_text = result.final_translation or ""
 
@@ -147,7 +160,7 @@ def validate_chapter_output(result: ChapterResult) -> QualityReport:
         )
 
     # ── Per-segment checks ─────────────────────────────────────────────
-    for seg_out in result.segment_results:
+    for seg_out in seg_results:
         polished = (seg_out.polished_translation or "").strip()
         seg_id = str(seg_out.segment_id)
 
@@ -176,6 +189,57 @@ def validate_chapter_output(result: ChapterResult) -> QualityReport:
                         f"{seg_cjk} CJK characters (e.g. {sample!r})."
                     ),
                     segment_id=seg_id,
+                )
+            )
+
+        # ── Short output detection ────────────────────────────────────
+        content_len = len(polished.replace(" ", ""))
+        if content_len < _SHORT_OUTPUT_THRESHOLD:
+            issues.append(
+                QualityIssue(
+                    code="short_output",
+                    severity="error",
+                    message=(
+                        f"Segment {seg_id} polished output is suspiciously "
+                        f"short ({content_len} non-space characters)."
+                    ),
+                    segment_id=seg_id,
+                )
+            )
+
+    # ── Segment overlap detection ─────────────────────────────────────────
+    # Checks if the start of the next segment's output appears as a substring
+    # at the end of the current segment's output (substring, not position-aligned).
+    for i in range(len(seg_results) - 1):
+        curr = (seg_results[i].polished_translation or "").strip()
+        nxt = (seg_results[i + 1].polished_translation or "").strip()
+        if not curr or not nxt:
+            continue
+        # Probe window: last 80 chars of curr, first 80 chars of nxt.
+        curr_tail = curr[-80:] if len(curr) >= 80 else curr
+        nxt_head = nxt[:80] if len(nxt) >= 80 else nxt
+        if len(nxt_head) < _OVERLAP_MIN_LENGTH:
+            continue
+        probe = nxt_head[:_OVERLAP_MIN_LENGTH]
+        start_pos = curr_tail.find(probe)
+        if start_pos < 0:
+            continue
+        # Extend the match as far as possible.
+        match_len = _OVERLAP_MIN_LENGTH
+        while (start_pos + match_len < len(curr_tail)
+               and match_len < len(nxt_head)
+               and curr_tail[start_pos + match_len] == nxt_head[match_len]):
+            match_len += 1
+        if match_len >= _OVERLAP_MIN_LENGTH:
+            issues.append(
+                QualityIssue(
+                    code="segment_overlap",
+                    severity="error",
+                    message=(
+                        f"Segments {seg_results[i].segment_id} and "
+                        f"{seg_results[i + 1].segment_id} overlap by "
+                        f"{match_len} characters at segment boundary."
+                    ),
                 )
             )
 

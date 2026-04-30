@@ -71,6 +71,9 @@ class SegmentRecord:
     status: SegmentStatus = SegmentStatus.PENDING
     retry_count: int = 0
     error_message: str = ""
+    polished_text: str = ""
+    """The polished translation output text, persisted so resume can
+    reconstruct the TranslationOutput without empty stubs."""
     started_at: Optional[float] = None
     completed_at: Optional[float] = None
     duration_seconds: Optional[float] = None

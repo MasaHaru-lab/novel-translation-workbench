@@ -209,6 +209,189 @@ def test_good_chapter_passes():
     assert report.issues == []
 
 
+# ── Segment overlap detection ───────────────────────────────────────────────
+
+
+def test_segment_overlap_triggers():
+    """Adjacent segments with shared text at boundary must be caught."""
+    shared_tail = "the onlooker sees the game best and that makes all the difference"
+    result = ChapterResult(
+        chapter_title="Chapter 16",
+        source_text="ignored",
+        segment_results=[
+            _seg("1", f"She observed quietly. {shared_tail}"),
+            _seg("2", f"{shared_tail} in this world of politics and power."),
+        ],
+        aggregated_translation=f"# Chapter 16\n\nShe observed quietly. {shared_tail} in this world of politics and power.",
+    )
+    report = validate_chapter_output(result)
+    assert "segment_overlap" in report.codes()
+    assert not report.passed
+
+
+def test_segment_overlap_no_false_positive():
+    """Adjacent segments with no meaningful overlap must pass."""
+    result = ChapterResult(
+        chapter_title="Chapter 1",
+        source_text="ignored",
+        segment_results=[
+            _seg("1", "She walked into the room and looked around carefully."),
+            _seg("2", "The old woman sat by the window, her hands folded."),
+        ],
+        aggregated_translation="# Chapter 1\n\nShe walked into the room. The old woman sat by the window.",
+    )
+    report = validate_chapter_output(result)
+    assert "segment_overlap" not in report.codes()
+
+
+def test_segment_overlap_below_threshold_notrigger():
+    """Short accidental similarity below _OVERLAP_MIN_LENGTH should not fire."""
+    # Both segments end/start with "the" — too short to be real overlap.
+    result = ChapterResult(
+        chapter_title="Chapter 1",
+        source_text="ignored",
+        segment_results=[
+            _seg("1", "She entered the room and found the"),
+            _seg("2", "the old woman waiting by the fire."),
+        ],
+        aggregated_translation="# Chapter 1\n\nShe entered the room and found the the old woman waiting by the fire.",
+    )
+    report = validate_chapter_output(result)
+    assert "segment_overlap" not in report.codes()
+
+
+# ── Short output detection ────────────────────────────────────────────────
+
+
+def test_short_output_triggers():
+    """Non-empty but suspiciously short segment output must be caught."""
+    result = ChapterResult(
+        chapter_title="Chapter 1",
+        source_text="这是一个很长的中文段落，描述了很多内容。",
+        segment_results=[
+            _seg("1", "He nodded."),
+        ],
+        aggregated_translation="# Chapter 1\n\nHe nodded.",
+    )
+    report = validate_chapter_output(result)
+    assert "short_output" in report.codes()
+    issue = next(i for i in report.issues if i.code == "short_output")
+    assert issue.segment_id == "1"
+
+
+def test_short_output_does_not_fire_on_empty():
+    """Empty segment should fire empty_segment, not short_output."""
+    result = ChapterResult(
+        chapter_title="Chapter 1",
+        source_text="ignored",
+        segment_results=[
+            _seg("1", ""),
+        ],
+        aggregated_translation="# Chapter 1\n\n",
+    )
+    report = validate_chapter_output(result)
+    assert "short_output" not in report.codes()
+    assert "empty_segment" in report.codes()
+
+
+def test_short_output_does_not_fire_on_normal_length():
+    """Normal-length segment output must pass the short check."""
+    report = validate_chapter_output(_good_chapter())
+    assert "short_output" not in report.codes()
+
+
+# ── Orchestrator status demotion ────────────────────────────────────────────
+
+
+def test_quality_failure_demotes_chapter_status(tmp_path):
+    """Quality failure must demote ChapterResult.chapter_status to PARTIAL
+    in the manifest execution path."""
+    from app.chapter.orchestrator import ChapterOrchestrator
+    from app.chapter.manifest import RunManifest, ChapterStatus
+    from app.translate.schema import TranslationInput
+    import app.chapter.orchestrator as orch_mod
+
+    def fake_translate_draft(inp: TranslationInput) -> TranslationOutput:
+        return TranslationOutput(
+            segment_id=inp.segment_id,
+            draft_translation="d",
+            polished_translation="",
+            notes=[],
+        )
+
+    def fake_polish(inp, draft_out, **_kwargs):
+        # Segment leaves 「明天再来」 in output — CJK residue triggers the gate.
+        return TranslationOutput(
+            segment_id=inp.segment_id,
+            draft_translation=draft_out.draft_translation,
+            polished_translation="She said 「明天再来」 and left silently.",
+            notes=[],
+        )
+
+    manifest_path = tmp_path / "demotion.manifest.json"
+    original_polish = orch_mod.polish_translation
+    orch_mod.polish_translation = fake_polish
+    try:
+        orch = ChapterOrchestrator()
+        result = orch.run_with_manifest(
+            source_text="Chapter 1\n\n她走进房间。",
+            translate_draft_fn=fake_translate_draft,
+            assets_mode="none",
+            manifest_path=str(manifest_path),
+        )
+    finally:
+        orch_mod.polish_translation = original_polish
+
+    # Chapter status must be demoted from COMPLETED to PARTIAL.
+    assert result.chapter_status == ChapterStatus.PARTIAL
+
+    # Manifest must also reflect the demotion.
+    loaded = RunManifest.load(str(manifest_path))
+    assert loaded.status == ChapterStatus.PARTIAL
+
+
+def test_quality_pass_preserves_completed_status(tmp_path):
+    """Clean quality must leave chapter_status as COMPLETED."""
+    from app.chapter.orchestrator import ChapterOrchestrator
+    from app.chapter.manifest import RunManifest, ChapterStatus
+    from app.translate.schema import TranslationInput
+    import app.chapter.orchestrator as orch_mod
+
+    def fake_translate_draft(inp: TranslationInput) -> TranslationOutput:
+        return TranslationOutput(
+            segment_id=inp.segment_id,
+            draft_translation="d",
+            polished_translation="",
+            notes=[],
+        )
+
+    def fake_polish(inp, draft_out, **_kwargs):
+        return TranslationOutput(
+            segment_id=inp.segment_id,
+            draft_translation=draft_out.draft_translation,
+            polished_translation="She walked into the room and looked around carefully, noting the old furniture.",
+            notes=[],
+        )
+
+    manifest_path = tmp_path / "pass.manifest.json"
+    original_polish = orch_mod.polish_translation
+    orch_mod.polish_translation = fake_polish
+    try:
+        orch = ChapterOrchestrator()
+        result = orch.run_with_manifest(
+            source_text="Chapter 1\n\n她走进房间。",
+            translate_draft_fn=fake_translate_draft,
+            assets_mode="none",
+            manifest_path=str(manifest_path),
+        )
+    finally:
+        orch_mod.polish_translation = original_polish
+
+    assert result.chapter_status == ChapterStatus.COMPLETED
+    assert result.quality_report is not None
+    assert result.quality_report.passed
+
+
 # ── Report API ───────────────────────────────────────────────────────────
 
 
