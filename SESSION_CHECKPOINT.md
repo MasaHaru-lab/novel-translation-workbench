@@ -1,39 +1,47 @@
-# Session Checkpoint — 2026-04-26 (Phase B+ doc-sync batch)
+# Session Checkpoint — 2026-05-01 (R4: BookMemory ContextPack CLI Activation)
 
 ## Current focus
-**Doc-sync batch** — update README, STATUS, and checkpoint to reflect Phase B+ operator improvements merged in PRs #9 and #10. No runtime code changes.
+**R4 is merged to `main` at `393d6d2`.** This checkpoint records the post-R4 state. No new work has started.
 
-## What shipped in this phase (before this batch)
+## What shipped in this batch
 
-### PR #9 — Default output derivation from `--source`
-- Committed `9369504` on `main`
-- `run` and `chapter run` derive `--output` from `--source` when omitted
-- Prevents silent overwrites (the common footgun of running chapter3 without `--output` clobbering chapter1's output)
-- 10 new CLI tests
+### R3: ContextPack pipeline wiring (2026-05-01)
+- `TranslationInput.context_pack_text` field on schema
+- All three prompt builders (draft, review, polish) inject context pack after project assets, before glossary terms
+- `ChapterOrchestrator.execute()` and `run_with_manifest()` accept `Optional[BookMemory]`
+- `_execute_segment_with_retry()` threads context pack text through retry/resume path
+- 18 new wiring tests
 
-### PR #10 — `chapter batch` command
-- Committed `6e6c605` on `main`
-- `python -m app.cli chapter batch --source f1 --source f2` for multi-file runs
-- Per-source output derivation, failure isolation, compact summary
-- KeyboardInterrupt/Ctrl+C not swallowed
-- 8 dedicated batch tests
+### R4: CLI activation (2026-05-01)
+- `--book-memory PATH` flag on `chapter run/stream/batch`
+- `load_book_memory()` helper in `cli.py`
+- BookMemory forwarded through resume/manifest paths
+- Observability logging: context pack activation status, size, truncation
+- 6 new CLI wiring tests
 
-## What this batch changed
-- **`README.md`** — added `chapter batch` documentation with example output; updated output-default description; updated canonical commands table; removed "Batch processing" from Next Steps.
-- **`STATUS.md`** — test counts updated (339 passing, 74 CLI + 39 chapter); batch processing removed from "What's Still Missing"; Phase B+ operator-usability entry added; `chapter batch` added to Run Instructions.
-- **`SESSION_CHECKPOINT.md`** — rewritten for this batch.
+## Current state
 
-## What was not changed
-- No runtime code changes
-- No test changes
-- No prompt or quality-rule changes
-- No project_assets changes
-- No Fishhead access
-- No CLAUDE.md, WORKFLOW.md, SKILL.md, ORCHESTRATION.md, or QUALITY_LOOP.md modifications
+- **HEAD**: `393d6d2` on `main`
+- **Test count**: 616 passing (0 regressions)
+- **Working tree**: clean
 
-## Test gate
-- Total: 339 passed (confirmed)
+## BookMemory support matrix
 
-## Pre-merge gate
-- Script: `scripts/checks/pre_merge_gate.sh`
-- Status: PENDING (will run before merge to main)
+| Command | `--book-memory` |
+|---|---|
+| `chapter run` | ✓ (fresh, resume, dry-run) |
+| `chapter stream` | ✓ |
+| `chapter batch` | ✓ |
+| legacy `run` | ✗ |
+
+## Closed loop (active)
+BookMemory store → `build_context_pack()` → `format_text()` → per-segment Prompt A/B injection → chapter CLI activation (`--book-memory`).
+
+## Remaining risks (no new work started)
+
+1. **No automatic population** — entities, relationships, and chapter events must be manually added or extracted.
+2. **No retention policy** — JSON grows with book size; no compaction or archiving.
+3. **No cross-book support** — one book per JSON file.
+4. **No migration strategy** — `BookMemory.version` field exists but no migration logic.
+5. **No pre-merge gate check** for book memory JSON validity.
+6. **Legacy `run`** does not support `--book-memory`; use chapter subcommands instead.

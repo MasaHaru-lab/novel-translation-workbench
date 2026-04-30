@@ -19,6 +19,21 @@ The translation framework has been migrated to a reusable, direction-agnostic sk
 
 ---
 
+## R4: BookMemory ContextPack CLI Activation (2026-05-01)
+
+**Merged to main at `393d6d2`.** BookMemory ContextPack is now wired end-to-end through the chapter CLI. The closed loop: BookMemory store → ContextPack build/render → per-segment prompt injection → chapter CLI activation.
+
+| Command | `--book-memory` | Notes |
+|---|---|---|
+| `python -m app.cli chapter run` | ✓ | Fresh run, resume, dry-run |
+| `python -m app.cli chapter stream` | ✓ | Stdout-only mode |
+| `python -m app.cli chapter batch` | ✓ | Multi-file batch |
+| `python -m app.cli run` (legacy) | ✗ | Segment-level pipeline, no book-memory support |
+
+**616 tests passing** (6 new wiring tests in R4, 18 new in R3, 0 regressions). Working tree clean.
+
+---
+
 
 ## Current Capabilities
 
@@ -26,11 +41,15 @@ The translation framework has been migrated to a reusable, direction-agnostic sk
   - Per-segment progress logging during fresh-run execution
   - Plan preview with segment count, complexity, budget, consistency intensity
   - Manifest-based resume with failure isolation, retry, and guidance
-- ✅ **Book memory retrieval / context-pack layer (R2)**
-  - `build_context_pack(segment, memory)` for deterministic substring matching of entities, titles, and relationships
+- ✅ **Book memory retrieval / context-pack layer (R2–R4)**
+  - `build_context_pack(segment, memory)` for deterministic substring matching of entities, titles, and relationships (R2)
   - Hard 4000-char context pack limit with priority-based truncation (confirmed kept over tentative)
   - Status-preserving output with `[TENTATIVE]` and `[UNRESOLVED]` labels
-  - 36 dedicated tests, all passing; module is built, tested, but not yet wired into translation pipeline
+  - Wired into per-segment Prompt A/B pipeline via `TranslationInput.context_pack_text` (R3)
+  - CLI-activated: `--book-memory PATH` on `chapter run/stream/batch` (R4)
+  - `chapter run --resume` forwards book-memory state (R4)
+  - Legacy `run` (segment-level pipeline) does not support `--book-memory`
+  - 42 retrieval+wiring tests, all passing
 - ✅ **Chapter-level HTTP API** (`POST /translate/chapter`)
   - Full manifest/resume semantics (fresh run, resume with existing manifest)
   - Direct access to `ChapterOrchestrator.run_with_manifest()`
@@ -43,7 +62,7 @@ The translation framework has been migrated to a reusable, direction-agnostic sk
   - Strategy enactment closed loop (budget/consistency resolved from plan, record attached to `ChapterResult`)
 - ✅ **Consistency audit** (term unification, limited automated correction)
 - ✅ **Advanced CLI output** — strategy overview, consistency summary, resume guidance
-- ✅ **592 tests passing** (26 service + 74 CLI + 39 chapter + 36 retrieval + others)
+- ✅ **616 tests passing** (26 service + 74 CLI + 45 chapter + 42 retrieval/wiring + others)
 
 ## What's Still Missing (Phase B and later)
 
@@ -65,10 +84,11 @@ The translation framework has been migrated to a reusable, direction-agnostic sk
 python -m app.cli chapter run                          # fresh run
 python -m app.cli chapter run --dry-run                # preview plan
 python -m app.cli chapter run --resume                 # resume partial run
+python -m app.cli chapter run --book-memory data/book_memory/book_memory.json  # with context packs
 python -m app.cli chapter stream                       # stdout-only mode
 python -m app.cli chapter batch --source f1 --source f2   # batch multi-file
 
-# Legacy segment-level pipeline
+# Legacy segment-level pipeline (no book-memory support)
 python -m app.cli run
 ```
 
@@ -349,7 +369,11 @@ Two changes to eliminate operator footguns in daily use:
 
 Test suite: 592 passed (74 CLI + 39 chapter + 36 retrieval + 26 service + others).
 
-**Next batch:** Phase B — quality loop. No further Phase A or Phase B+ operator-usability work.
+**R3: ContextPack pipeline wiring (2026-05-01):** `build_context_pack()` output injected into per-segment Prompt A/B via `TranslationInput.context_pack_text`. All three prompt builders (draft, review, polish) inject the context pack after project assets and before glossary terms. `ChapterOrchestrator.execute()` and `run_with_manifest()` accept `Optional[BookMemory]`. 18 new wiring tests. 610 tests passing.
+
+**R4: BookMemory ContextPack CLI activation (2026-05-01):** `--book-memory PATH` flag on `chapter run/stream/batch`. `load_book_memory()` helper in cli.py. BookMemory forwarded through resume/manifest paths with observability logging (context pack activation status, size, truncation). 6 new CLI wiring tests. 616 tests passing. Working tree clean. HEAD `393d6d2`.
+
+**Next batch:** Not yet started. See remaining risks and Phase B scope for candidates.
 
 ## Tech Debt
 

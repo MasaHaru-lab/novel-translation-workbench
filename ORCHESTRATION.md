@@ -84,6 +84,10 @@ The orchestrator invokes the segment-level workflow defined in `WORKFLOW.md` for
 
 **Phase A sealed (2026-04-26):** All Phase A surfaces frozen. No further CLI/HTTP/integration work in scope.
 
+**R3: ContextPack pipeline wiring (2026-05-01):** `build_context_pack()` output injected into per-segment Prompt A/B via `TranslationInput.context_pack_text`. `execute()`, `run()`, and `run_with_manifest()` accept `Optional[BookMemory]`. 18 new wiring tests.
+
+**R4: BookMemory CLI activation (2026-05-01):** `--book-memory PATH` flag on chapter subcommands. BookMemory forwarded through resume/manifest paths. Observability logging. 6 new wiring tests. 616 total tests.
+
 ## Limitations
 
 - HTTP entry point exists (`POST /translate/chapter`) but still requires the service to be running separately
