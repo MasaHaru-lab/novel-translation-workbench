@@ -193,11 +193,104 @@ reassess.
 
 ### What does NOT need the gate
 
-- Edits to `project_assets/` files (glossary, style notes, characters,
-  titles_and_terms, unresolved_decisions) — these are Type A/Type B and do
-  not require gate approval
+- Edits to `project_assets/` files — these are Type A/Type B and do
+  not require **Prompt Change Gate** approval (but see the **Canonization
+  Gate** below for asset-entry canonization rules)
 - Edits to `docs/QUALITY_LOOP.md` or `STATUS.md` or `SESSION_CHECKPOINT.md`
 - Corrections to asset files that fix instruction leakage or stale entries
+  (corrections are not new canonization decisions)
+
+## Canonization Gate
+
+### What it is
+
+A gate that evaluates proposed translation choices before they become
+authoritative entries in `project_assets/`. It ensures that weak, risky,
+or user-rejected renderings are not silently promoted to canonical status.
+
+The gate is implemented in `app/chapter/canonization.py` as the
+`CanonizationGate` class. It is a code-level tool used during quality-loop
+Type A/Type B resolution to classify proposed renderings before writing
+them to asset files.
+
+### Protection rules
+
+The gate runs the following detectors against every proposed rendering:
+
+| Rule | What it catches | Severity |
+|------|----------------|----------|
+| **Generic address** | "girl" for 丫头, "miss" for 大小姐 — generic English terms that flatten hierarchy | warning (blocker if user-rejected) |
+| **Stiff kinship** | "principal mother", "concubine-born offspring" — legalistic/bureaucratic renderings | warning (blocker if user-rejected) |
+| **Meta-note rendering** | "provisional, keep for now", "needs system-level review" — meta-instructions passed as renderings | blocker |
+| **Unapproved benchmark** | Rendering sourced from a single quality-run model output without explicit approval | warning |
+| **Weak evidence** | Risky categories (address/kinship/title) with weak or one-off evidence | warning |
+| **User-rejected** | Proposed rendering matches a previously rejected alternative in project assets | blocker |
+
+### Classification criteria
+
+| Verdict | Meaning | Routing |
+|---------|---------|---------|
+| **SAFE** | No risk signals, or signals overridden by strong evidence / explicit approval | Canonical asset (e.g. `titles_and_terms.md`) |
+| **RISKY** | At least one warning signal present, or risky category without sufficient evidence | `unresolved_decisions.md` — needs operator review |
+| **REJECTED** | Blocker signal present (meta-note, user-rejected) | Blocked — cannot be canonized in this form |
+
+### Category risk defaults
+
+Even when no specific protection rule triggers, the following categories
+default to RISKY unless strong evidence or explicit approval is provided:
+
+- Address terms (e.g. 大小姐, 丫头)
+- Kinship terms (e.g. 嫡母)
+- Titles and ranks (e.g. 贵妃, 光禄寺卿)
+
+This prevents the system from canonizing a rendering merely because "one
+run used it." Glossary terms, character names, and style notes do not have
+this default — they are SAFE when no rule triggers and evidence is adequate.
+
+### How to use
+
+```python
+from app.chapter.canonization import CanonizationGate, RenderingCategory
+
+gate = CanonizationGate()
+
+# Evaluate a proposed rendering
+verdict = gate.classify(
+    chinese_term="大小姐",
+    proposed_rendering="Young Lady",
+    category=RenderingCategory.ADDRESS_TERM,
+    evidence_strength="strong",
+    user_approved=True,
+)
+
+if verdict.risk == "safe":
+    # Write to the canonical asset file
+    ...
+elif verdict.risk == "risky":
+    # Write to unresolved_decisions.md instead
+    ...
+else:
+    # Rejected — report back to operator
+    ...
+```
+
+### What does NOT need the gate
+
+- Corrections that fix obvious typos or formatting in existing canonical entries
+- Removal of stale or instruction-leakage entries from asset files
+- Edits to `docs/QUALITY_LOOP.md`, `STATUS.md`, or checkpoint files
+- Changes to Prompt A / Prompt B (these are governed by the Prompt Change Gate)
+
+### Relationship to the Prompt Change Gate
+
+| Gate | Controls | Resolution types |
+|------|----------|-----------------|
+| Canonization Gate | `project_assets/` entries | Type A (glossary), Type B (style notes) |
+| Prompt Change Gate | `prompts/prompt_a.md`, `prompts/prompt_b.md` | Type C (prompt-level enforcement) |
+
+Both gates must pass before their respective changes are written. They are
+independent — an asset entry does not need Prompt Change Gate approval, and
+a prompt change does not need Canonization Gate approval.
 
 ## Version naming convention
 
@@ -223,7 +316,8 @@ The existing runs (v1–v5) are archived at `data/exports/one_chapter_quality_sa
 | Manifest/resume semantics | FROZEN | Phase A sealed surface |
 | Quality gate (`app/chapter/quality.py`) | FROZEN | Phase A sealed surface |
 | Strategy/budget/enactment | FROZEN | Phase A sealed surface |
-| `project_assets/*.md` | OPEN | Type A/Type B resolution |
+| `project_assets/*.md` | GATED | Canonization Gate controls new entries; corrections still OPEN |
+| `app/chapter/canonization.py` | OPEN | Canonization gate module |
 | Prompt A (`prompts/prompt_a.md`) | GATED | Changes require Prompt Change Gate |
 | Prompt B (`prompts/prompt_b.md`) | GATED | Changes require Prompt Change Gate |
 | `app/chapter/orchestrator.py` | FROZEN | No application logic changes in Phase B |
