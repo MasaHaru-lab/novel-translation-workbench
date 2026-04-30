@@ -25,13 +25,21 @@ _loaded: bool = False
 
 
 def _find_project_root() -> Path:
-    """Walk up from this file's directory looking for .env.local."""
-    # Start from this file's directory (app/) and walk up.
-    here = Path(__file__).resolve().parent
+    """Detect the project root directory.
+
+    Walks up from ``app/config_loader.py`` looking for known project markers
+    (``.git`` directory, ``.env.example`` file). This avoids the earlier bug
+    of scanning for ``.env.local`` (which does not exist until the operator
+    creates it) and falling back to the wrong directory (``app/``).
+    """
+    here = Path(__file__).resolve().parent  # e.g. …/novel-translation-workbench/app/
     for parent in [here] + list(here.parents):
-        if (parent / ".env.local").exists():
+        if (parent / ".git").is_dir():
             return parent
-    return here
+        if (parent / ".env.example").is_file():
+            return parent
+    # Fallback: parent of app/ is the project root
+    return here.parent
 
 
 def load_env_local(project_root: str | Path | None = None) -> None:
