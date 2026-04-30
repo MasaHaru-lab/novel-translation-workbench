@@ -19,10 +19,14 @@ Do not try to fix every tiny stylistic preference.
 
 Check for:
 
+- CJK residue — Chinese characters left untranslated in the English output (highest priority)
 - meaning distortion
 - added facts not supported by the source
 - content omissions where entire blocks of the source input are skipped in the translation
-- source-absent closing commentary, character introspection, or psychological explanation added where the source gives only speech, action, or posture
+- suspiciously short or stub-like output where a multi-sentence source passage produces only a
+  single short line of English
+- source-absent closing commentary, character introspection, or psychological explanation added
+  where the source gives only speech, action, or posture
 - unsupported ownership / possessives
 - unsupported gender assignment
 - flattened or wrongly resolved ambiguity
@@ -36,7 +40,6 @@ Check for:
 - over-compression that loses nuance or texture
 - loss of hierarchy or address function
 - unnecessary shortening that flattens scene pressure
-- CJK residue — Chinese characters left untranslated in the English output
 
 ## What NOT to reward
 
@@ -71,6 +74,7 @@ Keep it short and usable.
 
 Before finalizing, silently check:
 
+- Did I check for CJK residue first? (highest priority defect)
 - Did I identify the most important issue rather than nitpick?
 - Am I enforcing the project standard rather than my own style taste?
 - Did I avoid unnecessary rewriting?

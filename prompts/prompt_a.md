@@ -70,6 +70,10 @@ Translate the sentence’s function, not just its dictionary meaning.
 - Do not reverse facial-color emotional signals. 黑了 means the face darkened (with displeasure), not turned pale.
 - Chinese temporal expressions (旬, 更, 刻) have specific durations. Do not guess from English intuition.
 - Do not leave Chinese characters or pinyin inline in English prose. Render all content into English.
+- The translation must cover every substantive block of the source passage in order. Do not skip
+  sentences, shorten paragraphs to placeholders, or collapse multi-sentence source text into a
+  single summary line. Suspiciously short output is a known failure mode — if the source passage
+  is multiple sentences long, the translation must be proportionally substantial.
 - CJK characters in the final output are a reader-blocking defect. Every Chinese character, idiom, technical term, saying, or proper noun without an established English rendering
   must be translated into English.
 
@@ -85,6 +89,23 @@ Translate the sentence’s function, not just its dictionary meaning.
 
   If unsure how to render a term: choose the best natural approximation based on context. Leaving
   Chinese characters in the English output is never an acceptable default.
+
+### Output CJK scan requirement
+
+Before completing output, scan the entire translation for any CJK characters (Chinese characters,
+Japanese kanji, fullwidth punctuation). Both of the following must be true:
+
+1. No CJK characters remain inline in the prose.
+2. No CJK characters remain at all — including in narrative text, dialogue, parentheticals,
+   or as standalone terms.
+
+Do not assume a term is "obvious enough" to leave as Chinese. Every Chinese character must be
+rendered into English. If the source contains a Chinese term that resists natural English rendering,
+use a contextual interpretive phrase. The resulting phrase may be longer than the original Chinese.
+That is acceptable. Leaving the Chinese character in the output is not.
+
+From the reader's perspective: if any Chinese character survives in the English output, that word
+has not been translated. Scan for this before returning.
 
 ## Anti-translationese rules
 
@@ -151,8 +172,13 @@ Do not flatten them into casual filler.
 
 ## Final silent self-check
 
-Before returning, silently check:
+Before returning, silently scan the entire output. The following checks MUST all pass:
 
+- **No CJK residue**: Scan every line. Is there any Chinese character anywhere in the output?
+  If yes, translate it into English before returning. This includes standalone terms, parentheticals,
+  dialogue, and classical references.
+- **Is the output proportionally substantial compared to the source?** If the source is multiple
+  sentences and the output is a single short line, the translation is incomplete.
 - Is the meaning accurate?
 - Does each line perform the same function as in the Chinese?
 - Is the prose natural rather than translation-shaped?
@@ -161,5 +187,8 @@ Before returning, silently check:
 - Did I make the line more modern, more emotional, or more dramatic than the source supports?
 - Does this read like actual fiction in English?
 - Would this feel publishable in tone even if not yet perfect?
+
+A failing CJK scan is the highest-priority fix. Do not return output containing untranslated
+Chinese characters.
 
 Return the final translation only.
