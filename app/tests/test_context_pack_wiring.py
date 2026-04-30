@@ -7,6 +7,8 @@ Verifies:
 - Tentative/unresolved labels survive formatting.
 - Context pack and glossary terms coexist without suppression.
 - Orchestrator execute() and run_with_manifest() pass context pack through.
+- R4: resume() with/without book_memory.
+- R4: Observability logging at execution boundary.
 """
 
 from unittest.mock import patch
@@ -34,6 +36,7 @@ from app.book_memory.models import (
     BookMemory,
 )
 from app.book_memory.retrieval import build_context_pack
+from app.chapter.manifest import RunManifest
 
 
 # ── Fixtures ────────────────────────────────────────────────────────────────
@@ -556,3 +559,249 @@ def test_run_with_manifest_no_book_memory_no_context(sample_memory):
             f"Segment {inp.segment_id} has non-empty context_pack_text "
             f"but no book_memory was provided to run_with_manifest"
         )
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# R4: resume() activation and observability
+# ═════════════════════════════════════════════════════════════════════════
+
+
+def test_resume_with_book_memory_passes_context_pack(sample_memory, tmp_path):
+    """resume() with book_memory passes context pack for pending segments."""
+    # Text large enough to produce >= 2 segments (default max_chars=1200)
+    text = "第一章\n\n" + "秦流西看了看四周。" * 150 + "\n\n" + "晋王驾到。" * 150
+    orch = ChapterOrchestrator()
+    plan = orch.plan(text)
+
+    # Get segment IDs
+    seg_ids = [str(s.segment_id) for s in plan.segments]
+    assert len(seg_ids) >= 2, "Need at least 2 segments for resume test"
+
+    # Create a manifest with the first segment completed, rest pending
+    manifest_path = tmp_path / "manifest.json"
+    manifest = RunManifest.create(
+        chapter_title=plan.chapter_title,
+        source_text=text,
+        segment_ids=seg_ids,
+        manifest_path=str(manifest_path),
+        smoke_test=True,
+    )
+    manifest.start_run()
+    manifest.mark_segment_completed(seg_ids[0])
+    manifest.segments[seg_ids[0]].polished_text = "Completed segment output."
+    manifest.save()
+
+    captured_inputs: list[TranslationInput] = []
+
+    def capturing_draft_fn(inp: TranslationInput) -> TranslationOutput:
+        captured_inputs.append(inp)
+        return TranslationOutput(
+            segment_id=inp.segment_id,
+            draft_translation="draft",
+            polished_translation="",
+        )
+
+    result = orch.resume(
+        source_text=text,
+        manifest_path=str(manifest_path),
+        translate_draft_fn=capturing_draft_fn,
+        book_memory=sample_memory,
+    )
+
+    assert result is not None, "resume() returned None"
+    # Pending (non-completed) segments should have context pack text
+    pending_inputs = [inp for inp in captured_inputs if inp.segment_id != seg_ids[0]]
+    assert len(pending_inputs) >= 1, "Expected at least 1 pending segment"
+    assert any(
+        "Context Pack" in inp.context_pack_text for inp in pending_inputs
+    ), "Pending segment did not receive context pack text on resume"
+    # At least one entity match should be present
+    assert any(
+        "Qin Liuxi" in inp.context_pack_text for inp in pending_inputs
+    ), "Entity data missing from context pack on resume"
+
+
+def test_resume_without_book_memory_no_context(sample_memory, tmp_path):
+    """resume() without book_memory yields empty context_pack_text."""
+    text = "第一章\n\n" + "秦流西看了看四周。" * 150 + "\n\n" + "晋王驾到。" * 150
+    orch = ChapterOrchestrator()
+    plan = orch.plan(text)
+
+    seg_ids = [str(s.segment_id) for s in plan.segments]
+    assert len(seg_ids) >= 2
+
+    manifest_path = tmp_path / "manifest.json"
+    manifest = RunManifest.create(
+        chapter_title=plan.chapter_title,
+        source_text=text,
+        segment_ids=seg_ids,
+        manifest_path=str(manifest_path),
+        smoke_test=True,
+    )
+    manifest.start_run()
+    manifest.mark_segment_completed(seg_ids[0])
+    manifest.segments[seg_ids[0]].polished_text = "Completed segment output."
+    manifest.save()
+
+    captured_inputs: list[TranslationInput] = []
+
+    def capturing_draft_fn(inp: TranslationInput) -> TranslationOutput:
+        captured_inputs.append(inp)
+        return TranslationOutput(
+            segment_id=inp.segment_id,
+            draft_translation="draft",
+            polished_translation="",
+        )
+
+    result = orch.resume(
+        source_text=text,
+        manifest_path=str(manifest_path),
+        translate_draft_fn=capturing_draft_fn,
+    )
+
+    assert result is not None, "resume() returned None"
+    pending_inputs = [inp for inp in captured_inputs if inp.segment_id != seg_ids[0]]
+    for inp in pending_inputs:
+        assert inp.context_pack_text == "", (
+            f"Pending segment {inp.segment_id} has non-empty context_pack_text "
+            f"but no book_memory was provided"
+        )
+
+
+def test_execute_logs_context_pack_enabled(sample_memory, caplog):
+    """execute() logs context pack activation info when book_memory is provided."""
+    import logging
+    caplog.set_level(logging.INFO, logger="app.chapter.orchestrator")
+
+    text = "第一章\n\n秦流西看了看四周。"
+    orch = ChapterOrchestrator()
+    plan = orch.plan(text)
+
+    captured_inputs: list[TranslationInput] = []
+
+    def capturing_draft_fn(inp: TranslationInput) -> TranslationOutput:
+        captured_inputs.append(inp)
+        return TranslationOutput(
+            segment_id=inp.segment_id,
+            draft_translation="draft",
+            polished_translation="",
+        )
+
+    def mock_backend(prompt, max_tokens=None, **extra):
+        return "major_issue: none\nwhy_it_matters: n/a\nrecommended_fix: none\noptional_notes: n/a"
+
+    patches = [
+        patch("app.translate.backend_adapter.call_model_backend", side_effect=mock_backend),
+        patch("app.config.config.MODEL_BACKEND_URL", "http://fake:9999"),
+    ]
+    for p in patches:
+        p.start()
+    try:
+        _ = orch.execute(
+            plan,
+            translate_draft_fn=capturing_draft_fn,
+            book_memory=sample_memory,
+        )
+    finally:
+        for p in patches:
+            p.stop()
+
+    # Verify context pack activation log line
+    assert any(
+        "Context pack enabled" in msg for msg in caplog.messages
+    ), "Expected 'Context pack enabled' log message"
+    # Verify per-segment context pack log line
+    assert any(
+        "context pack" in msg and "chars" in msg for msg in caplog.messages
+    ), "Expected per-segment context pack size log message"
+
+
+def test_execute_logs_no_context_pack_disabled(sample_memory, caplog):
+    """execute() does NOT log context pack activation when book_memory is None."""
+    import logging
+    caplog.set_level(logging.INFO, logger="app.chapter.orchestrator")
+
+    text = "第一章\n\n秦流西看了看四周。"
+    orch = ChapterOrchestrator()
+    plan = orch.plan(text)
+
+    captured_inputs: list[TranslationInput] = []
+
+    def capturing_draft_fn(inp: TranslationInput) -> TranslationOutput:
+        captured_inputs.append(inp)
+        return TranslationOutput(
+            segment_id=inp.segment_id,
+            draft_translation="draft",
+            polished_translation="",
+        )
+
+    def mock_backend(prompt, max_tokens=None, **extra):
+        return "major_issue: none\nwhy_it_matters: n/a\nrecommended_fix: none\noptional_notes: n/a"
+
+    patches = [
+        patch("app.translate.backend_adapter.call_model_backend", side_effect=mock_backend),
+        patch("app.config.config.MODEL_BACKEND_URL", "http://fake:9999"),
+    ]
+    for p in patches:
+        p.start()
+    try:
+        _ = orch.execute(plan, translate_draft_fn=capturing_draft_fn)
+    finally:
+        for p in patches:
+            p.stop()
+
+    # No context pack log lines should appear
+    assert not any(
+        "Context pack" in msg for msg in caplog.messages
+    ), "Unexpected context pack log when book_memory was None"
+
+
+def test_cli_book_memory_flag_forwarded():
+    """--book-memory flag is threaded from CLI to run_chapter_pipeline."""
+    import tempfile
+    from pathlib import Path
+    from app.cli import main as cli_main
+    import sys
+    from unittest.mock import patch
+    from app import cli
+
+    captured = {}
+
+    def capturing_pipeline(*args, **kwargs):
+        captured['book_memory_path'] = kwargs.get('book_memory_path')
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        src = Path(tmpdir) / "s.txt"
+        out = Path(tmpdir) / "o.md"
+        src.write_text("x", encoding='utf-8')
+        with patch.object(cli, 'run_chapter_pipeline', side_effect=capturing_pipeline):
+            sys.argv = ['cli', 'chapter', 'run', '--source', str(src), '--output', str(out),
+                        '--book-memory', '/some/path/memory.json']
+            cli_main()
+
+    assert captured['book_memory_path'] == Path('/some/path/memory.json')
+
+
+def test_cli_book_memory_flag_default_none():
+    """Omitting --book-memory yields None."""
+    import tempfile
+    from pathlib import Path
+    from app.cli import main as cli_main
+    import sys
+    from unittest.mock import patch
+    from app import cli
+
+    captured = {}
+
+    def capturing_pipeline(*args, **kwargs):
+        captured['book_memory_path'] = kwargs.get('book_memory_path')
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        src = Path(tmpdir) / "s.txt"
+        out = Path(tmpdir) / "o.md"
+        src.write_text("x", encoding='utf-8')
+        with patch.object(cli, 'run_chapter_pipeline', side_effect=capturing_pipeline):
+            sys.argv = ['cli', 'chapter', 'run', '--source', str(src), '--output', str(out)]
+            cli_main()
+
+    assert captured['book_memory_path'] is None

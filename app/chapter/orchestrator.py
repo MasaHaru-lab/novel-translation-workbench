@@ -278,11 +278,25 @@ class ChapterOrchestrator:
 
         segment_results: List[TranslationOutput] = []
 
+        # R4 observability: context pack activation status
+        if book_memory is not None:
+            logger.info(
+                "Context pack enabled — book_memory: %r (%d entities, %d titles)",
+                book_memory.book_title,
+                len(book_memory.entities),
+                len(book_memory.titles),
+            )
+
         for seg in plan.segments:
             # Build context pack from book memory if available (R3)
             context_pack_text = ""
             if book_memory is not None:
-                context_pack_text = build_context_pack(seg.text, book_memory).format_text()
+                pack = build_context_pack(seg.text, book_memory)
+                context_pack_text = pack.format_text()
+                logger.info(
+                    "  Segment %s: context pack %d chars (truncated=%s, empty=%s)",
+                    seg.segment_id, len(context_pack_text), pack.truncated, pack.is_empty,
+                )
             inp = build_translation_input(seg, glossary, context_pack_text=context_pack_text)
             logger.info("  Translating segment %s ...", inp.segment_id)
 
@@ -429,6 +443,15 @@ class ChapterOrchestrator:
         # Collect actual segment results during execution.
         segment_results: Dict[str, TranslationOutput] = {}
 
+        # R4 observability: context pack activation status
+        if book_memory is not None:
+            logger.info(
+                "Context pack enabled — book_memory: %r (%d entities, %d titles)",
+                book_memory.book_title,
+                len(book_memory.entities),
+                len(book_memory.titles),
+            )
+
         # Execute pending/retryable segments.
         for seg_id in segment_ids_to_run:
             seg = seg_map.get(seg_id)
@@ -439,7 +462,12 @@ class ChapterOrchestrator:
             # Build context pack from book memory if available (R3)
             context_pack_text = ""
             if book_memory is not None:
-                context_pack_text = build_context_pack(seg.text, book_memory).format_text()
+                pack = build_context_pack(seg.text, book_memory)
+                context_pack_text = pack.format_text()
+                logger.info(
+                    "  Segment %s: context pack %d chars (truncated=%s, empty=%s)",
+                    seg_id, len(context_pack_text), pack.truncated, pack.is_empty,
+                )
 
             result = self._execute_segment_with_retry(
                 seg=seg,
@@ -805,6 +833,7 @@ class ChapterOrchestrator:
         translate_draft_fn: Optional[Callable[[TranslationInput], TranslationOutput]] = None,
         assets_mode: AssetsMode = DEFAULT_ASSETS_MODE,
         model_profile: Optional["ModelProfile"] = None,
+        book_memory: Optional["BookMemory"] = None,
     ) -> Optional[ChapterResult]:
         """Resume an interrupted chapter run from its saved manifest.
 
@@ -816,6 +845,8 @@ class ChapterOrchestrator:
             assets_mode: Asset injection mode.
             model_profile: When provided, review and polish passes use
                 the profile's adapter path instead of ``MODEL_BACKEND_URL``.
+            book_memory: When provided, context packs are built from book
+                memory for pending / retried segments (R3/R4).
 
         Returns:
             ChapterResult if the manifest was loaded and run continued,
@@ -836,13 +867,14 @@ class ChapterOrchestrator:
 
         logger.info(
             "Resuming run %s for chapter %r (%d/%d segments completed, "
-            "%d pending, %d failed)",
+            "%d pending, %d failed)%s",
             manifest.run_id,
             manifest.chapter_title,
             len(manifest.get_completed_segment_ids()),
             manifest.total_segments,
             len(manifest.get_pending_segment_ids()),
             sum(1 for r in manifest.segments.values() if r.status == SegmentStatus.FAILED),
+            " with book_memory" if book_memory is not None else "",
         )
 
         return self.run_with_manifest(
@@ -854,4 +886,5 @@ class ChapterOrchestrator:
             manifest_path=manifest_path,
             smoke_test=manifest.smoke_test,
             model_profile=model_profile,
+            book_memory=book_memory,
         )

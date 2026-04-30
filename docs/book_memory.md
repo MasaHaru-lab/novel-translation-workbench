@@ -183,7 +183,7 @@ pack.total_chars           # Estimated formatted character count
 pack.format_text()         # Rendered text suitable for Prompt A/B injection
 ```
 
-### Prompt A/B integration (future hook)
+### Prompt A/B integration (wired in R3, active since R4)
 
 The `ContextPack.format_text()` output is designed to be injected at a
 specific marker in Prompt A:
@@ -199,14 +199,27 @@ specific marker in Prompt A:
 For Prompt B (review), the same pack can be included to verify
 consistency against known renderings and decisions.
 
-### Integration boundary
+### CLI integration (R3/R4)
 
-The retrieval layer is **built but not yet wired into the translation
-pipeline**. Integration into Prompt A/B execution involves inserting
-`build_context_pack(segment, memory).format_text()` at the appropriate
-point in the segment-level translation workflow, and is a future step.
+The retrieval layer is **wired into the chapter-level translation
+pipeline**. Context packs are built and injected per segment when
+`--book-memory` is passed to a chapter subcommand.
 
-Key design constraints for that future integration:
+The context pack text is assembled by the orchestrator and forwarded
+to `run_with_manifest()`, which includes it in each segment's input
+as `context_pack_text`. Prompt A/B inject it at the `## Context Pack
+(retrieved from book memory)` marker if present.
+
+**CLI `--book-memory` support** (added R4):
+
+| Command | `--book-memory` | Notes |
+|---|---|---|
+| `python -m app.cli chapter run` | ✓ | Fresh run, resume, dry-run |
+| `python -m app.cli chapter stream` | ✓ | Stdout-only mode |
+| `python -m app.cli chapter batch` | ✓ | Multi-file batch |
+| `python -m app.cli run` (legacy) | ✗ | Segment-level pipeline, no book-memory support |
+
+Design constraints (remain valid since R1):
 - **Small context windows** — default 4000 characters (~1000 tokens), the
   pack builder enforces this by dropping lower-priority items as needed.
 - **Chinese source is the arbiter** — if the graph says "Qin Liuxi" but
@@ -250,6 +263,11 @@ rather than statistically inferred.
    Human enrichment is still needed.
 6. **No pre-merge gate check** — no hook validates the book memory JSON
    before merge. A future batch could add this to `pre_merge_gate.sh`.
+7. **No `--book-memory` on legacy `run`** — the legacy segment-level
+   pipeline (`python -m app.cli run`) does not accept `--book-memory`.
+   Only chapter subcommands (`chapter run`, `chapter stream`,
+   `chapter batch`) support it. Adding support to the legacy pipeline
+   is out of scope; use the chapter-level commands instead.
 
 ## Acceptance criteria (R1)
 

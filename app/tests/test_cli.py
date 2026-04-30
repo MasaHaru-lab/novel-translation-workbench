@@ -262,7 +262,7 @@ def _invoke_chapter_main_with_argv(argv):
     captured = {}
 
     def fake_run_chapter_pipeline(source, output, service_url, allow_mock_fallback,
-                                 *, assets_mode, model_profile=None, resume=False, dry_run=False, max_retries=2, retry_delay_seconds=1.0, auto_retry_on_resume=True, no_clobber=False, confirm=False, smoke_test=False):
+                                 *, assets_mode, model_profile=None, resume=False, dry_run=False, max_retries=2, retry_delay_seconds=1.0, auto_retry_on_resume=True, no_clobber=False, confirm=False, smoke_test=False, book_memory_path=None):
         captured['source'] = source
         captured['output'] = output
         captured['service_url'] = service_url
@@ -276,6 +276,7 @@ def _invoke_chapter_main_with_argv(argv):
         captured['no_clobber'] = no_clobber
         captured['confirm'] = confirm
         captured['smoke_test'] = smoke_test
+        captured['book_memory_path'] = book_memory_path
 
     with patch('sys.argv', argv):
         with patch.object(cli, 'run_chapter_pipeline', side_effect=fake_run_chapter_pipeline):
@@ -786,13 +787,14 @@ def _invoke_chapter_stream_main_with_argv(argv):
     from app import cli
     captured = {}
 
-    def fake_run_chapter_stream(source_path, service_url, allow_mock_fallback, assets_mode, model_profile=None, smoke_test=False):
+    def fake_run_chapter_stream(source_path, service_url, allow_mock_fallback, assets_mode, model_profile=None, smoke_test=False, book_memory_path=None):
         captured['source_path'] = source_path
         captured['service_url'] = service_url
         captured['allow_mock_fallback'] = allow_mock_fallback
         captured['assets_mode'] = assets_mode
         captured['model_profile'] = model_profile
         captured['smoke_test'] = smoke_test
+        captured['book_memory_path'] = book_memory_path
 
     with patch('sys.argv', argv):
         with patch.object(cli, 'run_chapter_stream', side_effect=fake_run_chapter_stream):
@@ -1716,7 +1718,7 @@ def _invoke_batch_main_with_argv(argv):
     captured = {}
 
     def fake_run_chapter_batch(source_paths, service_url, allow_mock_fallback,
-                                assets_mode, model_profile=None, resume=False, no_clobber=False, smoke_test=False):
+                                assets_mode, model_profile=None, resume=False, no_clobber=False, smoke_test=False, book_memory_path=None):
         captured['source_paths'] = source_paths
         captured['service_url'] = service_url
         captured['allow_mock_fallback'] = allow_mock_fallback
@@ -1724,6 +1726,7 @@ def _invoke_batch_main_with_argv(argv):
         captured['resume'] = resume
         captured['no_clobber'] = no_clobber
         captured['smoke_test'] = smoke_test
+        captured['book_memory_path'] = book_memory_path
 
     with patch('sys.argv', argv):
         with patch.object(cli, 'run_chapter_batch', side_effect=fake_run_chapter_batch):

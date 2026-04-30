@@ -28,6 +28,7 @@ from app.translate.translator import (
 )
 from app.translate.schema import TranslationInput, TranslationOutput
 from app.translate.backend_adapter import translate_draft_with_profile
+from app.book_memory.serialization import book_memory_from_dict
 from app.config import config
 
 
@@ -54,6 +55,34 @@ def _derive_output_path(source: Path) -> Path:
     ``data/source/chapter3.txt`` becomes ``data/exports/chapter3_en.md``.
     """
     return Path("data/exports") / f"{source.stem}_en.md"
+
+
+def load_book_memory(path: Optional[Path]):
+    """Load a BookMemory from a JSON file path, or return None.
+
+    Args:
+        path: Path to a JSON file serialized via ``book_memory_to_dict()``.
+
+    Returns:
+        A ``BookMemory`` instance, or ``None`` if path is None.
+    """
+    if path is None:
+        return None
+    import json
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        memory = book_memory_from_dict(data)
+        logger = logging.getLogger(__name__)
+        logger.info(
+            "Loaded BookMemory from %s: %r (%d entities, %d titles)",
+            path, memory.book_title, len(memory.entities), len(memory.titles),
+        )
+        return memory
+    except Exception as e:
+        logger = logging.getLogger(__name__)
+        logger.error("Failed to load BookMemory from %s: %s", path, e)
+        raise
 
 
 def read_source_file(source_path: Path) -> str:
@@ -295,6 +324,7 @@ def run_chapter_pipeline(
     no_clobber: bool = False,
     confirm: bool = False,
     smoke_test: bool = False,
+    book_memory_path: Optional[Path] = None,
 ):
     """Run the chapter-level translation pipeline.
 
@@ -369,6 +399,9 @@ def run_chapter_pipeline(
     manifest_path = RunManifest.default_manifest_path(str(output_path))
     orchestrator = ChapterOrchestrator()
 
+    # ── Load BookMemory (if provided) ────────────────────────────────────
+    book_memory = load_book_memory(book_memory_path)
+
     # ── Resume path ──────────────────────────────────────────────────────
     if resume:
         try:
@@ -383,6 +416,8 @@ def run_chapter_pipeline(
             print(f"  Completed:   {summary['completed']}/{summary['total_segments']} segments")
             print(f"  Failed:      {summary['failed']}")
             print(f"  Pending:     {summary['pending']}")
+            if book_memory is not None:
+                print(f"  BookMemory:  {book_memory.book_title!r} ({len(book_memory.entities)} entities)")
             print(f"  Manifest:    {manifest_path}")
             if summary['resumable']:
                 completed = summary['completed']
@@ -405,6 +440,7 @@ def run_chapter_pipeline(
                             resume_config=resume_config,
                             smoke_test=smoke_test,
                             model_profile=profile_obj,
+                            book_memory=book_memory,
                         )
                     except Exception as e:
                         print(f"  Error: Resume failed: {e}")
@@ -426,6 +462,8 @@ def run_chapter_pipeline(
     # ── Fresh run path ───────────────────────────────────────────────────
     plan = orchestrator.plan(text)
     print(f"Chapter: '{plan.chapter_title}' ({plan.segment_count} segments)")
+    if book_memory is not None:
+        print(f"BookMemory: {book_memory.book_title!r} ({len(book_memory.entities)} entities)")
     print(f"\nTranslating using {mode}...")
 
     run_start = time.monotonic()
@@ -439,6 +477,7 @@ def run_chapter_pipeline(
                 manifest_path=manifest_path,
                 smoke_test=smoke_test,
                 model_profile=profile_obj,
+                book_memory=book_memory,
             )
         except Exception as e:
             print(f"  Error: Chapter translation pipeline failed: {e}")
@@ -640,6 +679,7 @@ def run_chapter_stream(
     assets_mode: AssetsMode = DEFAULT_ASSETS_MODE,
     model_profile: Optional[str] = None,
     smoke_test: bool = False,
+    book_memory_path: Optional[Path] = None,
 ) -> None:
     """Stream chapter translation: read source, translate, output final text to stdout.
 
@@ -672,6 +712,9 @@ def run_chapter_stream(
 
     set_smoke_mode(smoke_test)
 
+    # Load BookMemory (if provided)
+    book_memory = load_book_memory(book_memory_path)
+
     # Run chapter translation
     try:
         orchestrator = ChapterOrchestrator()
@@ -682,6 +725,7 @@ def run_chapter_stream(
             manifest_path=None,  # No persistent manifest for stream mode
             smoke_test=smoke_test,
             model_profile=profile_obj,
+            book_memory=book_memory,
         )
     except Exception as e:
         sys.stderr.write(f"Chapter translation failed: {e}\n")
@@ -714,6 +758,7 @@ def run_chapter_batch(
     resume: bool = False,
     no_clobber: bool = False,
     smoke_test: bool = False,
+    book_memory_path: Optional[Path] = None,
 ) -> None:
     """Run chapter translation for multiple source files.
 
@@ -745,6 +790,7 @@ def run_chapter_batch(
                 resume=resume,
                 no_clobber=no_clobber,
                 smoke_test=smoke_test,
+                book_memory_path=book_memory_path,
             )
             # Check actual output: run_chapter_pipeline can return without
             # SystemExit even when translation failed (e.g., model backend
@@ -854,6 +900,10 @@ def main():
                                     help='Show chapter plan and wait for confirmation before executing. '
                                          'Useful after --dry-run to preview then decide, or standalone '
                                          'to see the plan before starting a fresh run.')
+    chapter_run_parser.add_argument('--book-memory', type=Path, default=None,
+                                    help='Path to a BookMemory JSON file. When provided, context packs '
+                                         'are built from book memory for each segment and injected into '
+                                         'translation prompts (R3/R4).')
     chapter_run_parser.add_argument('--smoke-test', action='store_true',
                                     help='Run in smoke-test mode (no real model backend required). '
                                          'Translates mechanically with mock output. Quality gates '
@@ -875,6 +925,8 @@ def main():
     chapter_stream_parser.add_argument('--model-profile', type=str, default=None,
                                        help='Select a model profile (e.g. local-qwen, deepseek-v4-flash, '
                                             'deepseek-v4-pro).')
+    chapter_stream_parser.add_argument('--book-memory', type=Path, default=None,
+                                        help='Path to a BookMemory JSON file for context pack injection (R3/R4).')
     chapter_stream_parser.add_argument('--smoke-test', action='store_true',
                                        help='Run in smoke-test mode (no real model backend required). '
                                             'Output is mock — not a real translation.')
@@ -897,6 +949,8 @@ def main():
                                            'deepseek-v4-pro).')
     chapter_batch_parser.add_argument('--resume', action='store_true',
                                       help='Attempt to resume each chapter from its saved manifest.')
+    chapter_batch_parser.add_argument('--book-memory', type=Path, default=None,
+                                       help='Path to a BookMemory JSON file for context pack injection (R3/R4).')
     chapter_batch_parser.add_argument('--smoke-test', action='store_true',
                                       help='Run in smoke-test mode (no real model backend required). '
                                            'Translates mechanically with mock output. Quality gates '
@@ -938,6 +992,7 @@ def main():
                 no_clobber=args.no_clobber,
                 confirm=args.confirm,
                 smoke_test=args.smoke_test,
+                book_memory_path=args.book_memory,
             )
         elif args.chapter_command == 'stream':
             run_chapter_stream(
@@ -947,6 +1002,7 @@ def main():
                 assets_mode=args.assets_mode,
                 model_profile=args.model_profile,
                 smoke_test=args.smoke_test,
+                book_memory_path=args.book_memory,
             )
         elif args.chapter_command == 'batch':
             run_chapter_batch(
@@ -958,6 +1014,7 @@ def main():
                 resume=args.resume,
                 no_clobber=args.no_clobber,
                 smoke_test=args.smoke_test,
+                book_memory_path=args.book_memory,
             )
     else:
         parser.print_help()
