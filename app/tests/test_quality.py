@@ -547,6 +547,110 @@ def test_cli_report_prints_quality_failure(capsys):
     assert "segment_residue" in out
 
 
+def test_placeholder_leak_triggers_on_doctor_surname():
+    """Final output containing ``Doctor [Surname]`` must fail the gate.
+
+    Regression for the ch1131 contamination where the project asset
+    pattern leaked into rendered prose via the consistency corrector.
+    """
+    bad = ChapterResult(
+        chapter_title="Chapter X",
+        source_text="ignored",
+        segment_results=[_seg("1", "When Qin Liuxi saw Doctor [Surname], she paused and saluted.")],
+        aggregated_translation="# Chapter X\n\nWhen Qin Liuxi saw Doctor [Surname], she paused and saluted.",
+    )
+    report = validate_chapter_output(bad)
+    assert not report.passed
+    assert "placeholder_leak" in report.codes()
+
+
+def test_placeholder_leak_does_not_fire_on_test_fixture_markers():
+    """Bracketed all-caps markers like ``[DRAFT 1]`` must not false-trigger.
+
+    Existing test fixtures use these markers and should not be detected
+    as placeholder leaks. The gate requires at least one lowercase letter
+    inside the brackets.
+    """
+    ok = ChapterResult(
+        chapter_title="Chapter X",
+        source_text="ignored",
+        segment_results=[_seg("1", "[DRAFT 1] She walked into the room and looked around.")],
+        aggregated_translation="# Chapter X\n\n[DRAFT 1] She walked into the room and looked around.",
+    )
+    report = validate_chapter_output(ok)
+    assert "placeholder_leak" not in report.codes()
+
+
+def test_slash_list_leak_triggers_on_glossary_candidate_string():
+    """Final output containing ``top-tier / ace / master / champion`` fails.
+
+    Regression for the ch1131 contamination where the 王者 glossary's
+    multi-candidate canonical leaked into prose via unsafe substitution.
+    """
+    bad = ChapterResult(
+        chapter_title="Chapter X",
+        source_text="ignored",
+        segment_results=[_seg("1", "She thought he was joking, but the top-tier / ace / master / champion was clearly serious.")],
+        aggregated_translation="# Chapter X\n\nShe thought he was joking, but the top-tier / ace / master / champion was clearly serious.",
+    )
+    report = validate_chapter_output(bad)
+    assert not report.passed
+    assert "slash_list_leak" in report.codes()
+
+
+def test_slash_list_leak_does_not_fire_on_two_alternatives():
+    """A pair like ``either / or`` must not false-trigger; only 3+ slash-list."""
+    ok = ChapterResult(
+        chapter_title="Chapter X",
+        source_text="ignored",
+        segment_results=[_seg("1", "He could not decide either / or, so he chose neither and walked away.")],
+        aggregated_translation="# Chapter X\n\nHe could not decide either / or, so he chose neither and walked away.",
+    )
+    report = validate_chapter_output(ok)
+    assert "slash_list_leak" not in report.codes()
+
+
+def test_segment_truncation_triggers_on_dangling_so():
+    """Non-final segment ending mid-clause (``...septicemia. So``) fails.
+
+    Regression for the ch1131 segment-2 truncation where the LLM
+    generation cut off mid-thought and the manifest still marked the
+    segment ``completed``.
+    """
+    bad = ChapterResult(
+        chapter_title="Chapter X",
+        source_text="ignored",
+        segment_results=[
+            _seg("1", "The patient had septicemia. So"),
+            _seg("2", "Qin Liuxi began the next round of preparations and the day continued."),
+        ],
+        aggregated_translation="# Chapter X\n\nThe patient had septicemia. So\n\nQin Liuxi began the next round.",
+    )
+    report = validate_chapter_output(bad)
+    assert not report.passed
+    assert "segment_truncation" in report.codes()
+
+
+def test_segment_truncation_skips_final_segment():
+    """The chapter's last segment is exempt — endings legitimately vary.
+
+    Some chapters end on dialogue, an em-dash, or other forms the
+    sentence-end heuristic does not recognize. Only intermediate
+    segments are flagged.
+    """
+    ok = ChapterResult(
+        chapter_title="Chapter X",
+        source_text="ignored",
+        segment_results=[
+            _seg("1", "She walked into the room and the night was cold."),
+            _seg("2", "Then he turned and walked away into the void"),
+        ],
+        aggregated_translation="# Chapter X\n\nShe walked in.\n\nThen he turned and walked away into the void",
+    )
+    report = validate_chapter_output(ok)
+    assert "segment_truncation" not in report.codes()
+
+
 def test_cli_report_prints_quality_pass(capsys):
     from pathlib import Path
     from app.chapter.models import ChapterResult

@@ -853,6 +853,146 @@ def test_corrector_does_not_introduce_new_content():
     assert corrected.endswith("stood up.")
 
 
+def test_unsafe_canonical_with_bracket_placeholder_dropped_at_parse_time():
+    """A title entry whose rendering is ``Doctor [Surname]`` must be silently
+    dropped — it is a documentation pattern, not a literal canonical.
+
+    Regression for ch1131 contamination where this entry caused every
+    "Doctor Zhang" / "Doctor Gao" / "Doctor Yang" in segment text to be
+    string-replaced with "Doctor [Surname]".
+    """
+    asset_text = (
+        "### 大夫 (physician title)\n"
+        "- Chinese: 大夫\n"
+        '- Working English rendering: Doctor [Surname]\n'
+        '- Notes: Canonical rendering is "Doctor [Surname]" '
+        '(e.g. "Doctor Zhang", "Doctor Gao", "Doctor Yang"). Not "Dr." '
+        'and not "Zhang Dafu".\n'
+    )
+    refs = _parse_title_refs(asset_text)
+    assert refs == [], (
+        "Bracket-placeholder canonicals must be filtered out of TitleRefs."
+    )
+
+
+def test_unsafe_canonical_with_slash_list_dropped_at_parse_time():
+    """A glossary entry whose rendering is ``top-tier / ace / master /
+    champion`` must be silently dropped.
+
+    Regression for ch1131 contamination where this entry caused every
+    "king" substring in English prose (e.g. inside "joking", "looking",
+    "thinking") to be string-replaced with the candidate-list canonical.
+    """
+    asset_text = (
+        "### 王者 (game-rank metaphor)\n"
+        "- Chinese: 王者\n"
+        "- Working English rendering: top-tier / ace / master / champion\n"
+        '- Notes: The counterpart to 青铜. Do NOT render as literal "king".\n'
+    )
+    refs = _parse_glossary_refs(asset_text)
+    assert refs == [], (
+        "Slash-list canonicals must be filtered out of GlossaryRefs."
+    )
+
+
+def test_word_boundary_variant_match_does_not_corrupt_inwords():
+    """Variant ``king`` must not match the substring inside ``joking``.
+
+    Regression for ch1131 where a single-token variant matched as a
+    case-insensitive ``in`` substring and then was string-replaced
+    inside common English words.
+    """
+    ref = ConsistencyReference(
+        glossary_terms=[
+            GlossaryRef(canonical="ace", variants=["king"]),
+        ],
+    )
+    auditor = ChapterConsistencyAuditor(ref)
+    # The text contains "joking", "looking", "thinking" — each contains
+    # the substring "king" — but no standalone "king".
+    text = "He was joking while looking at her, thinking she was naive."
+    audit = auditor.audit(text, "Chapter X", [("1", text)])
+    term_variants = [
+        i for i in audit.issues
+        if i.category == ConsistencyIssueCategory.TERM_VARIANT
+        and i.found == "king"
+    ]
+    assert term_variants == [], (
+        f"Word-boundary detection must skip 'king' inside other words, "
+        f"got {term_variants}."
+    )
+
+
+def test_word_boundary_variant_match_still_detects_standalone_word():
+    """Variant ``king`` must still match when it appears as a whole word.
+
+    Defense check: tightening to word boundaries must not break
+    legitimate single-word variant detection.
+    """
+    ref = ConsistencyReference(
+        glossary_terms=[
+            GlossaryRef(canonical="ace", variants=["king"]),
+        ],
+    )
+    auditor = ChapterConsistencyAuditor(ref)
+    text = "Everyone called him the king of the eastern hall."
+    audit = auditor.audit(text, "Chapter X", [("1", text)])
+    term_variants = [
+        i for i in audit.issues
+        if i.category == ConsistencyIssueCategory.TERM_VARIANT
+        and i.found == "king"
+    ]
+    assert len(term_variants) == 1
+
+
+def test_corrector_refuses_unsafe_replacement_value():
+    """``ChapterCorrector.correct`` must skip any replacement whose
+    expected value is itself a placeholder or slash-list — even when an
+    audit issue with such an expected value is constructed directly.
+
+    Defense in depth — the parser already drops these entries, but a
+    future code path that builds issues from a different source must
+    still not corrupt output.
+    """
+    corrector = ChapterCorrector(ConsistencyReference())
+    text = "When Qin Liuxi saw Doctor Zhang, she paused and saluted."
+    audit = ConsistencyAudit(
+        issues=[
+            ConsistencyIssue(
+                category=ConsistencyIssueCategory.TITLE_VARIANT,
+                segment_id="1", term="Doctor [Surname]",
+                found="Doctor Zhang", expected="Doctor [Surname]",
+                auto_fixable=True,
+            ),
+        ],
+    )
+    corrected, summary = corrector.correct(text, audit)
+    assert corrected == text
+    assert not summary.has_corrections
+    assert "[Surname]" not in corrected
+
+
+def test_corrector_refuses_slash_list_replacement_value():
+    """``ChapterCorrector.correct`` must skip slash-list expected values."""
+    corrector = ChapterCorrector(ConsistencyReference())
+    text = "She took him for a king of his domain."
+    audit = ConsistencyAudit(
+        issues=[
+            ConsistencyIssue(
+                category=ConsistencyIssueCategory.TERM_VARIANT,
+                segment_id="1", term="ace",
+                found="king",
+                expected="top-tier / ace / master / champion",
+                auto_fixable=True,
+            ),
+        ],
+    )
+    corrected, summary = corrector.correct(text, audit)
+    assert corrected == text
+    assert not summary.has_corrections
+    assert "top-tier / ace / master / champion" not in corrected
+
+
 def test_non_fixable_issues_not_corrected():
     """Issues marked as not auto-fixable should NOT be corrected."""
     ref = _make_test_reference()

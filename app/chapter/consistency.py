@@ -238,12 +238,47 @@ _ENGLISH_RENDERING_RE = re.compile(
 # Pattern for Notes lines in character/title entries
 _NOTES_LINE_RE = re.compile(r"- Notes\s*:\s*(.+)", re.IGNORECASE)
 
+# A canonical or variant value containing any of these is unsafe to use as
+# a substitution target. They indicate the asset is documenting a pattern,
+# a multi-candidate register guide, or a non-literal placeholder rather
+# than a single literal English rendering. Such values are silently
+# dropped at parse time.
+#
+# - "[" / "]"     : bracketed placeholder like ``Doctor [Surname]``.
+# - " / "         : slash-separated alternative list like
+#                   ``top-tier / ace / master / champion``.
+#
+# Defense in depth: even if such a value reaches ``ChapterCorrector.correct``,
+# that path also refuses to apply it (see safety check there).
+_UNSAFE_RENDERING_RE = re.compile(r"[\[\]]|\s/\s")
+
+
+def _is_unsafe_rendering(value: str) -> bool:
+    """True if ``value`` is a pattern/list rather than a literal rendering.
+
+    Values containing bracketed placeholders (``[Surname]``) or slash-separated
+    candidate lists (``top-tier / ace / master / champion``) must never enter
+    the audit/correction pipeline. They are guidance for human authors and
+    for the LLM prompt — not literal substitution targets. If they were
+    used in a string ``replace`` they would corrupt the output.
+    """
+    if not value:
+        return False
+    return _UNSAFE_RENDERING_RE.search(value) is not None
+
 
 def _parse_rendering_value(line: str) -> Optional[str]:
-    """Extract the rendering value from an 'English rendering: VALUE' line."""
+    """Extract the rendering value from an 'English rendering: VALUE' line.
+
+    Returns ``None`` for unsafe values (placeholders, multi-candidate lists),
+    so unsafe assets are skipped instead of being treated as canonical.
+    """
     m = _ENGLISH_RENDERING_RE.search(line)
     if m:
-        return m.group(1).strip()
+        value = m.group(1).strip()
+        if _is_unsafe_rendering(value):
+            return None
+        return value
     return None
 
 
@@ -255,15 +290,47 @@ def _extract_variants_from_notes(notes_text: str) -> List[str]:
       'Do not alternate casually with Madam Wang'
       'Do not map this mechanically onto...'
 
-    Extracts the quoted variant names.
+    Extracts the quoted variant names. Unsafe values (placeholders like
+    ``[Surname]`` or slash-list candidates) are dropped — see
+    :func:`_is_unsafe_rendering`.
     """
     variants = []
-    # Match quoted phrases that look like name variants
     for m in re.finditer(r'"([^"]+)"', notes_text):
         candidate = m.group(1).strip()
-        if candidate and len(candidate) > 1:
-            variants.append(candidate)
+        if not candidate or len(candidate) <= 1:
+            continue
+        if _is_unsafe_rendering(candidate):
+            continue
+        variants.append(candidate)
     return variants
+
+
+# Word-boundary matchers for variant detection. Using ``\b`` prevents the
+# ``"king" in "joking"`` substring trap that previously corrupted output by
+# turning common English words into glossary fragments.
+def _find_variant(text: str, variant: str) -> Optional[int]:
+    """Return the start index of a word-boundary, case-insensitive match
+    for ``variant`` in ``text``, or ``None`` if no such match exists.
+
+    Word boundaries are required on both ends only when the variant
+    starts/ends with a word character. This keeps matches for variants
+    that contain trailing non-word punctuation (e.g. ``Dr.``) working
+    while still rejecting in-word substring matches.
+    """
+    if not variant:
+        return None
+    pattern = re.escape(variant)
+    if variant[0].isalnum() or variant[0] == "_":
+        pattern = r"\b" + pattern
+    if variant[-1].isalnum() or variant[-1] == "_":
+        pattern = pattern + r"\b"
+    m = re.search(pattern, text, re.IGNORECASE)
+    return m.start() if m else None
+
+
+def _has_variant(text: str, variant: str) -> bool:
+    """Word-boundary, case-insensitive presence check."""
+    return _find_variant(text, variant) is not None
 
 
 def _parse_character_refs(asset_text: str) -> List[CharacterRef]:
@@ -587,16 +654,15 @@ class ChapterConsistencyAuditor:
                 variants_to_check.append((canonical.lower(), True))
 
             for seg_id, text in segment_texts:
-                canonical_present = canonical.lower() in text.lower()
+                canonical_present = _has_variant(text, canonical)
                 for variant, is_explicit_variant in variants_to_check:
                     # Skip if variant is literally the same string as canonical
                     # (case-sensitive). Case-only differences ARE legitimate
                     # variants to check.
                     if variant == canonical:
                         continue
-                    if variant.lower() in text.lower():
-                        # Get the actual text at the match position.
-                        idx = text.lower().index(variant.lower())
+                    idx = _find_variant(text, variant)
+                    if idx is not None:
                         actual_found = text[idx:idx + len(variant)]
 
                         # If the actual text IS the canonical form (exact match),
@@ -651,15 +717,14 @@ class ChapterConsistencyAuditor:
                 variants_to_check.append((canonical.lower(), True))
 
             for seg_id, text in segment_texts:
-                canonical_present = canonical.lower() in text.lower()
+                canonical_present = _has_variant(text, canonical)
                 for variant, is_explicit in variants_to_check:
                     # Skip only if variant is literally the same string as canonical.
                     # Case differences are legitimate variants.
                     if variant == canonical:
                         continue
-                    if variant.lower() in text.lower():
-                        # Get actual text at match position.
-                        idx = text.lower().index(variant.lower())
+                    idx = _find_variant(text, variant)
+                    if idx is not None:
                         actual_found = text[idx:idx + len(variant)]
 
                         # Skip if the actual text IS the canonical form (exact match).
@@ -708,9 +773,8 @@ class ChapterConsistencyAuditor:
                     # Skip only if variant is literally the same string as canonical.
                     if variant == canonical:
                         continue
-                    if variant.lower() in text.lower():
-                        # Get actual text at match position.
-                        idx = text.lower().index(variant.lower())
+                    idx = _find_variant(text, variant)
+                    if idx is not None:
                         actual_found = text[idx:idx + len(variant)]
 
                         # Skip if the actual text IS the canonical form (exact match).
@@ -851,11 +915,10 @@ class ChapterConsistencyAuditor:
                 continue
 
             for seg_id, text in segment_texts:
-                if partial.lower() in text.lower():
-                    canonical_present = canonical.lower() in text.lower()
-                    if canonical_present:
+                idx = _find_variant(text, partial)
+                if idx is not None:
+                    if _has_variant(text, canonical):
                         continue
-                    idx = text.lower().index(partial.lower())
                     start = max(0, idx - 40)
                     end = min(len(text), idx + len(partial) + 40)
                     context = text[start:end].strip()
@@ -916,13 +979,26 @@ class ChapterCorrector:
         corrected = aggregated_text
 
         # Collect all auto-fixable issues, group by replacement mapping
-        # to avoid redundant work.
+        # to avoid redundant work. Skip any pair where the replacement value
+        # is unsafe (placeholder pattern or slash-list candidate value) — see
+        # ``_is_unsafe_rendering``. Such values must never be applied via
+        # ``str.replace`` because they would corrupt the output. The parser
+        # already filters them, but this is a second line of defense for
+        # any future code path that constructs issues directly.
         replacements: Dict[str, str] = {}
         for issue in audit.issues:
             if not issue.auto_fixable:
                 continue
-            if issue.found and issue.expected:
-                replacements[issue.found] = issue.expected
+            if not (issue.found and issue.expected):
+                continue
+            if _is_unsafe_rendering(issue.found) or _is_unsafe_rendering(issue.expected):
+                logger.warning(
+                    "ChapterCorrector: refusing unsafe replacement "
+                    "%r -> %r (placeholder or slash-list value).",
+                    issue.found, issue.expected,
+                )
+                continue
+            replacements[issue.found] = issue.expected
 
         # Apply replacements in order of decreasing length (longer matches first)
         # to avoid partial replacement issues (e.g. "Old Madam" before "Madam").
