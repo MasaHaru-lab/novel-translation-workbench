@@ -34,6 +34,22 @@ The translation framework has been migrated to a reusable, direction-agnostic sk
 
 ---
 
+## R5: BookMemory ContextPack Validation (2026-05-01)
+
+**Branch `work/r5-bm-contextpack-validation` at `HEAD` (to be merged).** Validated the R2–R4 BookMemory / ContextPack path end-to-end with a real chapter source sample using smoke-test mode.
+
+| Step | Result |
+|---|---|
+| Seed memory bootstrap | 7 entities, 23 titles (title+term), 2 decisions, 5 unresolved from `project_assets/` |
+| `chapter run --smoke-test --book-memory data/book_memory/book_memory.json` | Exit 0, 3/3 segments completed |
+| ContextPack activation | ✓ Enabled — 7 entities, 23 titles. Per-segment packs: 2260/2028/647 chars, all `empty=False` |
+| Full test suite | 616 passed, 0 failed, 4 warnings (Pydantic 2.x deprecation, pre-existing) |
+| Working tree | Clean. Generated outputs (data/exports/) gitignored and not committed |
+
+**Seed file:** `data/book_memory/book_memory.json` — bootstrapped from `project_assets/` via `bootstrap_from_project_assets()`, deterministic, validatable.
+
+---
+
 
 ## Current Capabilities
 

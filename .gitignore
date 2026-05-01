@@ -50,4 +50,5 @@ Thumbs.db
 outputs/
 data/exports/
 data/output/
+data/samples/
 *.md.save

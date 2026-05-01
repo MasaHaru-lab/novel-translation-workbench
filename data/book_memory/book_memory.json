@@ -1,0 +1,393 @@
+{
+  "book_title": "",
+  "book_title_zh": "",
+  "total_chapters": 0,
+  "version": "1.0.0",
+  "entities": {
+    "ding_momo": {
+      "id": "ding_momo",
+      "name_zh": "丁嬷嬷",
+      "name_en": "Ding Momo",
+      "entity_type": "character",
+      "aliases": [],
+      "alternative_renderings": [],
+      "description": "Keep “Momo” for now rather than forcing “Nanny” or “Nurse.” Final treatment should stay aligned with the broader system for household titles and forms of address.",
+      "status": "tentative",
+      "evidence": [],
+      "tags": [],
+      "first_chapter": null,
+      "last_chapter": null
+    },
+    "lady_wang": {
+      "id": "lady_wang",
+      "name_zh": "王氏",
+      "name_en": "Lady Wang",
+      "entity_type": "character",
+      "aliases": [],
+      "alternative_renderings": [],
+      "description": "Use consistently. Do not alternate casually with Madam Wang unless a deliberate system change is made.",
+      "status": "tentative",
+      "evidence": [],
+      "tags": [],
+      "first_chapter": null,
+      "last_chapter": null
+    },
+    "lady_xie": {
+      "id": "lady_xie",
+      "name_zh": "谢氏",
+      "name_en": "Lady Xie",
+      "entity_type": "character",
+      "aliases": [],
+      "alternative_renderings": [],
+      "description": "",
+      "status": "tentative",
+      "evidence": [],
+      "tags": [],
+      "first_chapter": null,
+      "last_chapter": null
+    },
+    "old_lady_qin": {
+      "id": "old_lady_qin",
+      "name_zh": "秦老太太",
+      "name_en": "Old Lady Qin",
+      "entity_type": "character",
+      "aliases": [],
+      "alternative_renderings": [],
+      "description": "Senior matriarch figure in the Qin family.",
+      "status": "tentative",
+      "evidence": [],
+      "tags": [],
+      "first_chapter": null,
+      "last_chapter": null
+    },
+    "qin_liuxi": {
+      "id": "qin_liuxi",
+      "name_zh": "秦流西",
+      "name_en": "Qin Liuxi",
+      "entity_type": "character",
+      "aliases": [],
+      "alternative_renderings": [],
+      "description": "Main character. Do not drift to \"Qi Liuxi\" or other variants.",
+      "status": "tentative",
+      "evidence": [],
+      "tags": [],
+      "first_chapter": null,
+      "last_chapter": null
+    },
+    "qin_yuanshan": {
+      "id": "qin_yuanshan",
+      "name_zh": "秦元山",
+      "name_en": "Qin Yuanshan",
+      "entity_type": "character",
+      "aliases": [],
+      "alternative_renderings": [],
+      "description": "",
+      "status": "tentative",
+      "evidence": [],
+      "tags": [],
+      "first_chapter": null,
+      "last_chapter": null
+    },
+    "red_yuan_daoist": {
+      "id": "red_yuan_daoist",
+      "name_zh": "赤元老道",
+      "name_en": "Red Yuan Daoist",
+      "entity_type": "character",
+      "aliases": [],
+      "alternative_renderings": [],
+      "description": "Provisional rendering. May need later review.",
+      "status": "tentative",
+      "evidence": [],
+      "tags": [],
+      "first_chapter": null,
+      "last_chapter": null
+    }
+  },
+  "relationships": {},
+  "titles": {
+    "ancestral_temple_rites": {
+      "id": "ancestral_temple_rites",
+      "name_zh": "太庙祭祀",
+      "name_en": "ancestral temple rites",
+      "category": "term",
+      "notes": "Prefer a stable ritual-language rendering across the book.",
+      "status": "tentative",
+      "evidence": []
+    },
+    "auspicious_creature___auspicious_symbol___blessed_symbol": {
+      "id": "auspicious_creature___auspicious_symbol___blessed_symbol",
+      "name_zh": "吉祥物",
+      "name_en": "auspicious creature / auspicious symbol / blessed symbol",
+      "category": "term",
+      "notes": "In founding-myth, dynastic, or ritual contexts, avoid modern \"mascot\" or \"lucky mascot.\" Prefer historical-register wording that preserves the ritual/symbolic weight.",
+      "status": "tentative",
+      "evidence": []
+    },
+    "bleeding_from_the_seven_orifices": {
+      "id": "bleeding_from_the_seven_orifices",
+      "name_zh": "七窍流血",
+      "name_en": "bleeding from the seven orifices",
+      "category": "term",
+      "notes": "Keep vivid but controlled. Do not embellish.",
+      "status": "tentative",
+      "evidence": []
+    },
+    "chief_minister_of_the_court_of_imperial_entertainments": {
+      "id": "chief_minister_of_the_court_of_imperial_entertainments",
+      "name_zh": "光禄寺卿",
+      "name_en": "Chief Minister of the Court of Imperial Entertainments",
+      "category": "title",
+      "notes": "Provisional. Official title system needs later review for consistency and readability.",
+      "status": "tentative",
+      "evidence": []
+    },
+    "clashing_baleful_influence": {
+      "id": "clashing_baleful_influence",
+      "name_zh": "冲煞",
+      "name_en": "clashing baleful influence",
+      "category": "term",
+      "notes": "Provisional. Needs stable handling across fate / Daoist / metaphysical language.",
+      "status": "tentative",
+      "evidence": []
+    },
+    "clear_the_family_name": {
+      "id": "clear_the_family_name",
+      "name_zh": "平反",
+      "name_en": "clear the family name",
+      "category": "term",
+      "notes": "In context, may need slight variation, but preserve the sense of formal reversal of injustice.",
+      "status": "tentative",
+      "evidence": []
+    },
+    "fate_pattern": {
+      "id": "fate_pattern",
+      "name_zh": "命格",
+      "name_en": "fate pattern",
+      "category": "term",
+      "notes": "Prefer controlled metaphysical wording; do not make it sound like modern self-help language.",
+      "status": "tentative",
+      "evidence": []
+    },
+    "from_an_official_household___from_a_family_of_officials": {
+      "id": "from_an_official_household___from_a_family_of_officials",
+      "name_zh": "官家出身",
+      "name_en": "from an official household / from a family of officials",
+      "category": "term",
+      "notes": "Means the family held civil-service/official positions. Do not elevate to \"noble lineage\" or \"aristocratic.\" The Qin family are officials, not hereditary nobles. Distinguish from noble/aristocratic status.",
+      "status": "tentative",
+      "evidence": []
+    },
+    "gave_a_formal_feminine_salute___made_a_formal_salute": {
+      "id": "gave_a_formal_feminine_salute___made_a_formal_salute",
+      "name_zh": "福礼 / 福了一礼",
+      "name_en": "gave a formal feminine salute / made a formal salute",
+      "category": "term",
+      "notes": "Historical feminine ritual gesture (hands clasped at the side), not a generic Western bow. Do not flatten to \"bowed.\" In running prose, wording may vary but must preserve the ritual-gesture sense.",
+      "status": "tentative",
+      "evidence": []
+    },
+    "great_feng": {
+      "id": "great_feng",
+      "name_zh": "大灃",
+      "name_en": "Great Feng",
+      "category": "term",
+      "notes": "Fictional dynasty name. 灃 = fēng, not hóng. Never render as \"Great Hong\" or \"Great Hong Dynasty.\" Use consistently once stabilized.",
+      "status": "tentative",
+      "evidence": []
+    },
+    "imperial_favor": {
+      "id": "imperial_favor",
+      "name_zh": "圣眷",
+      "name_en": "imperial favor",
+      "category": "term",
+      "notes": "Keep stable. Do not over-modernize.",
+      "status": "tentative",
+      "evidence": []
+    },
+    "legal_mother": {
+      "id": "legal_mother",
+      "name_zh": "嫡母",
+      "name_en": "legal mother",
+      "category": "title",
+      "notes": "Rejected alternatives: “principal mother” (too legalistic/unnatural), plain “mother” (loses hierarchy). “legal mother” preserves the legal-wife / principal-wife distinction from concubine-born structure without sounding legalistic. Do not use “principal mother”.",
+      "status": "tentative",
+      "evidence": []
+    },
+    "main_branch": {
+      "id": "main_branch",
+      "name_zh": "长房",
+      "name_en": "main branch",
+      "category": "title",
+      "notes": "Keep stable unless a better clan-system rendering is adopted consistently.",
+      "status": "tentative",
+      "evidence": []
+    },
+    "momo": {
+      "id": "momo",
+      "name_zh": "嬷嬷",
+      "name_en": "Momo",
+      "category": "title",
+      "notes": "For now, prefer retaining “Momo” in role names such as “Ding Momo” rather than forcing “Nanny” or “Nurse.” Final treatment should stay aligned with the broader system for household titles and forms of address.",
+      "status": "tentative",
+      "evidence": []
+    },
+    "noble_consort": {
+      "id": "noble_consort",
+      "name_zh": "贵妃",
+      "name_en": "Noble Consort",
+      "category": "title",
+      "notes": "Prefer stable court-rank terminology once adopted.",
+      "status": "tentative",
+      "evidence": []
+    },
+    "noble_refinement": {
+      "id": "noble_refinement",
+      "name_zh": "清贵",
+      "name_en": "noble refinement",
+      "category": "term",
+      "notes": "Provisional. Preserve status and moral-social texture; avoid flat modern phrasing.",
+      "status": "tentative",
+      "evidence": []
+    },
+    "registered_under_[someones]_name": {
+      "id": "registered_under_[someones]_name",
+      "name_zh": "记在名下",
+      "name_en": "registered under [someone's] name",
+      "category": "term",
+      "notes": "Keep the formal household / lineage sense. Do not flatten into casual family phrasing.",
+      "status": "tentative",
+      "evidence": []
+    },
+    "the_debt_of_giving_birth_and_raising_[someone]": {
+      "id": "the_debt_of_giving_birth_and_raising_[someone]",
+      "name_zh": "生养之恩",
+      "name_en": "the debt of giving birth and raising [someone]",
+      "category": "term",
+      "notes": "Context-sensitive. Preserve the layered sense of obligation and upbringing.",
+      "status": "tentative",
+      "evidence": []
+    },
+    "the_debt_of_raising_[someone]": {
+      "id": "the_debt_of_raising_[someone]",
+      "name_zh": "抚养之恩",
+      "name_en": "the debt of raising [someone]",
+      "category": "term",
+      "notes": "Related to, but not identical with, 生养之恩.",
+      "status": "tentative",
+      "evidence": []
+    },
+    "the_three_sacrificial_animals": {
+      "id": "the_three_sacrificial_animals",
+      "name_zh": "三牲",
+      "name_en": "the three sacrificial animals",
+      "category": "term",
+      "notes": "Ritual term. Do not paraphrase loosely if it becomes recurring.",
+      "status": "tentative",
+      "evidence": []
+    },
+    "whisper_in_the_emperors_ear": {
+      "id": "whisper_in_the_emperors_ear",
+      "name_zh": "吹枕头风",
+      "name_en": "whisper in the emperor's ear",
+      "category": "term",
+      "notes": "Translate by function in running prose, not literally.",
+      "status": "tentative",
+      "evidence": []
+    },
+    "xi’er": {
+      "id": "xi’er",
+      "name_zh": "丫头 / 西丫头 / 你这丫头",
+      "name_en": "Xi’er",
+      "category": "title",
+      "notes": "Canonical rendering is \"Xi’er\" — preserves the elder-to-younger familiar register while reading naturally in English dialogue. The character's given name serves as the consistent address form. Rejected alternatives: \"girl\" (too flat, fails register), \"little girl\" (infantilizing), \"Little Xi\" (over-Westernized). Do not use any of these rejected forms.",
+      "status": "tentative",
+      "evidence": []
+    },
+    "young_lady": {
+      "id": "young_lady",
+      "name_zh": "大小姐",
+      "name_en": "Young Lady",
+      "category": "title",
+      "notes": "Keep as “Young Lady” for now. Do not map this mechanically onto British aristocratic forms such as “Lady + given name.” This is a household-status term, not a British courtesy title. In running prose, wording may vary slightly if rank order or family structure needs to be made clearer.",
+      "status": "tentative",
+      "evidence": []
+    }
+  },
+  "chapter_events": {},
+  "translation_decisions": {
+    "legal_mother": {
+      "id": "legal_mother",
+      "entity_id": "legal_mother",
+      "decision_type": "rendering",
+      "old_value": "",
+      "new_value": "legal mother",
+      "rationale": "preserves the legal-wife distinction from concubine-born structure without sounding legalistic",
+      "chapter_decided": 0,
+      "status": "tentative",
+      "evidence": []
+    },
+    "xi’er": {
+      "id": "xi’er",
+      "entity_id": "xi’er",
+      "decision_type": "rendering",
+      "old_value": "",
+      "new_value": "Xi’er",
+      "rationale": "preserves the elder-to-younger familiar register while reading naturally in English dialogue; the character's given name serves as a consistent address form",
+      "chapter_decided": 0,
+      "status": "tentative",
+      "evidence": []
+    }
+  },
+  "unresolved_decisions": {
+    "clan___branch_terminology": {
+      "id": "clan___branch_terminology",
+      "question": "Clan / branch terminology",
+      "entity_id": null,
+      "options": [],
+      "recommendation": "",
+      "status": "unresolved",
+      "created_chapter": 0,
+      "evidence": []
+    },
+    "daoist_title_handling": {
+      "id": "daoist_title_handling",
+      "question": "Daoist title handling",
+      "entity_id": null,
+      "options": [],
+      "recommendation": "",
+      "status": "unresolved",
+      "created_chapter": 0,
+      "evidence": []
+    },
+    "household-status_terms": {
+      "id": "household-status_terms",
+      "question": "Household-status terms",
+      "entity_id": null,
+      "options": [],
+      "recommendation": "",
+      "status": "unresolved",
+      "created_chapter": 0,
+      "evidence": []
+    },
+    "official_title_system": {
+      "id": "official_title_system",
+      "question": "Official title system",
+      "entity_id": null,
+      "options": [],
+      "recommendation": "",
+      "status": "unresolved",
+      "created_chapter": 0,
+      "evidence": []
+    },
+    "嬷嬷_system": {
+      "id": "嬷嬷_system",
+      "question": "嬷嬷 system",
+      "entity_id": null,
+      "options": [],
+      "recommendation": "",
+      "status": "unresolved",
+      "created_chapter": 0,
+      "evidence": []
+    }
+  }
+}
