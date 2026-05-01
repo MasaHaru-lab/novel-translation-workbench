@@ -239,7 +239,7 @@ Continuing down a rejected path is the fastest way to waste session budget and h
 - 删除 / restore / commit 这类高风险动作再停下来确认
 
 ### 批次级汇报格式
-除非用户明确要求，否则只输出：
+除非用户明确要求，否则只输出精简版，详见 `docs/CLOSEOUT_REPORT_TEMPLATE.md` 的完整模板。精简版包含：
 1. 改了哪些文件
 2. 每个文件一句话摘要
 3. 跑了哪些测试 / 验证
@@ -313,12 +313,13 @@ Only stop and ask if:
 
 1. **Stop implementation work.** The batch implementation phase is complete. Do not add features, fix bugs, or make improvements not already in scope — even if they are small, obvious, or related.
 
-2. **Present a compact review summary** containing:
+2. **Present a compact review summary** using the template at `docs/CLOSEOUT_REPORT_TEMPLATE.md`. The summary must include:
    - Branch name and HEAD commit
    - List of changed files (one file per line)
    - Summary of changes (one clear sentence per file)
    - Acceptance criteria and whether each is met (✓ / ✗)
    - Test / gate evidence: test results, pre-merge gate status
+   - Working tree status (clean / dirty — any uncommitted changes)
    - Remaining risk or known limitations (one sentence max per item)
    - Whether runtime behavior changed (yes / no — if yes, what and why)
    - Whether any scope boundary was approached or touched (and how it was handled)
