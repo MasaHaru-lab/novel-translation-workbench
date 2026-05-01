@@ -222,6 +222,25 @@ Batch translation: 2 source(s)
 | Run batch chapter translation | `python -m app.cli chapter batch --source ...` |
 | Stream chapter translation to stdout | `python -m app.cli chapter stream` |
 | Start translation service | `python run_translation_service.py` |
+| Intake a new chapter sample | `./样本 <name>` |
+
+### Chapter Sample Intake
+
+Save a real chapter sample into `data/source/` for validation:
+
+```bash
+# Paste interactive (type, paste text, Ctrl+D)
+./样本 ch_asclepius_01
+
+# From clipboard / file pipe
+pbpaste | ./样本 ch_asc_02
+cat my_chapter.txt | ./样本 ch_asc_03
+
+# Auto-named (timestamp-based)
+./样本
+```
+
+After saving, the tool prints the next **dry-run validation command** — a no-model, mock-safe check that previews how the source would segment and be processed. Empty input, invalid names, and duplicate files are rejected with a clear error.
 
 > Commands above assume an activated venv. Without activation, prefix each with `venv/bin/` (e.g., `venv/bin/python -m pytest app/tests/`).
 

@@ -1,0 +1,101 @@
+#!/usr/bin/env bash
+# 样本 — 样本录入操作员入口 (Sample intake operator entrypoint)
+#
+# 将新章节样本保存到 data/source/ 并显示下一步 dry-run 校验命令.
+#
+# Usage:
+#   ./样本 <name>           # paste content, end with Ctrl+D
+#   cat file | ./样本 <name>
+#   pbpaste | ./样本 <name>
+#   ./样本                   # auto-generates name from timestamp
+
+set -u
+
+SOURCE_DIR="data/source"
+MAX_BYTES=$((1024 * 1024))
+NAME_REGEX='^[a-zA-Z0-9_-]+$'
+
+error() { echo "ERROR: $*" >&2; }
+die()   { error "$@"; exit 1; }
+
+show_help() {
+    cat <<'EOF'
+Usage:  ./样本 [名称]
+
+样本 — 样本录入操作员入口
+将新章节样本保存到 data/source/，显示下一步 dry-run 校验命令。
+
+参数:
+  名称  样本名称（仅字母、数字、连字符、下划线）。
+        省略时自动从时间戳生成。
+
+示例:
+  pbpaste | ./样本 ch_asclepius_01
+  cat chapter.txt | ./样本 ch_asc_02
+  ./样本                    自动命名，粘贴后用 Ctrl+D 确认
+EOF
+    exit 0
+}
+
+main() {
+    if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then show_help; fi
+
+    local name="${1:-}"
+    local auto_named=false
+    if [[ -z "$name" ]]; then
+        name="ch_sample_$(date +%Y%m%d_%H%M%S)"
+        auto_named=true
+    fi
+
+    # Validate name
+    [[ -n "$name" ]] || die "Sample name is required."
+    [[ "$name" =~ $NAME_REGEX ]] || die "Name may only contain letters, digits, hyphens, and underscores."
+    [[ ${#name} -le 120 ]] || die "Name is too long (maximum 120 characters)."
+    [[ "$name" != -* && "$name" != *- ]] || die "Name may not start or end with a hyphen."
+
+    mkdir -p "$SOURCE_DIR" || die "Cannot create $SOURCE_DIR"
+
+    local dest="$SOURCE_DIR/$name.txt"
+    [[ ! -f "$dest" ]] || die "Already exists: $dest"
+
+    # Hint when stdin is a terminal
+    if [[ -t 0 ]]; then
+        echo "Paste chapter text, then press Ctrl+D (or Cmd+D) to confirm."
+        echo ""
+    fi
+
+    # Read stdin through temp file (avoids bash variable byte issues)
+    local tmp="${dest}.tmp"
+    if ! cat > "$tmp"; then
+        rm -f "$tmp"
+        die "Failed to read input."
+    fi
+
+    local byte_size
+    byte_size=$(stat -f%z "$tmp" 2>/dev/null || stat -c%s "$tmp" 2>/dev/null || wc -c < "$tmp" | tr -d ' ')
+
+    if [[ "$byte_size" -eq 0 ]]; then
+        rm -f "$tmp"
+        die "No input received. Pipe or paste chapter text to stdin."
+    fi
+
+    if [[ "$byte_size" -gt "$MAX_BYTES" ]]; then
+        rm -f "$tmp"
+        die "Sample too large ($byte_size bytes, limit $MAX_BYTES)."
+    fi
+
+    mv "$tmp" "$dest" || { rm -f "$tmp"; die "Failed to write $dest"; }
+
+    echo ""
+    echo "Saved: $dest ($byte_size bytes)"
+    $auto_named && echo "Auto-named (use ./样本 <name> to set a custom name)"
+    echo ""
+    echo "Next step — dry-run validation (no model backend needed):"
+    echo "  venv/bin/python -m app.cli chapter run --dry-run --source $dest"
+    echo ""
+    echo "For full mock-safe preview (dry-run + plan display):"
+    echo "  venv/bin/python -m app.cli chapter run --dry-run --allow-mock-fallback --source $dest"
+    echo ""
+}
+
+main "$@"
