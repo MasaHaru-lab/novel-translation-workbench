@@ -58,12 +58,15 @@ Default to direct `venv/bin/python` calls for routine commands. Do NOT use `sour
 This project is governed by the following document priority:
 
 1. `SKILL.md` — highest-level translation standard, scope, style rules, consistency rules, and project-memory behavior
-2. `WORKFLOW.md` — default execution workflow for this project
-3. local prompt wording, adapter logic, and implementation details
+2. `WORKFLOW.md` — default execution workflow for this project (Steps 0–4, prompt roles, loop limits)
+3. local prompt wording (`prompts/prompt_a.md`, `prompts/prompt_b.md`), adapter logic, and implementation details
+4. ad hoc instructions — passage-specific adjustments; lowest priority
 
 If these sources ever conflict, follow:
 
 `SKILL.md` > `WORKFLOW.md` > local implementation
+
+For the full routing decision flow (how skill-level, workflow-level, CLAUDE.md-level, and ad hoc guidance relate), see `WORKFLOW.md` → "Routing Architecture".
 
 ## Default Translation Protocol
 

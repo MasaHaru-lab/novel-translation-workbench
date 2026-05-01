@@ -12,6 +12,55 @@ If there is ever a conflict, follow:
 
 `SKILL.md` > `WORKFLOW.md`
 
+## Routing Architecture
+
+This project uses multiple guidance layers. This section clarifies when each applies, so future agents can distinguish workflow-level guidance, skill-level guidance, CLAUDE.md rules, and ad hoc prompts.
+
+### Layer map
+
+| Layer | Document | Responsibility |
+|-------|----------|----------------|
+| Skill routing | `CLAUDE.md` routing table | Maps user intent to the correct skill or tool |
+| Framework standard | `SKILL.md` | Quality bar, scope, style rules, project-memory expectations |
+| Execution protocol | `WORKFLOW.md` (this document) | Step order, prompt roles, loop limits, override modes |
+| Role prompts | `prompts/prompt_a.md`, `prompts/prompt_b.md` | Draft (A) and review (B) instructions per passage |
+| Book assets | `project_assets/*` | Book-level name, term, and style specifics |
+| Ad hoc instruction | User's current message | Passage-level adjustments not yet in permanent rules |
+
+### Decision flow for "translate"
+
+1. CLAUDE.md routing table → `fishhead-literary-translator` skill
+2. Skill's SKILL.md → framework standards and scope
+3. This WORKFLOW.md → execution protocol (Steps 0–4, A→B→revise→output)
+4. Book assets (`project_assets/`) → context for Step 0
+5. Role prompts (`prompts/prompt_a.md`, `prompts/prompt_b.md`) → draft and review
+6. User's ad hoc instructions → passage adjustments within the workflow
+
+### Priority when layers conflict
+
+Two priority rules apply. The correct one depends on what kind of question is being decided.
+
+**General governance priority** — for structural questions (who defines the workflow, quality bar, execution protocol, loop limits):
+
+**SKILL.md > WORKFLOW.md > book assets > role prompts > ad hoc instructions**
+
+**Explicit book-specific memory priority** — for concrete facts about this book (character names, titles, forms of address, glossary entries, established style notes):
+
+**`project_assets/*` entries are authoritative for this book's established facts.** A general rule in SKILL.md or WORKFLOW.md does not override an explicit book-asset entry. Treat book assets as ground truth for this book's names, titles, relationships, glossary terms, and style memory.
+
+If a general style rule (SKILL.md) and a book-specific entry (project_assets/*) disagree about a concrete fact — for example, a character name, a title rendering, or a glossary term — the book asset wins for that book. The general rule still applies to everything the book assets do not address.
+
+Ad hoc instructions are legitimate for one passage but do not permanently override any layer above. Repeated corrections should be hardened into permanent rules (style notes or prompt edits) rather than applied as one-off patches.
+
+### What each layer is not
+
+| Layer | Is not responsible for |
+|-------|----------------------|
+| CLAUDE.md rules | Translation standards, workflow steps, or style enforcement |
+| SKILL.md | Execution order, loop limits, or prompt role boundaries |
+| WORKFLOW.md | Direction-specific style rules, quality bar, or prompt wording |
+| Ad hoc instructions | Permanent rule changes; they apply only to the current passage |
+
 ## Purpose
 
 This project’s default behavior is not simple one-pass translation.
