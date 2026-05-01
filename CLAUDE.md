@@ -303,6 +303,59 @@ Only stop and ask if:
 - merge to main/master is about to happen
 - a genuine product/architecture decision cannot be resolved from existing direction
 
+### Review Gate
+
+**What it is:** A mandatory review step between batch completion and merge. The gate ensures scope discipline, acceptance verification, and explicit approval before any merge to `main`. It prevents three specific failure modes: scope expansion during review, implementation disguised as review, and merging without approval.
+
+**When it fires:** After a batch's implementation work is complete and before any merge or next-batch work begins. If the CLAUDE.md "Batch approval rule" pre-approves routine in-scope actions during implementation, this gate is the point where the operator explicitly confirms the batch is done and approved.
+
+**Gate steps:**
+
+1. **Stop implementation work.** The batch implementation phase is complete. Do not add features, fix bugs, or make improvements not already in scope — even if they are small, obvious, or related.
+
+2. **Present a compact review summary** containing:
+   - Branch name and HEAD commit
+   - List of changed files (one file per line)
+   - Summary of changes (one clear sentence per file)
+   - Acceptance criteria and whether each is met (✓ / ✗)
+   - Test / gate evidence: test results, pre-merge gate status
+   - Remaining risk or known limitations (one sentence max per item)
+   - Whether runtime behavior changed (yes / no — if yes, what and why)
+   - Whether any scope boundary was approached or touched (and how it was handled)
+
+3. **Wait for explicit approval.** The summary must be presented to the operator and explicitly approved before any of the following may proceed:
+   - Squash-merge to `main`
+   - Starting the next batch
+   - Continuing implementation on the same batch
+
+   While waiting:
+   - Do not expand scope based on observations from the completed work
+   - Do not start implementation on issues noticed during review
+   - Do not merge without explicit approval
+
+4. **If approval is denied,** identify the specific concern from the rejection. Fix only what was raised. Do not use a rejection as permission for broader changes, cleanup, or refactoring. After fixing, re-present the review summary.
+
+5. **After approval,** proceed with the merge steps defined in "Merging back to main" below.
+
+**What the review gate is NOT:**
+- Not a license to expand scope based on what the completed code looks like
+- Not a license to start feature work or fix observed issues outside the batch boundary
+- Not a license to clean up or refactor code the batch did not touch
+- Not a substitute for the Pre-merge Gate (mechanical), the Prompt Change Gate, or the Canonization Gate
+
+If something outside the batch scope needs attention during review, record it as a finding for a separate batch — do not act on it in the same batch.
+
+**Relationship to other gates in this project:**
+
+| Gate | Location | Controls |
+|------|----------|----------|
+| Review Gate (this section) | `CLAUDE.md` | Batch completion and merge approval |
+| Pre-merge Gate | `CLAUDE.md` + `scripts/checks/pre_merge_gate.sh` | Working-tree cleanliness, generated-output tracking |
+| Prompt Change Gate | `docs/QUALITY_LOOP.md` | Changes to `prompts/prompt_a.md` / `prompts/prompt_b.md` |
+| Canonization Gate | `docs/QUALITY_LOOP.md` + `app/chapter/canonization.py` | New `project_assets/` entries |
+
+The gates are independent — passing one does not satisfy another.
+
 ## gstack (REQUIRED — global install)
 
 **Before doing ANY work, verify gstack is installed:**
@@ -351,6 +404,10 @@ unattended without putting `main` at risk.
 
 Before merging `work/<topic>` into `main`:
 
+0. **Pass the Review Gate (see above).** The Review Gate is a separate
+   human-approval step. It must pass and receive explicit approval
+   before any mechanical merge steps begin. Do not skip, merge without
+   approval, or treat the mechanical steps below as a substitute.
 1. Run the **pre-merge gate**: `./scripts/checks/pre_merge_gate.sh`
 2. Gate must exit 0 (PASS). On FAIL, do not merge, do not "work
    around", do not bypass — fix the underlying issue first.
