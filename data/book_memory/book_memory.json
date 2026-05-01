@@ -88,14 +88,14 @@
       "first_chapter": null,
       "last_chapter": null
     },
-    "red_yuan_daoist": {
-      "id": "red_yuan_daoist",
+    "daoist_red_yuan": {
+      "id": "daoist_red_yuan",
       "name_zh": "赤元老道",
-      "name_en": "Red Yuan Daoist",
+      "name_en": "Daoist Red Yuan",
       "entity_type": "character",
       "aliases": [],
       "alternative_renderings": [],
-      "description": "Provisional rendering. May need later review.",
+      "description": "From 赤=red, 元=yuan/origin-element, 老道=venerable Daoist. Prefer \"Daoist Red Yuan\" order over \"Red Yuan Daoist.\"",
       "status": "tentative",
       "evidence": [],
       "tags": [],
