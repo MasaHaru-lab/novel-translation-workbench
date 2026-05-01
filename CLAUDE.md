@@ -413,7 +413,7 @@ Before merging `work/<topic>` into `main`:
 2. Gate must exit 0 (PASS). On FAIL, do not merge, do not "work
    around", do not bypass — fix the underlying issue first.
 3. Run the test suite (gate intentionally does not):
-   `source venv/bin/activate && python -m pytest app/tests/`
+   `venv/bin/python -m pytest app/tests/`
 4. Merge **squash-first** into `main`, so `main` keeps a clean
    one-commit-per-batch history. The full WIP history stays on the
    work branch (which can be deleted or kept for reference).
