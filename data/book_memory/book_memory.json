@@ -101,6 +101,48 @@
       "tags": [],
       "first_chapter": null,
       "last_chapter": null
+    },
+    "lady_gu": {
+      "id": "lady_gu",
+      "name_zh": "顾氏",
+      "name_en": "Lady Gu",
+      "entity_type": "character",
+      "aliases": ["三弟妹", "三婶"],
+      "alternative_renderings": [],
+      "description": "Third branch wife of the Qin family. Carrying twins, labor induced by the shock of the raid.",
+      "status": "tentative",
+      "evidence": [],
+      "tags": [],
+      "first_chapter": 1,
+      "last_chapter": 1
+    },
+    "qihuang": {
+      "id": "qihuang",
+      "name_zh": "岐黄",
+      "name_en": "Qihuang",
+      "entity_type": "character",
+      "aliases": [],
+      "alternative_renderings": [],
+      "description": "Qin Liuxi's personal maid / attendant.",
+      "status": "tentative",
+      "evidence": [],
+      "tags": [],
+      "first_chapter": 1,
+      "last_chapter": 1
+    },
+    "aunt_li": {
+      "id": "aunt_li",
+      "name_zh": "李婶",
+      "name_en": "Aunt Li",
+      "entity_type": "character",
+      "aliases": [],
+      "alternative_renderings": [],
+      "description": "Senior household servant / lead maid attached to major women such as Lady Wang, Lady Gu, or Old Lady Qin. Not a blood-relative aunt — in this book the form refers to a senior household servant role.",
+      "status": "tentative",
+      "evidence": [],
+      "tags": [],
+      "first_chapter": 1,
+      "last_chapter": 1
     }
   },
   "relationships": {},
