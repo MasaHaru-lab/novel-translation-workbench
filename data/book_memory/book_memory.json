@@ -143,6 +143,62 @@
       "tags": [],
       "first_chapter": 1,
       "last_chapter": 1
+    },
+    "doctor_zhang": {
+      "id": "doctor_zhang",
+      "name_zh": "张大夫 / 张老大夫",
+      "name_en": "Doctor Zhang",
+      "entity_type": "character",
+      "aliases": [],
+      "alternative_renderings": [],
+      "description": "Senior physician from Zhang Family Medical Hall in Annan Prefecture. Canonical rendering is 'Doctor Zhang' — not 'Dr. Zhang', not 'Zhang Dafu'. Keep stable.",
+      "status": "tentative",
+      "evidence": [],
+      "tags": [],
+      "first_chapter": 1131,
+      "last_chapter": 1131
+    },
+    "zhang_zhuoliang": {
+      "id": "zhang_zhuoliang",
+      "name_zh": "张卓良",
+      "name_en": "Zhang Zhuoliang",
+      "entity_type": "character",
+      "aliases": [],
+      "alternative_renderings": [],
+      "description": "Doctor Zhang's grandson. Young physician, protective of family reputation.",
+      "status": "tentative",
+      "evidence": [],
+      "tags": [],
+      "first_chapter": 1131,
+      "last_chapter": 1131
+    },
+    "doctor_gao": {
+      "id": "doctor_gao",
+      "name_zh": "高大夫",
+      "name_en": "Doctor Gao",
+      "entity_type": "character",
+      "aliases": [],
+      "alternative_renderings": [],
+      "description": "Supplementary physician at Li Family Village epidemic. Skeptical of Qin Liuxi.",
+      "status": "tentative",
+      "evidence": [],
+      "tags": [],
+      "first_chapter": 1131,
+      "last_chapter": 1131
+    },
+    "doctor_yang": {
+      "id": "doctor_yang",
+      "name_zh": "杨大夫",
+      "name_en": "Doctor Yang",
+      "entity_type": "character",
+      "aliases": [],
+      "alternative_renderings": [],
+      "description": "Supplementary physician at Li Family Village epidemic. Sarcastic toward Qin Liuxi.",
+      "status": "tentative",
+      "evidence": [],
+      "tags": [],
+      "first_chapter": 1131,
+      "last_chapter": 1131
     }
   },
   "relationships": {},
@@ -351,6 +407,24 @@
       "name_en": "Young Lady",
       "category": "title",
       "notes": "Keep as “Young Lady” for now. Do not map this mechanically onto British aristocratic forms such as “Lady + given name.” This is a household-status term, not a British courtesy title. In running prose, wording may vary slightly if rank order or family structure needs to be made clearer.",
+      "status": "tentative",
+      "evidence": []
+    },
+    "qingping_temple": {
+      "id": "qingping_temple",
+      "name_zh": "清平观",
+      "name_en": "Qingping Temple",
+      "category": "title",
+      "notes": "Canonical rendering is 'Qingping Temple' — not 'Qingping Abbey', 'Monastery', or 'Shrine'. Qin Liuxi's temple. Keep stable across all chapters.",
+      "status": "tentative",
+      "evidence": []
+    },
+    "doctor_title": {
+      "id": "doctor_title",
+      "name_zh": "大夫",
+      "name_en": "Doctor [Surname]",
+      "category": "title",
+      "notes": "Canonical rendering is 'Doctor [Surname]' for physician characters (Doctor Zhang, Doctor Gao, Doctor Yang). Not 'Dr.' abbreviation and not 'Dafu' transliteration. Working choice pending cross-chapter validation.",
       "status": "tentative",
       "evidence": []
     }

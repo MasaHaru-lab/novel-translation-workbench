@@ -37,9 +37,13 @@ Check for:
 - prose that becomes smoother at the cost of scene logic
 - translation-shaped or stiff English where a controlled fix is clearly needed
 - generic Westernized phrasing for names/addresses (e.g., "Little Xi" for "小西")
+- same-character title/address drift within the chapter (e.g., Doctor Zhang → Zhang Dafu → Dr. Zhang)
+- same-location name drift within the chapter (e.g., Qingping Temple → Qingping Abbey)
 - over-compression that loses nuance or texture
 - loss of hierarchy or address function
 - unnecessary shortening that flattens scene pressure
+- technical exposition that reads like a textbook list or clinical enumeration rather than fiction prose
+- Chinese game-rank or internet-culture idioms translated literally instead of by function (e.g., 青铜 as "bronze" when meaning "novice/amateur")
 
 ## What NOT to reward
 

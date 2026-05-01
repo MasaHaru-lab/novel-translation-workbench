@@ -121,6 +121,25 @@ Prefer:
 
 If a line is accurate but reads like translation, rewrite it into more natural English without changing meaning, force, or scene logic.
 
+## Technical exposition in fiction (special)
+
+When the source contains medical, Daoist, formula, or other specialized explanations:
+
+- Identify the scene purpose of the exposition. Is a character diagnosing? Thinking through a problem? Explaining to someone else? Match the prose to that purpose.
+- Do not enumerate clinical or technical details as a flat list in narrative voice. Flat symptom lists, formula breakdowns, and procedural enumerations stop the fiction and sound like textbook prose.
+- Convert technical information into scene action: a physician's observations during examination, a character's focused reasoning, dialogue where one character explains to another. Shorten sentence rhythm for intensity; embed details in physical action.
+- Preserve the information fidelity — do not omit or oversimplify the technical content. Reshape the delivery so it stays in the fictional register.
+- When the source runs several lines of dense formula reasoning or diagnosis, break it into scene beats: a line of thought, a physical action, a character reaction, then more reasoning.
+
+## Chinese internet / game-rank idioms
+
+When the source uses Chinese gaming, internet-slang, or modern competitive-culture metaphors (e.g. 青铜/王者 as skill-level contrast):
+
+- Identify the real-world comparative function: amateur vs expert, novice vs ace, low-ranked vs top-tier.
+- Translate that function, not the surface literal meaning ("bronze", "king").
+- Use natural English equivalents that preserve the scene's point. If a subordinate has been dismissive and is then proved wrong, the focus is the reversal (underestimation → correction), not the gaming metaphor.
+- If the gaming term would not plausibly exist in the character's world, do not import it into English. Translate the implied comparison only.
+
 ## Style requirements
 
 - Write smooth, controlled English prose.
