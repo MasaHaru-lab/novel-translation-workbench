@@ -2,6 +2,36 @@
 
 This project provides a translation workflow for Chinese novel chapters into English.
 
+## Skill Routing (READ FIRST)
+
+This user has many skills installed. They often do NOT remember the skill names. When the user's request matches a row in this table, **invoke the skill via the Skill tool immediately** — do not ask "should I use X?", do not silently re-implement the skill's logic, do not ignore it. If multiple match, pick the most specific.
+
+| User says (zh / en) | Auto-invoke |
+|---|---|
+| "minimal fix" / "narrow change" / "scoped" / "conservative" / "只改 X" / "最小改动" / "窄范围" / "先不要改" / "先看一下" / "inspect first" — and they're about to start an edit task | `scope` (BEFORE any Edit/Write) |
+| "translate" / "翻译" / "翻一下" / "把这段译成英文" — for any zh→en literary prose | `fishhead-literary-translator` |
+| "humanize" / "去 AI 味" / "改得不像 AI" / "更自然" — for editing existing text | `humanizer-zh` |
+| "commit this step" / "提交这一步" / "中途 commit" / "verify and commit" — mid-batch sub-step landing | `commit-batch` |
+| "close out the batch" / "收尾" / "wrap up this batch" / "finish batch" — final close-out | `batch-close` |
+| "save progress" / "save state" / "save my work" / "保存进度" — capture full session state | `context-save` |
+| "resume" / "where was I" / "pick up where I left off" / "继续上次的" — restore prior state | `context-restore` |
+| "write handoff" / "save resume note" / "留个续接点" / context feels like it's filling up on a long batch | `handoff` (proactive) |
+| "debug this" / "why is this broken" / "fix this bug" / "为什么坏了" / "排查" — error or unexpected behavior | `investigate` |
+| "review my plan" / "engineering review" / "lock in the plan" / "评审计划" | `plan-eng-review` |
+| "second opinion" / "ask codex" / "challenge this" / "找 codex 看看" | `codex` |
+| "ship" / "deploy" / "create a PR" / "push to main" — code is ready to land | `ship` |
+| "search the web" / "搜一下" / "查一下最新的" — needs real-time info | `skywork-search` |
+| ".pdf" / ".xlsx" / ".docx" / ".pptx" filename mentioned, or "make a PDF / spreadsheet / doc / deck" | matching `pdf` / `xlsx` / `docx` / `pptx` |
+| "make this a PDF" / "export to PDF" — markdown → publication PDF | `make-pdf` |
+| "open browser" / "take a screenshot" / "test the site" / "打开浏览器" / "截图" | `browse` |
+
+Rules:
+- The trigger keywords above are EXAMPLES of intent, not exact strings — match on meaning, including Chinese variants the user actually uses.
+- Do NOT enumerate alternatives back to the user ("I can use scope, batch-close, …"). Just invoke the right one.
+- Skills the user explicitly types as `/<name>` always win over auto-routing.
+- If unsure between two skills, pick the narrower / more specific one and invoke it. The skill itself will guide the next step.
+- This routing table is project-specific — it lists skills relevant to this translation workbench. Other skills exist but should fire on their own description triggers.
+
 ## Local development
 
 Working directory must be `~/novel-translation-workbench` before any file operation. Do NOT operate from `/Users/ambrosiazheng` or any parent directory. If `pwd` is wrong, stop and ask — do not create files (including `CLAUDE.md`) at the wrong level.
