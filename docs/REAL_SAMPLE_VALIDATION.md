@@ -159,7 +159,7 @@ chapter-level CLI (`chapter run`, not the legacy `run`).
 **Basic run (no book memory):**
 
 ```bash
-MODEL_BACKEND_URL=http://192.168.68.51:8001/generate \
+MODEL_BACKEND_URL=http://$(ssh -G Fishhead-Core | grep '^hostname ' | awk '{print $2}'):8001/generate \
   venv/bin/python -m app.cli chapter run \
   --source data/source/<name>.txt \
   --output data/exports/<name>_en.md
@@ -168,7 +168,7 @@ MODEL_BACKEND_URL=http://192.168.68.51:8001/generate \
 **Run with book memory (ongoing work):**
 
 ```bash
-MODEL_BACKEND_URL=http://192.168.68.51:8001/generate \
+MODEL_BACKEND_URL=http://$(ssh -G Fishhead-Core | grep '^hostname ' | awk '{print $2}'):8001/generate \
   venv/bin/python -m app.cli chapter run \
   --source data/source/<name>.txt \
   --output data/exports/<name>_en.md \
@@ -178,7 +178,7 @@ MODEL_BACKEND_URL=http://192.168.68.51:8001/generate \
 **Run with smoke-test flag (validation-only runs):**
 
 ```bash
-MODEL_BACKEND_URL=http://192.168.68.51:8001/generate \
+MODEL_BACKEND_URL=http://$(ssh -G Fishhead-Core | grep '^hostname ' | awk '{print $2}'):8001/generate \
   venv/bin/python -m app.cli chapter run --smoke-test \
   --source data/source/<name>.txt \
   --output data/exports/<name>_en.md \

@@ -15,11 +15,35 @@ The draft translation endpoint now integrates with a local model backend via HTT
 
 ## Environment Variables
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `MODEL_BACKEND_URL` | HTTP endpoint of the translation model backend (e.g., Ollama `/api/generate`) | (required) |
-| `MODEL_TIMEOUT_SECONDS` | Timeout for backend requests (seconds) | `30` |
-| `TRANSLATION_SERVICE_URL` | Base URL for the translation service (used by HTTP client) | `http://localhost:8000` |
+See `.env.example` for the canonical, up-to-date reference. This table summarizes the backend-relevant subset:
+
+| Variable | Description | Default | Used by |
+|----------|-------------|---------|---------|
+| `MODEL_BACKEND_URL` | HTTP endpoint of the translation model backend (e.g., Ollama `/api/generate`) | (required) | `app/config.py`, `backend_adapter.py` |
+| `MODEL_TIMEOUT_SECONDS` | Timeout for backend requests (seconds) | `30` | `app/config.py`, `backend_adapter.py` |
+| `DEEPSEEK_BASE_URL` | DeepSeek API base URL | `https://api.deepseek.com/v1` | `model_profiles.py` (deepseek profiles) |
+| `DEEPSEEK_API_KEY` | DeepSeek API key (secret — see below) | (required for deepseek) | `model_profiles.py`, `deepseek_adapter.py` |
+| `FISHHEAD_BASE_URL` | Local Fishhead/Ollama backend URL | (optional) | `model_profiles.py` (local-qwen profile) |
+| `TRANSLATION_SERVICE_URL` | Base URL for the translation service (used by HTTP client) | `http://localhost:8000` | `app/config.py` |
+
+### Secrets
+
+`DEEPSEEK_API_KEY` is the only credential in this project.
+
+- **Never commit** `.env` or `.env.local` — both are gitignored.
+- **Never log, print, or display** the key value in output, logs, or error messages.
+- The codebase references secrets **by env var name only** — `resolve_api_key()` reads from `os.environ` and never stores the value in logs, manifests, or error details.
+- Set your key in `.env.local` (autoloaded by the CLI/service, gitignored) rather than via `export` to avoid leaving it in shell history.
+
+### Fishhead host resolution
+
+Do not hard-code Fishhead IP addresses in env files or documentation. Resolve the active host with:
+
+```bash
+ssh -G Fishhead-Core | grep -E '^hostname '
+```
+
+This avoids stale IP assumptions when the Fishhead address changes.
 
 ## Starting the Translation Service
 
@@ -28,7 +52,7 @@ The draft translation endpoint now integrates with a local model backend via HTT
    pip install -r requirements.txt
    ```
 
-2. Set the model backend URL:
+2. Set the model backend URL (or use `.env.local` — see `.env.example`):
    ```bash
    export MODEL_BACKEND_URL=http://localhost:11434/api/generate
    ```

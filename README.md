@@ -280,13 +280,18 @@ If the service is unavailable, the CLI will fall back to local mock translation 
 
 ### Configuration
 
-The service reads the following environment variables:
+See `.env.example` for the complete, canonical reference. Key environment variables:
 
-- `MODEL_BACKEND_URL` – HTTP endpoint of the translation model backend (required for real translation)
+- `MODEL_BACKEND_URL` – HTTP endpoint of the translation model backend (required for real translation when no `--model-profile` is set)
+- `DEEPSEEK_API_KEY` – DeepSeek API key (**secret** — never log or commit; set in `.env.local`)
 - `MODEL_TIMEOUT_SECONDS` – timeout for backend requests (default: 30)
 - `TRANSLATION_SERVICE_URL` – base URL for the translation service (used by the client)
 
-If `MODEL_BACKEND_URL` is not set, the service will return a 503 error when draft translation is requested.
+If no backend URL is configured, the service returns a 503 error when draft translation is requested.
+
+**Secret handling:** The only credential in this project is `DEEPSEEK_API_KEY`. It is referenced by env var name only in code — never logged, stored, or committed. Set it in `.env.local` (autoloaded, gitignored) rather than via `export` to keep it out of shell history.
+
+**Fishhead backend:** If using Fishhead as a local translation backend, resolve the active host with `ssh -G Fishhead-Core | grep hostname` rather than hard-coding an IP address.
 
 ### Backend Contract
 

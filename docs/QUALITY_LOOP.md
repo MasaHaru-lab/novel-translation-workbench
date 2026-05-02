@@ -38,8 +38,9 @@ It touches only:
 ### Backend
 
 A working translation backend reachable at `MODEL_BACKEND_URL`.
-Currently: Fishhead wrapper at `http://192.168.68.51:8001/generate`,
-model `qwen2.5:14b` via Ollama.
+Currently: Fishhead wrapper (resolve host with `ssh -G Fishhead-Core | grep hostname`,
+port `8001`), model `qwen2.5:14b` via Ollama. Do not hard-code the Fishhead IP address —
+it is managed via SSH config and may change.
 
 If the backend is unreachable, no quality-loop work runs.
 
@@ -60,8 +61,8 @@ Do not commit generated outputs.
 ### Run
 
 ```bash
-MODEL_BACKEND_URL=http://192.168.68.51:8001/generate \
-  venv/bin/python -m app.cli chapter run \
+export MODEL_BACKEND_URL=http://$(ssh -G Fishhead-Core | grep '^hostname ' | awk '{print $2}'):8001/generate
+venv/bin/python -m app.cli chapter run \
   --source data/source/one_chapter_quality_source.txt \
   --output data/outputs/quality_run.md \
   --confirm

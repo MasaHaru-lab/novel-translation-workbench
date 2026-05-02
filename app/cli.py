@@ -958,6 +958,16 @@ def main():
     chapter_batch_parser.add_argument('--no-clobber', action='store_true',
                                       help='Skip chapters whose output file already exists.')
 
+    # ── workspace-check command ────────────────────────────────────────
+    check_parser = subparsers.add_parser(
+        'check',
+        help='Report workspace hygiene: classify dirty/untracked/generated files by category.',
+    )
+    check_parser.add_argument(
+        '--project-root', type=Path, default=None,
+        help='Project root directory (default: auto-detect from CWD).',
+    )
+
     args = parser.parse_args()
 
     if args.command == 'run':
@@ -1016,6 +1026,10 @@ def main():
                 smoke_test=args.smoke_test,
                 book_memory_path=args.book_memory,
             )
+    elif args.command == 'check':
+        from app.hygiene.reporter import scan_workspace
+        report = scan_workspace(project_root=args.project_root)
+        report.print_report()
     else:
         parser.print_help()
 
