@@ -246,7 +246,7 @@ A minimal FastAPI service for draft translation has been added.
 
 ## Reality Check: Fishhead Wrapper Unreachable (2026-04-25)
 
-- **Attempt**: Reality Check discovery only — `chapter run` on real content (`one_chapter.txt`)
+- **Attempt**: Reality Check discovery only — `chapter run` on real content (`data/source/one_chapter_quality_source.txt`)
 - **Blocker**: Fishhead wrapper (resolve with `ssh -G Fishhead-Core | grep hostname`) is unreachable (ARP incomplete, all probes timed out)
 - **Current status**: The wrapper was verified functional on 2026-04-20 but is unreachable from this Mac as of 2026-04-25. No other backend is configured (`MODEL_BACKEND_URL` not set, Ollama available but no models loaded).
 - **No code changes made** during this discovery.
@@ -254,7 +254,7 @@ A minimal FastAPI service for draft translation has been added.
   ```bash
   MODEL_BACKEND_URL=http://$(ssh -G Fishhead-Core | grep '^hostname ' | awk '{print $2}'):8001/generate \
     venv/bin/python -m app.cli chapter run \
-    --source one_chapter.txt \
+    --source data/source/one_chapter_quality_source.txt \
     --output data/exports/reality_chapter.md \
     --dry-run --confirm
   ```
