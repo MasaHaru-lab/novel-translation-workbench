@@ -996,6 +996,23 @@ def main():
     chapter_batch_parser.add_argument('--no-clobber', action='store_true',
                                       help='Skip chapters whose output file already exists.')
 
+    # ── chapter inspect command ────────────────────────────────────────
+    chapter_inspect_parser = chapter_sub.add_parser(
+        'inspect',
+        help='Phase C Stage 5 validation helper: summarize artifact paths, '
+             'manifest quality, and next-step guidance for a completed chapter run.',
+    )
+    chapter_inspect_parser.add_argument(
+        '--source', type=Path, required=True,
+        help='Path to the chapter source text file. Artifact paths are derived '
+             'from the source filename stem.',
+    )
+    chapter_inspect_parser.add_argument(
+        '--output', type=Path, default=None,
+        help='Path to the output file (default: derived from --source). '
+             'Use this when a non-standard output path was used for the run.',
+    )
+
     # ── workspace-check command ────────────────────────────────────────
     check_parser = subparsers.add_parser(
         'check',
@@ -1064,6 +1081,18 @@ def main():
                 smoke_test=args.smoke_test,
                 book_memory_path=args.book_memory,
             )
+        elif args.chapter_command == 'inspect':
+            from app.chapter.inspector import (
+                find_artifacts,
+                format_inspection_guide,
+                load_manifest,
+            )
+
+            source_stem = args.source.stem
+            artifacts = find_artifacts(source_stem)
+            summary = load_manifest(artifacts.manifest)
+            output = format_inspection_guide(artifacts, summary)
+            print(output)
     elif args.command == 'check':
         from app.hygiene.reporter import scan_workspace
         report = scan_workspace(project_root=args.project_root)
