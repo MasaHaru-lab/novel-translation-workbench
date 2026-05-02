@@ -11,7 +11,9 @@
 
 set -u
 
-SOURCE_DIR="data/source"
+# Resolve repo root from script location, not CWD (Finder/launchd sets CWD=$HOME)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SOURCE_DIR="$SCRIPT_DIR/data/source"
 MAX_BYTES=$((1024 * 1024))
 NAME_REGEX='^[a-zA-Z0-9_-]+$'
 
