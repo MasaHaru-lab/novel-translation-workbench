@@ -103,7 +103,7 @@ Before any tool call, in this order:
    → NO: go to step 3.
 
 3. Does a known failure pattern or quality-loop procedure match?
-   → Check docs/FAILURE_PATTERN_INDEX.md, then docs/QUALITY_LOOP.md.
+   → Check docs/QUALITY_LOOP.md, then docs/FAILURE_PATTERN_INDEX.md for known-pattern context.
    → YES: follow that protocol. Done.
    → NO: go to step 4.
 
