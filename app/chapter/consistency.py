@@ -252,6 +252,13 @@ _NOTES_LINE_RE = re.compile(r"- Notes\s*:\s*(.+)", re.IGNORECASE)
 # that path also refuses to apply it (see safety check there).
 _UNSAFE_RENDERING_RE = re.compile(r"[\[\]]|\s/\s")
 
+# Matches a variant candidate that is a single ASCII-lowercase word (e.g.
+# "old", "venerable", "mother", "girl"). Such strings extracted from Notes
+# lines are almost always common English words mentioned incidentally or as
+# rejected alternatives — never legitimate substitution targets. Multi-word
+# or capitalized variants pass this check freely.
+_SINGLE_LOWERCASE_WORD_RE = re.compile(r"^[a-z]+$")
+
 
 def _is_unsafe_rendering(value: str) -> bool:
     """True if ``value`` is a pattern/list rather than a literal rendering.
@@ -300,6 +307,14 @@ def _extract_variants_from_notes(notes_text: str) -> List[str]:
         if not candidate or len(candidate) <= 1:
             continue
         if _is_unsafe_rendering(candidate):
+            continue
+        # Single-word all-lowercase strings extracted from Notes are never
+        # legitimate substitution targets — they are common English words
+        # mentioned incidentally (e.g. "old" / "venerable" in Chi Yuan
+        # Daoist's notes) or as rejected alternatives (e.g. "mother" /
+        # "girl" in title notes). Multi-word and capitalized variants do
+        # not match this filter and pass through normally.
+        if _SINGLE_LOWERCASE_WORD_RE.match(candidate):
             continue
         variants.append(candidate)
     return variants

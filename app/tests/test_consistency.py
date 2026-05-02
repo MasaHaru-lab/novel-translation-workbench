@@ -97,6 +97,66 @@ def test_build_consistency_reference():
     assert "Qin Liuxi" in names
 
 
+def test_extract_variants_from_notes_filters_single_lowercase_word():
+    """A single-word all-lowercase variant extracted from Notes must be
+    filtered at extraction time — it is a common English word mentioned
+    incidentally or as a rejected alternative, not a deliberate substitution
+    target.
+
+    Regression guard: "mother" from 嫡母's rejected alternatives, and "old"
+    / "venerable" from Chi Yuan Daoist's incidental notes would previously
+    produce auto-fixable substitution targets that corrupt real output.
+    """
+    from app.chapter.consistency import _extract_variants_from_notes
+
+    # Rejected alternatives containing single-word lowercase words
+    variants = _extract_variants_from_notes(
+        'Rejected alternatives: "principal mother" (too legalistic), '
+        'plain "mother" (loses hierarchy).'
+    )
+    assert "mother" not in variants, (
+        "Single-word lowercase 'mother' must be filtered from rejected alternatives."
+    )
+    # Multi-word variant from rejected alternatives must still pass through
+    assert "principal mother" in variants, (
+        "Multi-word 'principal mother' must NOT be filtered."
+    )
+
+    # Incidental common English words from character notes
+    variants = _extract_variants_from_notes(
+        'Any "old"/"venerable" nuance should be handled through contextual register.'
+    )
+    assert "old" not in variants, (
+        "Single-word lowercase 'old' must be filtered from incidental notes."
+    )
+    assert "venerable" not in variants, (
+        "Single-word lowercase 'venerable' must be filtered from incidental notes."
+    )
+
+    # Capitalized single-word (plausible name variant) must pass through
+    variants = _extract_variants_from_notes(
+        'Do not drift to "Qi Liuxi" or other variants.'
+    )
+    assert "Qi Liuxi" in variants, (
+        "Capitalized multi-word 'Qi Liuxi' must NOT be filtered."
+    )
+
+    # Multi-word variant (even with first-word lowercase) must still pass through
+    variants = _extract_variants_from_notes(
+        'Do not rename to "Old Daoist Chi Yuan" or similar.'
+    )
+    assert "Old Daoist Chi Yuan" in variants, (
+        "Multi-word capitalized variant must NOT be filtered."
+    )
+
+
+def test_extract_variants_from_notes_empty():
+    """Empty or None-like notes text returns an empty list."""
+    from app.chapter.consistency import _extract_variants_from_notes
+    assert _extract_variants_from_notes("") == []
+    assert _extract_variants_from_notes("No quoted text here.") == []
+
+
 # ═════════════════════════════════════════════════════════════════════════
 # Data models
 # ═════════════════════════════════════════════════════════════════════════
@@ -1221,16 +1281,22 @@ def test_realistic_cross_entity_scenario():
     from app.chapter.consistency import _extract_variants_from_notes
     variants = _extract_variants_from_notes(notes_text)
 
-    # The extracted variants include common English words from notes
-    assert "old" in variants, (
-        "'old' is extracted as a variant from Chi Yuan Daoist notes"
+    # Single-word lowercase strings extracted from notes are now filtered
+    # at extraction time — they are common English words, not deliberate
+    # substitution targets. The cross-entity surface is still tested below
+    # via the manually-constructed CharacterRef with "old" as a variant.
+    assert "old" not in variants, (
+        "'old' must NOT be extracted from Chi Yuan Daoist notes — "
+        "it is an incidental English word, not a deliberate variant."
     )
 
+    # Build the CharacterRef with "old" included explicitly so the
+    # cross-entity collision guard is still exercised below.
     ref = ConsistencyReference(
         characters=[
             CharacterRef(canonical="Qin Liuxi", variants=["Qi Liuxi"]),
             CharacterRef(canonical="Old Lady Qin", variants=[]),
-            CharacterRef(canonical="Chi Yuan Daoist", variants=variants),
+            CharacterRef(canonical="Chi Yuan Daoist", variants=["Old Daoist Chi Yuan", "old"]),
         ],
         titles=[],
         glossary_terms=[],
