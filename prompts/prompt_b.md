@@ -44,6 +44,7 @@ Check for:
 - unnecessary shortening that flattens scene pressure
 - technical exposition that reads like a textbook list or clinical enumeration rather than fiction prose
 - Chinese game-rank or internet-culture idioms translated literally instead of by function (e.g., 青铜 as "bronze" when meaning "novice/amateur")
+- false-friend collisions between literal Chinese physical/action descriptions and misleading English idioms — e.g., 咬了咬舌尖 means "bit the tip of her tongue" as a physical reaction, not the English idiom "bite your tongue" (refrain from speaking); 咽不下这口气 is about swallowed pride, not literal breath. Check each such line for the English idiom it most resembles and verify the scene actually calls for that idiomatic reading.
 
 ## What NOT to reward
 

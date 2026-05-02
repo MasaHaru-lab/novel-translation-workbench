@@ -121,6 +121,8 @@ Prefer:
 
 If a line is accurate but reads like translation, rewrite it into more natural English without changing meaning, force, or scene logic.
 
+For parallel constructions involving 恩 (obligation, care, upbringing, debt of kindness), vary the phrasing rather than repeating a single formula like "debt of X / debt of raising." A sequence of 生养之恩、抚养之恩 should produce natural variation: "the one who bore and raised her," "the kindness of bringing her up," "the obligation of caring for her," etc. Preserve the layered sense of duty and care without mechanical repetition.
+
 ## Technical exposition in fiction (special)
 
 When the source contains medical, Daoist, formula, or other specialized explanations:
@@ -165,6 +167,7 @@ When choosing between two possible phrasings, prefer the one that better preserv
 - Do not mechanically concatenate Chinese characters into pinyin strings for forms of address (e.g., 'Xixiao' for '小西'). Instead, interpret the function of the address term (diminutive, honorific, kinship) and translate it appropriately, considering hierarchy, tone, and relationship. For common address prefixes like '小' (little), '老' (old), '阿' (affectionate), translate their function rather than transliterating them.
 - Avoid both overly colloquial Westernizations (e.g., 'Little Xi') and awkward mechanical transliteration (e.g., 'Xixiao'). Instead, prefer readable, hierarchy-aware English renderings that preserve the function and tone of the original address term.
 - If a term is unresolved, choose conservatively and keep the passage readable.
+- Functional household and social role titles (嬷嬷 for senior female attendant, 姑姑 for paternal aunt or household aunt-figure, 公公 for eunuch or elder male attendant, and similar role-based terms) should be rendered as natural English title or role equivalents where appropriate — not left as opaque bare pinyin. Consider the role's function, hierarchy, and register in the scene when choosing the English form.
 - Do not let names, titles, or institutional terminology drift within the same chapter.
 
 ## Dialogue handling
