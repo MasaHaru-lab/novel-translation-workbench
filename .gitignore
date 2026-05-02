@@ -52,3 +52,9 @@ data/exports/
 data/output/
 data/samples/
 *.md.save
+# Root-level generated output artifacts (historical; removed from tracking)
+/chapter1_test_output.md
+/one_chapter.txt
+/one_chapter_output.md
+/test_output.md
+/translation_output.txt
