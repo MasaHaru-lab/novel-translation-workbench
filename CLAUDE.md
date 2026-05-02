@@ -31,6 +31,7 @@ Rules:
 - Skills the user explicitly types as `/<name>` always win over auto-routing.
 - If unsure between two skills, pick the narrower / more specific one and invoke it. The skill itself will guide the next step.
 - This routing table is project-specific — it lists skills relevant to this translation workbench. Other skills exist but should fire on their own description triggers.
+- For disambiguation, conflict resolution, and routing protocol details, see `SKILL_ROUTER.md`. It is the authoritative routing index above this table.
 
 ## Local development
 
