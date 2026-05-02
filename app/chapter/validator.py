@@ -13,6 +13,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional, Tuple
 
+from app.config_loader import find_project_root
+
 
 APPROVED_QUALITY_SAMPLE = "data/source/one_chapter_quality_source.txt"
 """Path of the approved quality sample, relative to project root."""
@@ -134,7 +136,7 @@ def _check_dry_run_advisory(
         return []
 
     default_manifest = (
-        Path("data/exports") / f"{source_path.stem}_en.manifest.json"
+        find_project_root() / "data/exports" / f"{source_path.stem}_en.manifest.json"
     )
     if not default_manifest.exists():
         return [

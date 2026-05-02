@@ -16,6 +16,9 @@ from app.chapter.inspector import (
     load_manifest,
     suggest_next_step,
 )
+from app.config_loader import find_project_root
+
+PROJECT_ROOT = find_project_root()
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -238,22 +241,22 @@ class TestFindArtifacts:
     def test_basic_source_stem(self):
         """Path derivation for a typical source name."""
         artifacts = find_artifacts("ch1131_v1")
-        assert artifacts.source == Path("data/source/ch1131_v1.txt")
-        assert artifacts.output == Path("data/exports/ch1131_v1_en.md")
-        assert artifacts.manifest == Path("data/exports/ch1131_v1_en.manifest.json")
-        assert artifacts.inspection_record == Path("data/exports/ch1131_v1_inspection.md")
+        assert artifacts.source == PROJECT_ROOT / "data/source/ch1131_v1.txt"
+        assert artifacts.output == PROJECT_ROOT / "data/exports/ch1131_v1_en.md"
+        assert artifacts.manifest == PROJECT_ROOT / "data/exports/ch1131_v1_en.manifest.json"
+        assert artifacts.inspection_record == PROJECT_ROOT / "data/exports/ch1131_v1_inspection.md"
 
     def test_source_stem_with_hyphens(self):
         """Source names with hyphens work correctly."""
         artifacts = find_artifacts("ch-asc-01")
-        assert artifacts.source == Path("data/source/ch-asc-01.txt")
-        assert artifacts.output == Path("data/exports/ch-asc-01_en.md")
+        assert artifacts.source == PROJECT_ROOT / "data/source/ch-asc-01.txt"
+        assert artifacts.output == PROJECT_ROOT / "data/exports/ch-asc-01_en.md"
 
     def test_source_stem_with_underscores(self):
         """Source names with underscores work correctly."""
         artifacts = find_artifacts("my_chapter_03")
-        assert artifacts.source == Path("data/source/my_chapter_03.txt")
-        assert artifacts.output == Path("data/exports/my_chapter_03_en.md")
+        assert artifacts.source == PROJECT_ROOT / "data/source/my_chapter_03.txt"
+        assert artifacts.output == PROJECT_ROOT / "data/exports/my_chapter_03_en.md"
 
     def test_artifact_object_type(self):
         """find_artifacts returns a ChapterArtifacts instance."""

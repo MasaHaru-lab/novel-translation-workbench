@@ -441,9 +441,9 @@ class TestConfigLoader:
 
     def test_find_project_root_repo(self):
         """_find_project_root() must resolve to the repo root, not app/."""
-        from app.config_loader import _find_project_root
+        from app.config_loader import find_project_root
 
-        root = _find_project_root()
+        root = find_project_root()
         # Repo root must contain .git (or .env.example in a deployment copy)
         assert (root / ".git").is_dir() or (root / ".env.example").is_file()
         # Must NOT be under app/
@@ -453,9 +453,9 @@ class TestConfigLoader:
     def test_find_project_root_detection_from_env_marker(self):
         """_find_project_root() should use .git or .env.example as marker,
         not scan for .env.local (which may not exist yet)."""
-        from app.config_loader import _find_project_root
+        from app.config_loader import find_project_root
 
-        root = _find_project_root()
+        root = find_project_root()
         # The detected root must be the project root, not a subdirectory
         expected = Path(__file__).resolve().parent.parent.parent  # tests/ → app/ → project
         assert root == expected, f"Expected {expected}, got {root}"

@@ -24,7 +24,7 @@ from pathlib import Path
 _loaded: bool = False
 
 
-def _find_project_root() -> Path:
+def find_project_root() -> Path:
     """Detect the project root directory.
 
     Walks up from ``app/config_loader.py`` looking for known project markers
@@ -56,7 +56,7 @@ def load_env_local(project_root: str | Path | None = None) -> None:
     if project_root is not None:
         root = Path(project_root).resolve()
     else:
-        root = _find_project_root()
+        root = find_project_root()
 
     env_path = root / ".env.local"
     if not env_path.exists():

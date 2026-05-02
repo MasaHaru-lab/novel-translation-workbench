@@ -17,11 +17,13 @@ from pathlib import Path
 from typing import List, Optional
 
 from app.chapter.manifest import RunManifest
+from app.config_loader import find_project_root
 
 # ── Project root-relative path constants ──────────────────────────────────────
-SOURCE_DIR = Path("data/source")
-EXPORT_DIR = Path("data/exports")
-TEMPLATE_PATH = Path("docs/templates/INSPECTION_RECORD_TEMPLATE.md")
+_PROJECT_ROOT = find_project_root()
+SOURCE_DIR = _PROJECT_ROOT / "data/source"
+EXPORT_DIR = _PROJECT_ROOT / "data/exports"
+TEMPLATE_PATH = _PROJECT_ROOT / "docs/templates/INSPECTION_RECORD_TEMPLATE.md"
 
 
 @dataclass

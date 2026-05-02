@@ -24,6 +24,9 @@ from app.chapter.manifest import ChapterStatus, SegmentStatus
 from app.chapter.models import ChapterResult
 from app.segment.segmenter import Segment
 from app.translate.schema import TranslationOutput, GlossaryTerm
+from app.config_loader import find_project_root
+
+PROJECT_ROOT = find_project_root()
 
 
 def create_mock_segment(segment_id=1):
@@ -1522,25 +1525,25 @@ def test_chapter_run_elapsed_resume_path(tmp_path, capsys):
 def test_derive_output_path_basic():
     """Should derive output path from source filename."""
     result = _derive_output_path(Path("data/source/chapter3.txt"))
-    assert result == Path("data/exports/chapter3_en.md")
+    assert result == PROJECT_ROOT / "data/exports/chapter3_en.md"
 
 
 def test_derive_output_path_different_dir():
     """Should use data/exports/ directory regardless of source location."""
     result = _derive_output_path(Path("/tmp/my_source.txt"))
-    assert result == Path("data/exports/my_source_en.md")
+    assert result == PROJECT_ROOT / "data/exports/my_source_en.md"
 
 
 def test_derive_output_path_no_ext():
     """Should handle source files without extension."""
     result = _derive_output_path(Path("data/source/chapter3"))
-    assert result == Path("data/exports/chapter3_en.md")
+    assert result == PROJECT_ROOT / "data/exports/chapter3_en.md"
 
 
 def test_derive_output_path_multi_dot():
     """Should handle source files with multiple dots."""
     result = _derive_output_path(Path("data/source/ch.3.backup.txt"))
-    assert result == Path("data/exports/ch.3.backup_en.md")
+    assert result == PROJECT_ROOT / "data/exports/ch.3.backup_en.md"
 
 
 def test_chapter_run_without_output_derives_from_source():
@@ -1548,7 +1551,7 @@ def test_chapter_run_without_output_derives_from_source():
     captured = _invoke_chapter_main_with_argv([
         'cli', 'chapter', 'run', '--source', '/tmp/chapter3.txt',
     ])
-    assert captured['output'] == Path('data/exports/chapter3_en.md')
+    assert captured['output'] == PROJECT_ROOT / 'data/exports/chapter3_en.md'
 
 
 def test_chapter_run_without_output_default_source_backward_compat():
@@ -1556,7 +1559,7 @@ def test_chapter_run_without_output_default_source_backward_compat():
     captured = _invoke_chapter_main_with_argv([
         'cli', 'chapter', 'run',
     ])
-    assert captured['output'] == Path('data/exports/one_chapter_quality_source_en.md')
+    assert captured['output'] == PROJECT_ROOT / 'data/exports/one_chapter_quality_source_en.md'
 
 
 def test_chapter_run_with_explicit_output_unchanged():
@@ -1573,7 +1576,7 @@ def test_run_pipeline_without_output_derives_from_source():
     captured = _invoke_main_with_argv([
         'cli', 'run', '--source', '/tmp/chapter3.txt',
     ])
-    assert captured['output'] == Path('data/exports/chapter3_en.md')
+    assert captured['output'] == PROJECT_ROOT / 'data/exports/chapter3_en.md'
 
 
 def test_run_pipeline_without_output_default_source_backward_compat():
@@ -1581,7 +1584,7 @@ def test_run_pipeline_without_output_default_source_backward_compat():
     captured = _invoke_main_with_argv([
         'cli', 'run',
     ])
-    assert captured['output'] == Path('data/exports/one_chapter_quality_source_en.md')
+    assert captured['output'] == PROJECT_ROOT / 'data/exports/one_chapter_quality_source_en.md'
 
 
 def test_run_pipeline_with_explicit_output_unchanged(tmp_path):

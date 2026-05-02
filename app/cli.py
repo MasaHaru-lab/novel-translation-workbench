@@ -14,6 +14,7 @@ from typing import Callable, Iterator, List, Optional
 from app.chapter.manifest import RunManifest, ResumeConfig
 from app.chapter.orchestrator import ChapterOrchestrator
 from app.chapter.models import ChapterResult
+from app.config_loader import find_project_root
 from app.chapter.validator import (
     ValidationResult,
     resolve_git_ref,
@@ -54,12 +55,28 @@ def _orchestrator_progress_logging() -> Iterator[None]:
         log.setLevel(prev_level)
 
 
+def _resolve_source(source: Path) -> Path:
+    """Resolve a source path with project-root-aware fallback.
+
+    If the path exists as-is, return it unchanged. If it does not exist but
+    resolves relative to the project root, return that instead. Otherwise
+    return the original path so the caller can produce a clear diagnostic.
+    """
+    if source.exists():
+        return source
+    alt = find_project_root() / source
+    if alt.exists():
+        return alt
+    return source
+
+
 def _derive_output_path(source: Path) -> Path:
     """Derive a default output path from the source path.
 
-    ``data/source/chapter3.txt`` becomes ``data/exports/chapter3_en.md``.
+    ``data/source/chapter3.txt`` becomes ``data/exports/chapter3_en.md``,
+    resolved relative to the project root.
     """
-    return Path("data/exports") / f"{source.stem}_en.md"
+    return find_project_root() / "data/exports" / f"{source.stem}_en.md"
 
 
 def load_book_memory(path: Optional[Path]):
@@ -371,6 +388,8 @@ def run_chapter_pipeline(
     for line in vresult.format_lines():
         print(line)
     if not vresult.passed:
+        if any("not found" in e for e in vresult.errors):
+            print(f"  Tip: Run from the project root ({find_project_root()}) or use an absolute --source path.")
         sys.exit(1)
 
     try:
@@ -878,8 +897,8 @@ def main():
 
     run_parser = subparsers.add_parser('run', help='Run translation pipeline')
     # Optional arguments for input/output paths
-    run_parser.add_argument('--source', type=Path, default=Path('data/source/one_chapter_quality_source.txt'),
-                            help='Path to source text file')
+    run_parser.add_argument('--source', type=Path, default=None,
+                            help='Path to source text file (default: project-root/data/source/one_chapter_quality_source.txt)')
     run_parser.add_argument('--output', type=Path, default=None,
                             help='Path to output markdown file (default: derived from --source, e.g. data/exports/<source-stem>_en.md)')
     run_parser.add_argument('--service-url', type=str, default=None,
@@ -898,8 +917,8 @@ def main():
     chapter_parser = subparsers.add_parser('chapter', help='Translate a full chapter (auto-segment -> auto-translate -> aggregate -> consistency)')
     chapter_sub = chapter_parser.add_subparsers(dest='chapter_command', required=True)
     chapter_run_parser = chapter_sub.add_parser('run', help='Run chapter-level translation pipeline')
-    chapter_run_parser.add_argument('--source', type=Path, default=Path('data/source/one_chapter_quality_source.txt'),
-                                    help='Path to full chapter source text file')
+    chapter_run_parser.add_argument('--source', type=Path, default=None,
+                                    help='Path to full chapter source text file (default: project-root/data/source/one_chapter_quality_source.txt)')
     chapter_run_parser.add_argument('--output', type=Path, default=None,
                                     help='Path to final chapter-level output file (default: derived from --source, e.g. data/exports/<source-stem>_en.md)')
     chapter_run_parser.add_argument('--service-url', type=str, default=None,
@@ -1024,6 +1043,21 @@ def main():
     )
 
     args = parser.parse_args()
+
+    # Resolve default source paths relative to project root.
+    if args.command == 'run':
+        if args.source is None:
+            args.source = find_project_root() / 'data/source/one_chapter_quality_source.txt'
+        else:
+            args.source = _resolve_source(args.source)
+    elif args.command == 'chapter':
+        if args.chapter_command == 'run':
+            if args.source is None:
+                args.source = find_project_root() / 'data/source/one_chapter_quality_source.txt'
+            else:
+                args.source = _resolve_source(args.source)
+        elif args.chapter_command == 'inspect' and args.source is not None:
+            args.source = _resolve_source(args.source)
 
     if args.command == 'run':
         if args.output is None:
