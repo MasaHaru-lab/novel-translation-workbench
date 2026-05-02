@@ -205,6 +205,51 @@ For orchestrator design and current capabilities, see `ORCHESTRATION.md`.
 - 不允许修改 CLI parser、stdout/stderr 处理、stream output contract、或相关测试结构来"为这个功能做准备"。
 - 只有当用户明确说"重新打开 stream dry-run 设计"或等价表述时，才允许进入 discovery。在此之前，任何发现或实现尝试都视为范围越界。
 
+## Secret Safety (REQUIRED)
+
+**NEVER read, display, echo, grep, or otherwise output the value of API keys,
+tokens, credentials, or secret environment variables.** A previous incident in
+this repo exposed a `DEEPSEEK_API_KEY` via a `cat .env.local` command whose
+grep filter did not strip credential lines.
+
+### Prohibited commands
+
+| Command | Why |
+|---------|-----|
+| `cat .env*`, `cat .env.local`, etc. | Prints secret values |
+| `printenv` | Dumps all environment variables, including secrets |
+| `env` (bare — no arguments) | Dumps all environment variables |
+| `set` (bare) | Dumps shell variables, including any inherited secrets |
+| `echo $SOME_KEY`, `echo $TOKEN`, etc. | Expands secret values into output |
+| `grep -v` on `.env*` output | Does not fully mask values; key=value pairs leak |
+| `source .env`, `. .env` | Imports secrets into shell session |
+
+### Allowed redacted presence checks only
+
+To check whether an environment variable or file exists:
+
+```bash
+# Check if an env var is set — value is REDACTED
+echo "DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:+set (hidden)}unset"
+
+# Check if a file exists — no contents are read
+test -f .env.local && echo "ENV_LOCAL_PRESENT" || echo "ENV_LOCAL_MISSING"
+```
+
+### Automated guard
+
+This project has a `PreToolUse` hook (`.claude/hooks/check-secret-safety.sh`)
+that blocks Bash commands matching known dangerous patterns. If a legitimate
+command is incorrectly blocked, describe the command to the operator and ask
+before bypassing the hook.
+
+### If a secret is exposed
+
+1. Stop all tool use immediately.
+2. Do not copy, store, commit, or log the exposed value.
+3. Report the incident (location, context, whether any value was persisted).
+4. Do not continue the batch until the operator confirms.
+
 ## Verification Before Claims
 
 - 不要猜 API 签名、字段名、文件位置；先用 Read / Grep 读一手
