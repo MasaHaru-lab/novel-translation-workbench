@@ -333,6 +333,52 @@ def _has_variant(text: str, variant: str) -> bool:
     return _find_variant(text, variant) is not None
 
 
+def _variant_collides_with_other_names(
+    variant: str,
+    current_canonical: str,
+    all_characters: List[CharacterRef],
+) -> bool:
+    """Check if a variant string is a case-insensitive substring of another
+    entity's canonical name or known variant aliases.
+
+    This prevents the cross-entity name corruption pattern where a variant
+    extracted from one character's notes (e.g. "old" from Chi Yuan Daoist's
+    notes) is found as a substring of another character's canonical name
+    ("Old" inside "Old Lady Qin"). Without this guard, the automatic
+    replacement would corrupt the other entity's name by replacing part of it.
+
+    Args:
+        variant: The variant string being checked (the text found in output).
+        current_canonical: The canonical name of the entity this variant
+            belongs to.
+        all_characters: All character refs from the consistency reference.
+
+    Returns:
+        True if the variant appears as a case-insensitive substring of any
+        other entity's canonical name or known variant aliases, meaning an
+        automatic replacement would risk cross-entity corruption.
+    """
+    if not variant:
+        return False
+    variant_lower = variant.lower().strip()
+    if not variant_lower or len(variant_lower) <= 1:
+        return False
+    for char_ref in all_characters:
+        if char_ref.canonical == current_canonical:
+            continue  # Same entity — skip
+        # Check against other entity's canonical name
+        if variant_lower in char_ref.canonical.lower():
+            # Found a cross-entity collision: the variant is a substring of
+            # another entity's canonical name. Replacing it globally would
+            # corrupt the other entity's name.
+            return True
+        # Also check against other entity's explicit variant aliases
+        for other_variant in char_ref.variants:
+            if variant_lower in other_variant.lower():
+                return True
+    return False
+
+
 def _parse_character_refs(asset_text: str) -> List[CharacterRef]:
     """Parse characters.md into structured CharacterRef objects."""
     refs = []
@@ -678,6 +724,18 @@ class ChapterConsistencyAuditor:
                         # it if the variant is an explicit known variant.
                         if canonical_present and not is_explicit_variant:
                             continue
+
+                        # Cross-entity collision guard: check whether the
+                        # variant text is a substring of another entity's
+                        # canonical name or known aliases. If so, automatic
+                        # replacement would risk corrupting that entity's
+                        # name — downgrade to review-only.
+                        if is_explicit_variant and _variant_collides_with_other_names(
+                            variant=variant,
+                            current_canonical=canonical,
+                            all_characters=self.reference.characters,
+                        ):
+                            is_explicit_variant = False
 
                         start = max(0, idx - 40)
                         end = min(len(text), idx + len(variant) + 40)
