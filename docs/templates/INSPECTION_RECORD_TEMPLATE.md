@@ -108,7 +108,7 @@ For each issue, record: segment, description, and issue type.
 | **ACCEPT** | Chapter passes inspection. No blockers. Proceed to next chapter or stop. |
 | **HOLD** | Minor issues found. Chapter is acceptable but observations should inform asset/prompt updates before the next chapter. |
 | **REVISE** | Issues found that warrant re-translation or correction. Apply fixes, then re-inspect. |
-| **CAPTURE** | Systematic failure. Capture artifacts to `data/captures/<chapter_name>/` for later investigation. Re-translate after root cause is fixed. |
+| **CAPTURE** | Systematic failure. Capture artifacts via `docs/templates/BAD_CASE_CAPTURE_TEMPLATE.md` and register in `docs/bad_cases/INDEX.md`. Re-translate after root cause is fixed. |
 
 **Verdict:** `ACCEPT` / `HOLD` / `REVISE` / `CAPTURE`
 
@@ -132,7 +132,21 @@ For each issue, record: segment, description, and issue type.
 | Manifest status | Quality gate | Typical verdict |
 |----------------|--------------|----------------|
 | COMPLETED | PASSED | ACCEPT or HOLD |
-| COMPLETED | PASSED (issues found) | HOLD or REVISE |
+| COMPLETED | PASSED (issues found) | HOLD or REVISE, or CAPTURE if systematic |
 | PARTIAL | FAILED | REVISE or CAPTURE |
 | PARTIAL | PASSED | REVISE or CAPTURE (should not normally occur — investigate first) |
 | FAILED | N/A | CAPTURE |
+
+---
+
+## Capture Workflow
+
+If the verdict is **CAPTURE** (whether due to gate failure or operator judgment
+of a systematic issue that passed the gate):
+
+1. Create a capture directory: `data/captures/<capture_name>/`
+2. Copy the source, output, and manifest into it
+3. Write a capture note using `docs/templates/BAD_CASE_CAPTURE_TEMPLATE.md`
+4. Register the capture in `docs/bad_cases/INDEX.md`
+
+See `docs/PHASE_C_PRODUCTION_WORKFLOW.md` §10 for the full capture rules.

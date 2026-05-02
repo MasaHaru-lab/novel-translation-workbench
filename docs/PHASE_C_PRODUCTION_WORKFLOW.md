@@ -376,26 +376,14 @@ from the manifest, but the inspection content is the operator's judgment.
 
 When a chapter fails quality or the operator decides it cannot proceed:
 
-```markdown
-# Capture: <chapter_name>
+- The operator writes a **capture note** using the `BAD_CASE_CAPTURE_TEMPLATE.md`
+  and places it at `data/captures/<capture_name>/capture_note.md`.
+- Artifacts (source copy, output copy, manifest) are placed in the same directory.
+- The bad case is indexed in `docs/bad_cases/INDEX.md` for future reference.
 
-**Captured:** 2026-05-02
-**Reason:** (one sentence — quality gate failed / inspection issues / infrastructure error)
-
-## Artifacts
-- Source: `data/captures/<name>/source.txt` (copy)
-- Manifest: `data/captures/<name>/output.manifest.json`
-- Quality report: embedded below or linked
-
-## Operator Notes
-(Free text — what went wrong, what to fix, whether to retry)
-
-## Next Action
-- [ ] Fix the underlying issue before retranslating
-- [ ] Delete from captures when resolved
-```
-
-The capture directory `data/captures/` is planned but does not exist yet. It will be created and added to `.gitignore` in Stage 3.
+**Template:** `docs/templates/BAD_CASE_CAPTURE_TEMPLATE.md`
+**Index:** `docs/bad_cases/INDEX.md`
+**Directory:** `data/captures/` (gitignored — created, exists as of Stage 3A)
 
 ---
 
@@ -462,9 +450,13 @@ A chapter should be captured when any of these conditions are met:
 
 ### What capture means
 
-- Source file is copied to `data/captures/<name>/source.txt`
-- The failed manifest is copied to `data/captures/<name>/`
-- A capture note is written (see §8.3)
+- A capture note is written using the template at
+  `docs/templates/BAD_CASE_CAPTURE_TEMPLATE.md` and placed in
+  `data/captures/<capture_name>/capture_note.md`
+- Source file is copied to `data/captures/<capture_name>/source.txt`
+- Output file is copied to `data/captures/<capture_name>/output.md`
+- Manifest is copied to `data/captures/<capture_name>/output.manifest.json`
+- The bad case is registered in `docs/bad_cases/INDEX.md`
 - The original `data/source/<name>.txt` is **not deleted** (the operator
   may retry with a fixed pipeline)
 
@@ -517,14 +509,17 @@ and write a template `_inspection.md` file. The operator fills in the rest.
 ### Stage 3: Capture Path Creation
 
 **What:** Create the `data/captures/` directory and add it to `.gitignore`.
-Optionally write a capture helper that copies source + manifest + quality
-report into a capture directory:
+Write an operator-facing bad-case capture template and a lightweight bad-case
+index for future reference.
 
-```
-venv/bin/python -m app.cli chapter capture --source data/source/<name>.txt [--reason "reason"]
-```
+**Delivered:** Stage 3A (partial — directory, gitignore, template, index).
 
-**Not implemented yet.** Pending Stage 1 approval.
+| Artifact | Path | Status |
+|----------|------|--------|
+| Capture directory | `data/captures/` | created + gitignored |
+| Capture template | `docs/templates/BAD_CASE_CAPTURE_TEMPLATE.md` | created |
+| Bad-case index | `docs/bad_cases/INDEX.md` | created |
+| Capture helper script | — | deferred (operator workflow is manual for now) |
 
 ### Stage 4: Pre-Run Validation Gate
 

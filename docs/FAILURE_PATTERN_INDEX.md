@@ -73,11 +73,14 @@ Each entry is a single light-weight record. No multi-paragraph analysis.
 When entering this project for any task involving translation, quality, or tuning:
 
 1. **Read this index.** Scan the entries. If none match your current task, skip.
-2. **If an entry matches** your current domain, read the guardrail. Apply it
+2. **If you observe a new quality failure**, also check `docs/bad_cases/INDEX.md`
+   for specific captured instances — a pattern may have already been captured
+   as a bad case before it earned a formal pattern index entry.
+3. **If an entry matches** your current domain, read the guardrail. Apply it
    before and during your work.
-3. **If you observe a new instance of an active pattern**, note it in your
+4. **If you observe a new instance of an active pattern**, note it in your
    closeout report so the entry can be updated.
-4. **If you observe a pattern that is not in this index** but meets the capture
+5. **If you observe a pattern that is not in this index** but meets the capture
    criteria, add an entry. One sentence per field. Do not write a multi-paragraph
    analysis — the closeout report is where the full record lives.
 
