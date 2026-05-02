@@ -76,7 +76,10 @@ The translation kernel at baseline has these established capabilities:
 - Dry-run mode (`--dry-run`)
 - Strategy enactment closed loop
 - Model profiles (`--model-profile`)
-- 616 tests passing (as of closeout)
+- Pre-run validation guardrails (Stage 4: source checks, book-memory check,
+  quality-sample guard, dry-run advisory)
+- Branch-aware manifests (`git_ref` in `RunManifest`, populated at run start)
+- 677 tests passing (as of Stage 4 closeout)
 
 ---
 
@@ -523,15 +526,38 @@ index for future reference.
 
 ### Stage 4: Pre-Run Validation Gate
 
-**What:** Add a lightweight pre-run validation step to the CLI that checks:
-- Source file exists and is non-empty
-- Output path is not a protected path (e.g., not overwriting the approved
-  quality sample's output without explicit override)
-- Book memory file exists if `--book-memory` is passed
-- Dry-run advisory: print a reminder if the user runs without `--dry-run`
-  first on an untracked source
+**Delivered (Stage 4 — 2026-05-02).**
 
-**Not implemented yet.** Pending Stage 1–3 approval.
+Adds a lightweight pre-run validation step to the CLI that performs the
+following deterministic, offline checks before any chapter translation begins:
+
+| Check | Type | Behavior |
+|-------|------|----------|
+| Source file validity | Hard error | File must exist, be a regular file, valid UTF-8, and non-empty |
+| Quality sample guard | Warning | Warns when the approved quality sample is used as source (it is reserved for quality-loop runs) |
+| Book memory existence | Hard error | File declared via `--book-memory` must exist and be a regular file |
+| Dry-run advisory | Warning | Suggests `--dry-run` first when running a new source that has no existing manifest |
+
+Validated by `app/chapter/validator.py` and wired into `run_chapter_pipeline()`
+and `run_chapter_stream()`. Tested with 35 dedicated tests.
+
+**Delivered as a package with Stage 4B (branch awareness):**
+
+| Check | Type | Behavior |
+|-------|------|----------|
+| Git ref capture | Metadata | Resolves `<branch> @ <short-commit>` at run start and populates `git_ref` in `RunManifest` for all downstream artifacts |
+
+The `git_ref` field is added to `RunManifest` (`app/chapter/manifest.py`) and
+populated in the CLI after the orchestrator run completes. It provides run
+traceability without modifying the orchestrator kernel.
+
+**Stage 4 explicitly does not include:**
+- Modifications to the orchestrator, quality gate, prompts, or translation logic
+- Changes to how `chapter run`, `chapter stream`, or `chapter batch` decide what
+  to translate or how to translate it
+- A `--no-validate` skip flag (advisory warnings can already be safely ignored;
+  hard errors are always legitimate problems)
+- Automation of the capture path or bad-case helper scripts
 
 ### Stage 5: Complete Production Workflow Integration
 
@@ -560,17 +586,18 @@ Phase C MVP is reached when all of the following are true:
 2. [ ] **Inspection record creation.** There is a documented way (script
    or manual) to create an inspection record for a completed chapter.
 
-3. [ ] **Capture path exists.** `data/captures/` exists, is gitignored,
+3. [x] **Capture path exists.** `data/captures/` exists, is gitignored,
    and can hold a captured chapter's artifacts.
 
-4. [ ] **Pre-run validation.** The CLI warns the operator before running
+4. [x] **Pre-run validation.** The CLI warns the operator before running
    without a prior `--dry-run` on a new (untracked) source file. The
-   warning can be skipped with an explicit flag for experienced operators.
+   warning is advisory (not a blocker) — experienced operators can proceed
+   past it.
 
-5. [ ] **Branch awareness.** Each chapter run produces artifacts that the
-   operator can trace back to the code state (branch + commit). This is
-   already partially provided by the manifest — adding `git_ref` completes
-   it.
+5. [x] **Branch awareness.** Each chapter run produces artifacts that the
+   operator can trace back to the code state (branch + commit). The
+   `RunManifest` now includes a `git_ref` field, populated from `git
+   rev-parse` at run start.
 
 6. [ ] **End-to-end operator workflow.** An operator can complete a chapter
    from source file to inspection record using the documented workflow
@@ -579,7 +606,7 @@ Phase C MVP is reached when all of the following are true:
 7. [ ] **Bad-case handling.** The operator knows what to do when a chapter
    fails and can capture the state for later investigation.
 
-8. [ ] **Test suite still passes.** All 616+ existing tests pass. Any new
+8. [x] **Test suite still passes.** All 677+ existing tests pass. Any new
    code added in Phase C has test coverage.
 
 9. [ ] **Working tree discipline maintained.** Generated outputs remain
@@ -597,7 +624,8 @@ proceeding:
 | **Stage boundary** | Completion of any Stage 1–5 implementation stage | Each stage changes the operator workflow. The operator must review and approve before the next stage begins. |
 | **First inspection record template** | Stage 2: before writing the first `chapter inspect` command or helper script | The inspection record format affects the operator's daily workflow. The template must be reviewed. |
 | **New `data/captures/` directory** | Stage 3: before creating the capture path and `.gitignore` entry | Capture is a new concept. The operator must agree it is worth implementing. |
-| **Pre-run validation warning** | Stage 4: before adding CLI validation logic | Adding CLI warnings changes the operator's command behavior. The operator must agree on the warning text and behavior. |
+| **Pre-run validation warning** | Stage 4: CLI validation logic | Adding CLI warnings changes the operator's command behavior. The operator must agree on the warning text and behavior. |
+| **Branch awareness (git_ref)** | Stage 4B: RunManifest `git_ref` field | Adding run traceability requires a manifest schema change. The operator must agree on the field format and population strategy. |
 | **Any code change to kernel** | Any stage that touches `app/chapter/orchestrator.py`, `app/chapter/quality.py`, prompts, or translation logic | The kernel is frozen. Any Phase C code change to the kernel requires a written justification and explicit approval. |
 
 ---

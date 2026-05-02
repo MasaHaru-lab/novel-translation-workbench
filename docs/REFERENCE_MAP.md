@@ -65,6 +65,7 @@ source text > characters > titles_and_terms > glossary > style_notes > unresolve
 | When to read | File | What it tells you |
 |---|---|---|
 | Modifying any pipeline stage | `docs/PIPELINE_CONTRACTS.md` | Contracts between all 8 pipeline stages: inputs, outputs, owners, invariants. Read before editing any stage's code. |
+| Understanding the guardrail layer | `app/chapter/validator.py` | Stage 4 pre-run validation checks: source validity, quality-sample guard, book-memory existence, dry-run advisory, git-ref resolution. |
 | Understanding skill boundaries | `docs/SKILL_BOUNDARY_MAP.md` | What belongs in a skill vs. workflow vs. project rules. Candidate skills map and extraction readiness. |
 | Using the pre-merge gate | `scripts/checks/pre_merge_gate.sh` | Working-tree cleanliness check; generated-output tracking. Run before merging. |
 
@@ -137,6 +138,10 @@ Starting a new task?
   │    1. docs/FAILURE_PATTERN_INDEX.md (known patterns — read first)
   │    2. docs/QUALITY_LOOP.md (full process)
   │    3. docs/REAL_SAMPLE_VALIDATION.md (sample intake, if needed)
+  │
+  ├─ Adding or extending guardrails?
+  │    1. app/chapter/validator.py (pre-run validation checks)
+  │    2. app/tests/test_validator.py (Stage 4 guardrail tests)
   │
   ├─ Closing out a batch / merging?
   │    1. docs/CLOSEOUT_REPORT_TEMPLATE.md (report format)

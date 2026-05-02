@@ -148,6 +148,11 @@ class RunManifest:
     no real model backend). Smoke-test runs skip quality gates and
     consistency passes; their output is not a real translation."""
 
+    git_ref: str = ""
+    """Git branch and commit at the time the run was started, in the format
+    ``"<branch> @ <short-commit>"``. Populated during Stage 4 pre-run
+    validation. Empty string when git metadata is unavailable."""
+
     @staticmethod
     def create(
         chapter_title: str,
@@ -352,6 +357,7 @@ class RunManifest:
             manifest_path=d.get("manifest_path"),
             quality_summary=d.get("quality_summary"),
             smoke_test=d.get("smoke_test", False),
+            git_ref=d.get("git_ref", ""),
         )
 
     @staticmethod

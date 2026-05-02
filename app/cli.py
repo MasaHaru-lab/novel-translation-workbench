@@ -14,6 +14,11 @@ from typing import Callable, Iterator, List, Optional
 from app.chapter.manifest import RunManifest, ResumeConfig
 from app.chapter.orchestrator import ChapterOrchestrator
 from app.chapter.models import ChapterResult
+from app.chapter.validator import (
+    ValidationResult,
+    resolve_git_ref,
+    validate_chapter_run,
+)
 from app.segment.segmenter import create_segments
 from app.translate.translator import (
     ASSETS_MODES,
@@ -355,6 +360,19 @@ def run_chapter_pipeline(
         auto_retry_on_resume=auto_retry_on_resume,
     )
 
+    # ── Stage 4: Pre-run validation ──────────────────────────────────────
+    vresult = validate_chapter_run(
+        source_path=source_path,
+        output_path=output_path,
+        book_memory_path=book_memory_path,
+        is_dry_run=dry_run,
+        is_resume=resume,
+    )
+    for line in vresult.format_lines():
+        print(line)
+    if not vresult.passed:
+        sys.exit(1)
+
     try:
         text = read_source_file(source_path)
     except FileNotFoundError as e:
@@ -460,6 +478,8 @@ def run_chapter_pipeline(
             print(f"  Starting a fresh run.")
 
     # ── Fresh run path ───────────────────────────────────────────────────
+    git_ref = resolve_git_ref()
+
     plan = orchestrator.plan(text)
     print(f"Chapter: '{plan.chapter_title}' ({plan.segment_count} segments)")
     if book_memory is not None:
@@ -482,6 +502,12 @@ def run_chapter_pipeline(
         except Exception as e:
             print(f"  Error: Chapter translation pipeline failed: {e}")
             sys.exit(1)
+
+    # Stage 4: tag the run manifest with git ref for traceability.
+    if git_ref and result.manifest and result.manifest.manifest_path:
+        result.manifest.git_ref = git_ref
+        result.manifest.save()
+
     _report_chapter_result(result, output_path, elapsed_seconds=time.monotonic() - run_start)
 
 
@@ -686,6 +712,18 @@ def run_chapter_stream(
     If source_path is None, read from stdin.
     """
     _validate_assets_mode(assets_mode)
+
+    # ── Stage 4: Pre-run validation ──────────────────────────────────────
+    if source_path is not None:
+        vresult = validate_chapter_run(
+            source_path=source_path,
+            book_memory_path=book_memory_path,
+            is_dry_run=True,  # stream doesn't support --dry-run, skip advisory
+        )
+        for line in vresult.format_lines():
+            sys.stderr.write(line + "\n")
+        if not vresult.passed:
+            sys.exit(1)
 
     # Read source text
     if source_path is not None:
