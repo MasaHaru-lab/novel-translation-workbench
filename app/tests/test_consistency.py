@@ -97,6 +97,23 @@ def test_build_consistency_reference():
     assert "Qin Liuxi" in names
 
 
+def test_build_consistency_reference_canonizes_chen_pi():
+    """Chen Pi (陈皮) is canonized as the spaced two-word form, with the
+    collapsed one-word form 'Chenpi' registered as a known variant so the
+    consistency audit will not silently re-collapse the canonical spelling.
+    """
+    ref = build_consistency_reference()
+    chen_pi = next(
+        (c for c in ref.characters if c.canonical == "Chen Pi"), None
+    )
+    assert chen_pi is not None, (
+        "Expected canonical 'Chen Pi' character entry in characters.md"
+    )
+    assert "Chenpi" in chen_pi.variants, (
+        "Expected 'Chenpi' to be registered as a known variant of 'Chen Pi'"
+    )
+
+
 def test_extract_variants_from_notes_filters_single_lowercase_word():
     """A single-word all-lowercase variant extracted from Notes must be
     filtered at extraction time — it is a common English word mentioned
