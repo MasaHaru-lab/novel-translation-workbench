@@ -19,6 +19,9 @@ This directory stores book-level translation memory and consistency assets.
 - `unresolved_decisions.md`  
   Use for unstable or risky choices that should not be silently treated as final.
 
+- `gold_examples.md`  
+  Use for positive taste anchors: short source-to-English example pairs that capture the project's literary instinct. Not a glossary, not a rule, not a global replacement — situational anchors to check against during review.
+
 ## Update rule
 
 After each meaningful passage or chapter:
@@ -37,3 +40,4 @@ When these files are used together, follow this order:
 4. `glossary.md`
 5. `style_notes.md`
 6. `unresolved_decisions.md` as cautionary reference
+7. `gold_examples.md` as positive reference during review (taste anchors, not rules)
