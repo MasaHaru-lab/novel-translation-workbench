@@ -92,9 +92,10 @@ def test_build_consistency_reference():
     assert len(ref.characters) >= 1
     assert len(ref.titles) >= 1
     assert len(ref.glossary_terms) >= 1
-    # Qin Liuxi should be present
+    # The main character is canonized in Western order (Given + Family) per
+    # the ch 1–3 naming-type system in project_assets/2. characters.md.
     names = [c.canonical for c in ref.characters]
-    assert "Qin Liuxi" in names
+    assert "Liuxi Qin" in names
 
 
 def test_build_consistency_reference_canonizes_chen_pi():
@@ -111,6 +112,25 @@ def test_build_consistency_reference_canonizes_chen_pi():
     )
     assert "Chenpi" in chen_pi.variants, (
         "Expected 'Chenpi' to be registered as a known variant of 'Chen Pi'"
+    )
+
+
+def test_build_consistency_reference_canonizes_qi_huang():
+    """Qi Huang (岐黄) is canonized as the spaced two-character form per the
+    ch 1–3 given-name-only attendant rule, with the collapsed one-word form
+    'Qihuang' registered as a known variant so the consistency audit will
+    catch drift back to the deprecated form.
+    """
+    ref = build_consistency_reference()
+    qi_huang = next(
+        (c for c in ref.characters if c.canonical == "Qi Huang"), None
+    )
+    assert qi_huang is not None, (
+        "Expected canonical 'Qi Huang' character entry in characters.md "
+        "(ch 1–3 given-name-only attendant rule)"
+    )
+    assert "Qihuang" in qi_huang.variants, (
+        "Expected 'Qihuang' to be registered as a known variant of 'Qi Huang'"
     )
 
 
