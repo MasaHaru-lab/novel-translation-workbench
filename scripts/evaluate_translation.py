@@ -114,7 +114,7 @@ def call_deepseek(system: str, user: str) -> str:
         for line in env_local.read_text().splitlines():
             if "=" in line and not line.startswith("#"):
                 k, _, v = line.partition("=")
-                os.environ.setdefault(k.strip(), v.strip())
+                os.environ[k.strip()] = v.strip()  # .env.local wins over shell env
 
     api_key = os.environ.get("DEEPSEEK_API_KEY")
     base_url = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1")
