@@ -69,7 +69,7 @@ Do not commit generated outputs.
 ```bash
 venv/bin/python -m app.cli chapter run \
   --source data/source/one_chapter_quality_source.txt \
-  --output data/outputs/quality_run.md \
+  --output data/output/quality_run.md \
   --model-profile deepseek-v4-flash \
   --confirm
 ```
@@ -144,7 +144,7 @@ After applying a fix, confirm it worked before moving to the next finding.
 ```bash
 venv/bin/python -m app.cli chapter run \
   --source data/source/one_chapter_quality_source.txt \
-  --output data/outputs/quality_run_vN.md \
+  --output data/output/quality_run_vN.md \
   --model-profile deepseek-v4-flash \
   --confirm
 ```
