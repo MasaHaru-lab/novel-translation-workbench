@@ -456,13 +456,13 @@ See `STATUS.md` for the full gate trace.
    Rationale: existing rules (§58 "do not invent facts", §65 "do not add
    psychological interpretation") are too broad — the model treats scene
    continuation as "predicting the next beat" rather than inventing.
-4. **Verification plan** (pending): Run v6 with `--model-profile deepseek-v4-flash`.
-   Pass criterion: translation ends at source line 82 without fabricated
-   continuation or closing commentary.
+4. **Verification plan** (✓): v6 run on 2026-04-26. Pass criterion: translation
+   ends at source line 82 without fabricated continuation or closing commentary.
 5. **Approval** (✓): Type C warranted. Minimal targeted change applied.
 6. **Execute** (✓): Prompt A diff applied in work branch
    `work/phase-b-type-c-narrative-stance`.
-7. **Confirm or revert** (pending): v6 run not yet executed.
+7. **Confirm or revert** (✓ PASS): v6 verified 2026-04-26 — no fabricated
+   continuation. Type C rule effective. See `STATUS.md` for full trace.
 
 ### Candidates status
 
