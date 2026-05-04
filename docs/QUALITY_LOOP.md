@@ -37,12 +37,18 @@ It touches only:
 
 ### Backend
 
-A working translation backend reachable at `MODEL_BACKEND_URL`.
-Currently: Fishhead wrapper (resolve host with `ssh -G Fishhead-Core | grep hostname`,
-port `8001`), model `qwen2.5:14b` via Ollama. Do not hard-code the Fishhead IP address —
-it is managed via SSH config and may change.
+The main translation path uses the DeepSeek cloud API via the `deepseek-v4-flash`
+model profile. Set the following in `.env.local`:
 
-If the backend is unreachable, no quality-loop work runs.
+```
+DEEPSEEK_BASE_URL=https://api.deepseek.com/v1
+DEEPSEEK_API_KEY=<your key>
+```
+
+The local Fishhead backend (`local-qwen`, model `qwen2.5:14b` via Ollama) is a
+fallback only. Do not use it as the primary quality-loop path — cloud output is
+the baseline that matters. Switch to `--model-profile local-qwen` only when the
+cloud API is unavailable and you need a continuity run.
 
 ### Approved sample text
 
@@ -61,10 +67,10 @@ Do not commit generated outputs.
 ### Run
 
 ```bash
-export MODEL_BACKEND_URL=http://$(ssh -G Fishhead-Core | grep '^hostname ' | awk '{print $2}'):8001/generate
 venv/bin/python -m app.cli chapter run \
   --source data/source/one_chapter_quality_source.txt \
   --output data/outputs/quality_run.md \
+  --model-profile deepseek-v4-flash \
   --confirm
 ```
 
@@ -136,10 +142,10 @@ After applying a fix, confirm it worked before moving to the next finding.
 **For Type A/B fixes:**
 
 ```bash
-export MODEL_BACKEND_URL=http://$(ssh -G Fishhead-Core | grep '^hostname ' | awk '{print $2}'):8001/generate
 venv/bin/python -m app.cli chapter run \
   --source data/source/one_chapter_quality_source.txt \
   --output data/outputs/quality_run_vN.md \
+  --model-profile deepseek-v4-flash \
   --confirm
 ```
 
@@ -450,13 +456,13 @@ See `STATUS.md` for the full gate trace.
    Rationale: existing rules (§58 "do not invent facts", §65 "do not add
    psychological interpretation") are too broad — the model treats scene
    continuation as "predicting the next beat" rather than inventing.
-4. **Verification plan** (deferred): Run v6 when Fishhead is reachable.
+4. **Verification plan** (pending): Run v6 with `--model-profile deepseek-v4-flash`.
    Pass criterion: translation ends at source line 82 without fabricated
    continuation or closing commentary.
 5. **Approval** (✓): Type C warranted. Minimal targeted change applied.
 6. **Execute** (✓): Prompt A diff applied in work branch
    `work/phase-b-type-c-narrative-stance`.
-7. **Confirm or revert** (pending): Awaiting Fishhead availability for v6 run.
+7. **Confirm or revert** (pending): v6 run not yet executed.
 
 ### Candidates status
 
