@@ -671,7 +671,7 @@ def test_bootstrap_from_project_assets():
 
     # Should have entities from characters.md
     assert len(memory.entities) >= 1
-    assert "qin_liuxi" in memory.entities
+    assert "liuxi_qin" in memory.entities
 
     # Should have titles from titles_and_terms.md
     assert len(memory.titles) >= 1
