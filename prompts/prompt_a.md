@@ -161,7 +161,7 @@ When choosing between two possible phrasings, prefer the one that better preserv
 
 ## Names, titles, and forms of address
 
-- Keep personal names consistent with the established rendering when available.
+- Keep personal names consistent with the established rendering when available. If `project_assets/2. characters.md` is present, it is the canonical source for every personal-name rendering and naming-system rule, and it overrides any inference from the Chinese surface form. Do not emit a name form that contradicts a canonical entry there, even if it looks like a natural pinyin choice.
 - Treat forms of address as meaningful signals of rank, intimacy, age, contempt, or household position.
 - Translate titles, ranks, forms of address, and institutional terms by narrative function, readability, and consistency.
 - Do not mechanically concatenate Chinese characters into pinyin strings for forms of address (e.g., 'Xixiao' for '小西'). Instead, interpret the function of the address term (diminutive, honorific, kinship) and translate it appropriately, considering hierarchy, tone, and relationship. For common address prefixes like '小' (little), '老' (old), '阿' (affectionate), translate their function rather than transliterating them.
