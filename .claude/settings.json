@@ -1,4 +1,13 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(venv/bin/python -m app.cli chapter*)",
+      "Bash(venv/bin/python scripts/quality_loop.py*)",
+      "Bash(venv/bin/python scripts/fetch_chapter.py*)",
+      "Bash(venv/bin/python scripts/evaluate_translation.py*)",
+      "Bash(curl -s*52shuku.net*)"
+    ]
+  },
   "hooks": {
     "PreToolUse": [
       {

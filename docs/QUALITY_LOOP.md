@@ -102,6 +102,107 @@ existing closure report (`outputs/quality_loop_closure_report.md`):
 
 Each finding falls into one of three resolution types:
 
+- **Type A** — glossary/lexical (noun-like, stable): resolve via `project_assets/`
+- **Type B** — style/behavioral (how to translate): resolve via `project_assets/4. style_notes.md`
+- **Type C** — prompt-level enforcement (Type B failed): resolve via Prompt A, gated
+
+See "Finding classification and resolution" below for full criteria and routing.
+
+### Resolve
+
+Apply the fix appropriate to the finding type:
+
+| Type | Action | Gate |
+|------|--------|------|
+| A | Add or correct entry in the relevant `project_assets/` file | Canonization Gate |
+| B | Add behavioral rule to `project_assets/4. style_notes.md` | Canonization Gate |
+| C | Propose diff to `prompts/prompt_a.md`, get gate approval, apply | Prompt Change Gate |
+
+**Type A/B resolution:** write the entry, run the Canonization Gate, commit to
+the asset file. No prompt edit needed.
+
+**Type C resolution:** write the proposed diff, document the evidence (≥2 runs
+or ≥2 occurrences), verify no lower-level fix is possible, submit for gate
+approval. Only then edit the prompt file. See "Prompt Change Gate" for the
+full 7-step sequence.
+
+Do not resolve more than one Type C finding per iteration. Prompt changes
+compound — isolate and verify one at a time.
+
+### Verify
+
+After applying a fix, confirm it worked before moving to the next finding.
+
+**For Type A/B fixes:**
+
+```bash
+export MODEL_BACKEND_URL=http://$(ssh -G Fishhead-Core | grep '^hostname ' | awk '{print $2}'):8001/generate
+venv/bin/python -m app.cli chapter run \
+  --source data/source/one_chapter_quality_source.txt \
+  --output data/outputs/quality_run_vN.md \
+  --confirm
+```
+
+Compare the new output against the baseline for the specific passage that
+triggered the fix. Verdict: **FIXED** (gone), **IMPROVED** (reduced),
+**UNCHANGED** (fix had no effect — escalate to Type B or C).
+
+**For Type C fixes:**
+
+Run the same command and compare against the verification plan written during
+the Prompt Change Gate (Step 4). Verdict: **FIXED** or **REGRESSED** (revert
+the prompt change and reassess).
+
+**Verification is not optional.** A fix that is not verified in a v-next run
+is not closed — it remains an open finding.
+
+## Loop control
+
+### When to continue
+
+Run another iteration when:
+
+- At least one finding was FIXED or IMPROVED in the last run
+- There are open findings with a known resolution path (Type A/B pending, or
+  a gate-approved Type C not yet verified)
+- Score is still below target and the finding list is non-empty
+
+### When to stop
+
+Stop the loop when any of the following is true:
+
+- All current findings are FIXED or UNCHANGED across two consecutive runs
+  (UNCHANGED after two attempts = the fix path is wrong; reassess before
+  continuing)
+- No new bad cases appear in the last run and score is ≥ 8.0
+- The only remaining findings require a Type C fix that has not yet received
+  gate approval — pause, get approval, then resume
+- The sample has been exhausted: every passage has been verified at least once
+  and no regressions remain
+
+### Automated loop (`scripts/quality_loop.py`)
+
+For unattended multi-round runs, use the quality loop script:
+
+```bash
+# First batch (10 rounds, DeepSeek evaluator)
+venv/bin/python scripts/quality_loop.py --rounds 10
+
+# Resume after reviewing the convergence report
+venv/bin/python scripts/quality_loop.py --rounds 10 --continue
+
+# Preview commands without running (no model calls, no API cost)
+venv/bin/python scripts/quality_loop.py --rounds 3 --dry-run
+```
+
+The script runs translate → evaluate → auto-apply high-confidence asset
+updates (confidence ≥ 0.80) each round, then prints a convergence report.
+Low-confidence updates (< 0.80) are listed for human review but not applied.
+Type C changes are never auto-applied.
+
+After each batch, inspect `data/quality_loop/convergence_batch_NN.md` and
+`data/quality_loop/round_*/eval.json` before continuing.
+
 ## Finding classification and resolution
 
 ### Type A — Glossary/lexical entries
