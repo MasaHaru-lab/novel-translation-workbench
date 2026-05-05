@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """Quality iteration loop for novel-translation-workbench.
 
-Runs N rounds of: translate → evaluate → auto-apply high-confidence asset updates.
-Pauses for human review after each batch.
+Runs N rounds of: translate → evaluate → stage proposed asset updates for review.
+Nothing is written to project_assets/ automatically. All proposals land in
+round_XXX/staging.md for Claude in-session review before any asset is touched.
 
 Usage:
-  python scripts/quality_loop.py --rounds 10
-  python scripts/quality_loop.py --rounds 10 --continue   # resume after checkpoint
-  python scripts/quality_loop.py --rounds 10 --dry-run    # verify pipeline, no API calls
+  python scripts/quality_loop.py --rounds 3
+  python scripts/quality_loop.py --rounds 3 --continue   # resume after checkpoint
+  python scripts/quality_loop.py --rounds 3 --dry-run    # verify pipeline, no API calls
 """
 from __future__ import annotations
 
@@ -29,7 +30,15 @@ DEFAULT_SOURCE = PROJECT_ROOT / "data" / "source" / "one_chapter_quality_source.
 DEFAULT_PROFILE = "deepseek-v4-flash"
 DEFAULT_BOOK_MEMORY = PROJECT_ROOT / "data" / "book_memory" / "book_memory.json"
 
-AUTO_APPLY_THRESHOLD = 0.80  # confidence >= this → auto-apply asset update
+# Asset filename map — DeepSeek uses bare names; actual files dropped the numeric prefix
+ASSET_FILE_MAP = {
+    "glossary.md": "glossary.md",
+    "characters.md": "characters.md",
+    "titles_and_terms.md": "titles_and_terms.md",
+    "style_notes.md": "style_notes.md",
+    "unresolved_decisions.md": "unresolved_decisions.md",
+    "gold_examples.md": "gold_examples.md",
+}
 
 
 # ── State management ──────────────────────────────────────────────────────────
@@ -67,29 +76,65 @@ def round_dir(round_num: int) -> Path:
     return LOOP_DIR / f"round_{round_num:03d}"
 
 
-def apply_asset_update(update: dict) -> bool:
-    target_file = ASSETS_DIR / update["target_file"]
-    action = update["action"]
-    content = update["content"].strip()
+def write_staging_file(rdir: Path, eval_report: dict, round_num: int) -> Path:
+    """Write all proposed updates to a staging file. Nothing touches project_assets/."""
+    updates = eval_report.get("proposed_asset_updates", [])
+    bad_cases = eval_report.get("bad_cases", [])
+    gold_cases = eval_report.get("gold_cases", [])
+    staging_path = rdir / "staging.md"
 
-    if action == "add":
-        existing = target_file.read_text(encoding="utf-8") if target_file.exists() else ""
-        if content in existing:
-            return False  # already present
-        with target_file.open("a", encoding="utf-8") as f:
-            f.write(f"\n\n{content}\n")
-        return True
+    lines = [
+        f"# Round {round_num:03d} — Staging for Review",
+        f"Generated: {datetime.now(timezone.utc).isoformat()}",
+        f"Score: {eval_report.get('score', '?')}/10",
+        "",
+        f"> {eval_report.get('summary', '')}",
+        "",
+    ]
 
-    if action == "modify":
-        # Append as a note; full modify requires human review
-        existing = target_file.read_text(encoding="utf-8") if target_file.exists() else ""
-        note = f"\n\n<!-- AUTO-UPDATE {datetime.now(timezone.utc).date()} -->\n{content}\n"
-        if content in existing:
-            return False
-        target_file.write_text(existing + note, encoding="utf-8")
-        return True
+    if bad_cases:
+        lines += [f"## Bad Cases ({len(bad_cases)})", ""]
+        for i, bc in enumerate(bad_cases, 1):
+            sev = bc.get("severity", "?").upper()
+            lines += [
+                f"### {i}. [{sev}] {bc.get('type', '?')}",
+                f"- **ZH:** {bc.get('chinese_original', '')}",
+                f"- **Bad:** {bc.get('bad_translation', '')}",
+                f"- **Fix:** {bc.get('suggested_fix', '')}",
+                f"- **Why:** {bc.get('explanation', '')}",
+                "",
+            ]
 
-    return False  # "remove" always needs human review
+    if gold_cases:
+        lines += [f"## Gold Cases ({len(gold_cases)})", ""]
+        for i, gc in enumerate(gold_cases, 1):
+            lines += [
+                f"### {i}.",
+                f"- **EN:** {gc.get('excellent_translation', '')}",
+                f"- **Why:** {gc.get('why_good', '')}",
+                "",
+            ]
+
+    if updates:
+        lines += [f"## Proposed Asset Updates ({len(updates)})", "",
+                  "_Nothing has been applied. Review each entry, then apply manually._", ""]
+        for i, u in enumerate(updates, 1):
+            conf = u.get("confidence", 0)
+            target = ASSET_FILE_MAP.get(u.get("target_file", ""), u.get("target_file", "?"))
+            lines += [
+                f"### {i}. → {target}  (conf={conf:.2f}, action={u.get('action','?')})",
+                f"**Reason:** {u.get('reason', '')}",
+                "",
+                "```",
+                u.get("content", "").strip(),
+                "```",
+                "",
+            ]
+    else:
+        lines += ["## Proposed Asset Updates", "", "_None this round._", ""]
+
+    staging_path.write_text("\n".join(lines), encoding="utf-8")
+    return staging_path
 
 
 def print_round_report(round_num: int, eval_report: dict) -> None:
@@ -130,13 +175,11 @@ def print_round_report(round_num: int, eval_report: dict) -> None:
         print()
 
     if updates:
-        print(f"  PROPOSED ASSET UPDATES ({len(updates)}):")
+        print(f"  PROPOSED ASSET UPDATES ({len(updates)}) — staged for review:")
         for i, u in enumerate(updates, 1):
             conf = u.get("confidence", 0)
-            auto = "AUTO" if conf >= AUTO_APPLY_THRESHOLD else "REVIEW"
-            print(f"    {i}. [{auto} conf={conf:.2f}] → {u['target_file']}")
+            print(f"    {i}. [conf={conf:.2f}] → {u.get('target_file', '?')}")
             print(f"       {u.get('content', '')[:100]}")
-            print(f"       Reason: {u.get('reason', '')[:80]}")
         print()
 
     print(sep)
@@ -150,12 +193,14 @@ def generate_convergence_report(state: dict, batch: int) -> Path:
     scores = [r["score"] for r in rounds if "score" in r]
     bad_counts = [r["bad_count"] for r in rounds if "bad_count" in r]
     gold_counts = [r["gold_count"] for r in rounds if "gold_count" in r]
-    updates_applied = sum(r.get("updates_applied", 0) for r in rounds)
+    total_staged = sum(r.get("staged", 0) for r in rounds)
 
     scores = [s for s in scores if s is not None]
     trend = "improving" if len(scores) > 1 and scores[-1] > scores[0] else \
             "stable" if len(scores) > 1 and abs(scores[-1] - scores[0]) < 0.5 else \
             "needs more work"
+
+    staging_files = [r["staging"] for r in rounds if r.get("staging")]
 
     report = textwrap.dedent(f"""\
         # Quality Loop — Batch {batch} Convergence Report
@@ -166,24 +211,26 @@ def generate_convergence_report(state: dict, batch: int) -> Path:
         - Score trend: {scores[0] if scores else '?'} → {scores[-1] if scores else '?'} ({trend})
         - Total bad cases found: {sum(bad_counts)}
         - Total gold cases found: {sum(gold_counts)}
-        - Asset updates auto-applied: {updates_applied}
+        - Proposed updates staged for review: {total_staged}
 
         ## Round Scores
         {chr(10).join(f'  Round {r["round"]:03d}: {r.get("score","?")}/10 '
                       f'(bad={r.get("bad_count","?")}, gold={r.get("gold_count","?")})'
                       for r in rounds)}
 
+        ## Pending Review
+        {chr(10).join(f'  {p}' for p in staging_files)}
+
         ## Recommendation
         {"✅ Quality is improving — continue to next batch." if trend == "improving"
-         else "⚠️  Quality has plateaued — review asset updates manually before next batch."
+         else "⚠️  Quality has plateaued — review staging files before next batch."
          if trend == "stable"
          else "🔴 Quality needs significant work — inspect bad cases and update prompts."}
 
         ## Next Steps
-        - Review bad cases in data/quality_loop/round_*/eval.json
-        - Check auto-applied asset updates in project_assets/
-        - Run: python scripts/quality_loop.py --rounds 10 --continue
-          (or adjust prompts first if plateau)
+        - Read staging files above; apply approved entries to project_assets/ manually
+        - Run: python scripts/quality_loop.py --rounds 3 --continue
+          (after applying any asset updates)
     """)
 
     report_path = LOOP_DIR / f"convergence_batch_{batch:02d}.md"
@@ -270,32 +317,19 @@ def main() -> int:
 
         run(eval_cmd, "evaluate", dry_run=False)  # always run evaluator cmd itself
 
-        # Step 3: Parse eval and apply high-confidence updates
+        # Step 3: Parse eval, write staging file — nothing touches project_assets/
         eval_report: dict = {}
         if eval_path.exists():
             try:
                 eval_report = json.loads(eval_path.read_text())
             except json.JSONDecodeError:
-                print(f"  Could not parse eval report — skipping asset updates")
+                print(f"  Could not parse eval report — skipping staging")
 
         print_round_report(round_num, eval_report)
 
-        updates_applied = 0
-        review_needed: list[dict] = []
-        for update in eval_report.get("proposed_asset_updates", []):
-            conf = update.get("confidence", 0)
-            if conf >= AUTO_APPLY_THRESHOLD and not args.dry_run:
-                applied = apply_asset_update(update)
-                if applied:
-                    updates_applied += 1
-                    print(f"  ✓ Auto-applied: {update['target_file']} — {update['content'][:60]}")
-            else:
-                review_needed.append(update)
-
-        if review_needed:
-            print(f"\n  ⚠  {len(review_needed)} update(s) need human review:")
-            for u in review_needed:
-                print(f"     [{u['target_file']}] {u.get('content', '')[:80]}")
+        staging_path = write_staging_file(rdir, eval_report, round_num)
+        n_staged = len(eval_report.get("proposed_asset_updates", []))
+        print(f"  → Staged {n_staged} proposed update(s) for review: {staging_path}")
 
         # Step 4: Save round state
         round_state = {
@@ -305,10 +339,10 @@ def main() -> int:
             "score": eval_report.get("score"),
             "bad_count": len(eval_report.get("bad_cases", [])),
             "gold_count": len(eval_report.get("gold_cases", [])),
-            "updates_applied": updates_applied,
-            "updates_pending_review": len(review_needed),
+            "staged": n_staged,
             "output": str(output_path),
             "eval": str(eval_path),
+            "staging": str(staging_path),
         }
         state["rounds"].append(round_state)
         state["total_rounds"] = round_num
@@ -320,8 +354,9 @@ def main() -> int:
     print(f"  BATCH {batch} COMPLETE")
     print(f"{'═' * 60}")
     print(f"\n  Convergence report → {report_path}")
-    print(f"\n  Review the report, then decide:")
-    print(f"    a) python scripts/quality_loop.py --rounds 10 --continue")
+    print(f"\n  Read staging files in data/quality_loop/round_*/staging.md")
+    print(f"  Apply approved entries to project_assets/ manually, then:")
+    print(f"    a) python scripts/quality_loop.py --rounds 3 --continue")
     print(f"       (next batch with updated assets)")
     print(f"    b) Inspect bad cases and adjust prompts first")
     print(f"    c) Done — move to a new chapter")

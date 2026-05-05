@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Evaluate a translated chapter against the Chinese source.
 
-Calls DeepSeek API with a structured evaluation prompt.
+Calls Claude via the `claude -p` CLI (Claude Code Pro auth — no API key needed).
 Outputs a JSON report with bad_cases, gold_cases, proposed_asset_updates, score.
 
 Usage:
@@ -15,7 +15,8 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
+import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -107,36 +108,25 @@ def load_assets(assets_dir: Path) -> str:
     return "\n\n".join(parts) if parts else "(no assets loaded)"
 
 
-def call_deepseek(system: str, user: str) -> str:
-    # Load env from project .env.local if present
-    env_local = PROJECT_ROOT / ".env.local"
-    if env_local.exists():
-        for line in env_local.read_text().splitlines():
-            if "=" in line and not line.startswith("#"):
-                k, _, v = line.partition("=")
-                os.environ[k.strip()] = v.strip()  # .env.local wins over shell env
-
-    api_key = os.environ.get("DEEPSEEK_API_KEY")
-    base_url = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1")
-    if not api_key:
-        sys.exit("evaluate_translation: DEEPSEEK_API_KEY not set")
-
-    import requests as req
-    resp = req.post(
-        f"{base_url.rstrip('/')}/chat/completions",
-        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-        json={
-            "model": "deepseek-chat",
-            "max_tokens": 4096,
-            "messages": [
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
-        },
-        timeout=120,
+def call_claude(system: str, user: str, model: str = "claude-opus-4-7") -> str:
+    result = subprocess.run(
+        [
+            "claude", "-p",
+            "--model", model,
+            "--system-prompt", system,
+            "--tools", "",
+            "--no-session-persistence",
+        ],
+        input=user,
+        capture_output=True,
+        text=True,
+        timeout=300,
     )
-    resp.raise_for_status()
-    return resp.json()["choices"][0]["message"]["content"] or ""
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"claude CLI exited {result.returncode}:\n{result.stderr[:500]}"
+        )
+    return result.stdout.strip()
 
 
 def main() -> int:
@@ -177,8 +167,8 @@ def main() -> int:
         translation_text=translation_text,
     )
 
-    print("evaluate_translation: calling DeepSeek...", file=sys.stderr)
-    raw = call_deepseek(EVAL_SYSTEM, user_prompt)
+    print("evaluate_translation: calling Claude...", file=sys.stderr)
+    raw = call_claude(EVAL_SYSTEM, user_prompt)
 
     # Strip markdown fences if the model wrapped anyway
     raw = raw.strip()
@@ -187,7 +177,6 @@ def main() -> int:
         raw = re.sub(r"\n?```$", "", raw)
 
     try:
-        import re
         report = json.loads(raw)
     except json.JSONDecodeError as e:
         sys.exit(f"evaluate_translation: could not parse JSON response: {e}\nRaw:\n{raw[:500]}")

@@ -50,6 +50,15 @@ The translation framework has been migrated to a reusable, direction-agnostic sk
 
 ---
 
+## Phase B Quality Loop Refactor: Staging Discipline + Asset Reorganization (2026-05-06)
+
+- **Scope:** Quality-loop pivot from auto-apply to staging-based review; evaluator switched to `claude -p` CLI; `project_assets/N. *.md` renamed to bare names with content expansion; ch010 manual-review candidates landed in glossary, gold_examples, and FAILURE_PATTERN_INDEX.
+- **Files changed:** `.claude/settings.json`, `app/chapter/strategy.py` (parser strips `(...)` annotations from `- Chinese:` lines), `app/config_loader.py`, `data/book_memory/book_memory.json`, `docs/FAILURE_PATTERN_INDEX.md`, `project_assets/{characters,glossary,gold_examples,style_notes,titles_and_terms,unresolved_decisions}.md`, `scripts/{evaluate_translation,quality_loop}.py`.
+- **Tests:** `venv/bin/python -m pytest app/tests/` — 738 passing.
+- **Next:** Quality loop staging discipline ready for first end-to-end use.
+
+---
+
 
 ## Current Capabilities
 

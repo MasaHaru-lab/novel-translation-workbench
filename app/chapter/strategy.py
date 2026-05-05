@@ -224,11 +224,14 @@ def _parse_chinese_entities_from_assets() -> List[str]:
 
     # Pattern for "- Chinese: 中文名" lines
     chinese_line_re = re.compile(r"-\s*Chinese\s*:\s*(.+)", re.IGNORECASE)
+    # Strip trailing annotations like " (full name: ...)" or "（注）" so the
+    # captured entity matches against bare source text.
+    paren_annotation_re = re.compile(r"\s*[（(].*$")
 
     # Characters: extract Chinese names from "- Chinese: 秦流西" lines
     chars_text = load_asset("characters") or ""
     for match in chinese_line_re.finditer(chars_text):
-        chinese_name = match.group(1).strip()
+        chinese_name = paren_annotation_re.sub("", match.group(1)).strip()
         if chinese_name and chinese_name not in seen:
             seen.add(chinese_name)
             entities.append(chinese_name)

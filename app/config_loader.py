@@ -12,6 +12,10 @@ Usage:
 This is safe to call multiple times — subsequent calls are no-ops
 (a ``_loaded`` flag prevents duplicate parsing).
 
+``.env.local`` values always win over the existing shell environment so
+that rotating a key in ``.env.local`` takes effect immediately without
+requiring a shell restart.
+
 The loader is intentionally *not* auto-imported by ``app.config`` or
 ``app.translate.model_profiles`` so that callers (CLI, service, tests)
 explicitly opt in to local secret loading.
@@ -74,8 +78,6 @@ def load_env_local(project_root: str | Path | None = None) -> None:
             key, _, value = line.partition("=")
             key = key.strip()
             value = value.strip().strip("\"'")
-            # Only set if not already present (env var takes precedence)
-            if key not in os.environ:
-                os.environ[key] = value
+            os.environ[key] = value  # .env.local wins over shell env
 
     _loaded = True
