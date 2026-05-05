@@ -120,6 +120,26 @@ When translating a book or continuing an existing work, check and maintain proje
 
 Each chapter should strengthen later consistency rather than restarting from zero.
 
+## Memory Governance
+
+Tier mapping for this project. See `~/.claude/skills/memory-governance/` for the cross-project protocol.
+
+| Tier | Path(s) | Soft cap |
+|---|---|---|
+| 0 — Run notes | `data/quality_loop/round_NNN/staging.md`; STATUS.md "Recent batches" entries | — |
+| 1 — Case library | `project_assets/gold_examples.md` (gold), `docs/FAILURE_PATTERN_INDEX.md` (bad patterns), `project_assets/unresolved_decisions.md` (open questions) | — |
+| 2a — Term canonization | `project_assets/glossary.md`, `project_assets/characters.md`, `project_assets/titles_and_terms.md` | ≈400 entries combined (current: ~126) |
+| 2b — Active behavioral rule | `project_assets/style_notes.md`, `prompts/prompt_a.md`, `prompts/prompt_b.md` | ≈60 rules combined |
+| 3 — Archive | `project_assets/archive/` (created on first archive) | — |
+
+**Tier 1 → 2a gate:** Canonization Gate (`docs/QUALITY_LOOP.md` + `app/chapter/canonization.py`).
+**Tier 1 → 2b gate:** Prompt Change Gate (`docs/QUALITY_LOOP.md`).
+**Archive policy:** 90 days no recurrence, OR explicit supersession (the new entry takes over; the old one is moved to `project_assets/archive/` with a supersession note pointing at the new one).
+**Light scan cadence:** every batch close-out — flag candidates only, do not archive.
+**Sweep cadence:** per Phase milestone or quarterly, whichever comes first — actual archive decisions land here.
+
+`data/book_memory/book_memory.json` is a derived artifact, not a Tier-2a source. It bootstraps from `project_assets/` via `bootstrap_from_project_assets()` and is regenerated; treat the `.md` files as canonical.
+
 ## Mode overrides
 
 - If the user explicitly asks for `translate-only`, skip internal review
