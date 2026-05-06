@@ -6,9 +6,14 @@ Nothing is written to project_assets/ automatically. All proposals land in
 round_XXX/staging.md for Claude in-session review before any asset is touched.
 
 Usage:
-  python scripts/quality_loop.py --rounds 3
-  python scripts/quality_loop.py --rounds 3 --continue   # resume after checkpoint
+  python scripts/quality_loop.py --rounds 3              # new batch, round counter continues
+  python scripts/quality_loop.py --rounds 3 --continue   # resume current batch (same batch number)
+  python scripts/quality_loop.py --rounds 3 --reset      # destructive: wipe state.json, start over
   python scripts/quality_loop.py --rounds 3 --dry-run    # verify pipeline, no API calls
+
+State is preserved across invocations. A default run (no flag) bumps the batch
+number but keeps the monotonic round counter and the rounds[] history. Use
+--reset only when you genuinely want to throw away all prior history.
 """
 from __future__ import annotations
 
@@ -247,17 +252,30 @@ def main() -> int:
     ap.add_argument("--model-profile", default=DEFAULT_PROFILE)
     ap.add_argument("--book-memory", type=Path, default=DEFAULT_BOOK_MEMORY)
     ap.add_argument("--continue", dest="resume", action="store_true",
-                    help="Continue from last saved state")
+                    help="Continue from last saved state (don't bump the batch counter)")
+    ap.add_argument("--reset", action="store_true",
+                    help="Destructive: wipe state.json and start fresh batch 1, round 1")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
     LOOP_DIR.mkdir(parents=True, exist_ok=True)
-    state = load_state() if args.resume else {
+
+    # Always load existing state unless --reset is explicitly passed.
+    # The previous behaviour (load only on --resume, else fresh dict) silently
+    # threw away the cross-batch rounds[] history and reset the round counter,
+    # which clobbered prior round_NNN directories on the next default run.
+    fresh_state = {
         "batch": 0,
         "total_rounds": 0,
         "rounds": [],
         "started_at": datetime.now(timezone.utc).isoformat(),
     }
+    if args.reset:
+        state = fresh_state
+    elif STATE_FILE.exists():
+        state = load_state()
+    else:
+        state = fresh_state
 
     if not args.resume:
         state["batch"] = state.get("batch", 0) + 1
