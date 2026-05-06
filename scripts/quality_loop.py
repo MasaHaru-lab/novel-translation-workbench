@@ -91,6 +91,7 @@ def write_staging_file(rdir: Path, eval_report: dict, round_num: int) -> Path:
     lines = [
         f"# Round {round_num:03d} — Staging for Review",
         f"Generated: {datetime.now(timezone.utc).isoformat()}",
+        f"Backend: {eval_report.get('backend', 'unknown')}",
         f"Score: {eval_report.get('score', '?')}/10",
         "",
         f"> {eval_report.get('summary', '')}",
@@ -255,6 +256,11 @@ def main() -> int:
                     help="Continue from last saved state (don't bump the batch counter)")
     ap.add_argument("--reset", action="store_true",
                     help="Destructive: wipe state.json and start fresh batch 1, round 1")
+    ap.add_argument("--evaluator", choices=["claude", "deepseek", "auto"],
+                    default="auto",
+                    help="Forwarded to evaluate_translation.py. 'auto' (default) "
+                         "tries Claude and falls back to DeepSeek on confirmed "
+                         "rate-limit; 'claude' / 'deepseek' lock to one backend.")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
@@ -329,6 +335,7 @@ def main() -> int:
             "--translation", str(output_path),
             "--assets-dir", str(ASSETS_DIR),
             "--output", str(eval_path),
+            "--evaluator", args.evaluator,
         ]
         if args.dry_run:
             eval_cmd.append("--dry-run")
@@ -358,6 +365,7 @@ def main() -> int:
             "bad_count": len(eval_report.get("bad_cases", [])),
             "gold_count": len(eval_report.get("gold_cases", [])),
             "staged": n_staged,
+            "backend": eval_report.get("backend", "unknown"),
             "output": str(output_path),
             "eval": str(eval_path),
             "staging": str(staging_path),
