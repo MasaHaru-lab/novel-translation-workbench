@@ -209,6 +209,17 @@ Type C changes are never auto-applied.
 After each batch, inspect `data/quality_loop/convergence_batch_NN.md` and
 `data/quality_loop/round_*/eval.json` before continuing.
 
+### Human-review calibration checklist
+
+`scripts/evaluate_translation.py` accepts `--human-review <markdown>` for
+calibration against manually reviewed signals. When this option is provided,
+the evaluator prompt requires a `human_review_checklist` array in the JSON
+report. Each human-review bullet or line-level correction must receive an
+explicit `caught`, `missed`, or `unclear` judgment with brief evidence. This is
+separate from `bad_cases` and `gold_cases`: the checklist exists so known human
+targets cannot be silently skipped when the evaluator chooses not to promote a
+signal into the main findings.
+
 ## Finding classification and resolution
 
 ### Type A — Glossary/lexical entries
