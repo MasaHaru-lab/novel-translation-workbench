@@ -90,6 +90,14 @@ Evaluate this translation. Return ONLY valid JSON matching this exact schema:
       "confidence": <float 0-1>
     }}
   ],
+  "human_review_checklist": [
+    {{
+      "signal": <human-review bullet/signal being checked>,
+      "judgment": <"caught"|"missed"|"unclear">,
+      "evidence": <brief source/translation/evaluator evidence>,
+      "linked_case": <bad_cases/gold_cases index or null>
+    }}
+  ],
   "summary": <2-3 sentence summary of main quality issues this round>
 }}
 
@@ -98,6 +106,12 @@ Rules:
 - gold_cases: only genuinely excellent translations worth reusing. Max 5.
 - proposed_asset_updates: only rules that would PREVENT RECURRING bad cases. Max 5.
 - confidence > 0.8 = safe to auto-apply. confidence < 0.8 = needs human review.
+- human_review_checklist: if human review signals are provided, include one item
+  for every bullet/signal from that section. Mark "caught" only when the signal
+  is explicitly handled in bad_cases or gold_cases. Mark "missed" when the
+  source/translation contains the signal but the main evaluation did not handle
+  it. Mark "unclear" only when the signal cannot be located or compared.
+  If no human review is provided, return an empty array.
 - Return ONLY the JSON object. No prose, no markdown fences.
 """
 
@@ -128,10 +142,13 @@ def build_human_review_block(content: str) -> str:
     return (
         "## Human Review Calibration Signals (must-check)\n"
         "The following human-reviewed notes are explicit calibration signals. "
-        "When a signal appears in the source or translation, check whether the "
-        "translation matches it. If the translation diverges, report the issue "
-        "in bad_cases. If it matches well, report it in gold_cases when it is "
-        "one of the strongest examples.\n\n"
+        "Treat each bullet or line-level correction as its own signal. For "
+        "every signal, compare the Chinese source, English translation, and "
+        "the expected human correction. If the translation diverges, report "
+        "the issue in bad_cases. If it matches well, report it in gold_cases "
+        "when it is one of the strongest examples. You must also complete "
+        "human_review_checklist with one caught/missed/unclear judgment per "
+        "signal and brief evidence; do not silently skip any signal.\n\n"
         f"{content}"
     )
 
@@ -197,9 +214,37 @@ EVAL_SCHEMA = {
                 "required": ["target_file", "action", "content", "confidence"],
             },
         },
+        "human_review_checklist": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "signal": {"type": "string", "maxLength": 400},
+                    "judgment": {
+                        "type": "string",
+                        "enum": ["caught", "missed", "unclear"],
+                    },
+                    "evidence": {"type": "string", "maxLength": 500},
+                    "linked_case": {
+                        "anyOf": [
+                            {"type": "integer"},
+                            {"type": "string", "maxLength": 80},
+                            {"type": "null"},
+                        ]
+                    },
+                },
+                "required": ["signal", "judgment", "evidence", "linked_case"],
+            },
+        },
         "summary": {"type": "string", "maxLength": 800},
     },
-    "required": ["score", "bad_cases", "gold_cases", "proposed_asset_updates"],
+    "required": [
+        "score",
+        "bad_cases",
+        "gold_cases",
+        "proposed_asset_updates",
+        "human_review_checklist",
+    ],
 }
 
 
