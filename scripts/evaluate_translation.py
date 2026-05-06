@@ -109,16 +109,43 @@ Rules:
 - When human review signals are provided, prioritize diverging human-review
   signals in bad_cases before ordinary non-calibration issues. Do not praise a
   rendering in gold_cases if it diverges from the expected human correction.
+  Never list the same Chinese span or English rendering in both bad_cases and
+  gold_cases; if any part of a rendering is called wrong, it is not reusable
+  gold for this report. Exact or acceptable matches to human-review signals
+  should be marked caught in human_review_checklist with linked_case null
+  unless they are independently excellent, reusable examples. Do not turn
+  harmless formatting differences, capitalization, comma placement, or wording
+  that preserves the expected meaning/register into bad_cases. A correct term
+  without an explanatory gloss, or a correct kinship/legal relation followed by
+  an appositive name, is an acceptable match: mark caught with linked_case null,
+  not a bad_case. For rare body/diagnostic technical terms such as 泪堂, a
+  rendering like "Tear Hall beneath her eyes" is an acceptable term-with-location
+  match for "Tear Hall, the area beneath the eyes"; mark caught with linked_case
+  null and do not create a bad_case.
+- Severity calibration: critical = truncation, repetition/merge artifact, or
+  meaning failure that breaks the passage; major = human-review divergence that
+  changes title meaning, relationship/address, terminology, dialogue force, or
+  narrative stance; minor = local polish issue with meaning intact. If bad_cases
+  is near the limit, keep critical/major human-review divergences and drop minor
+  polish complaints first.
 - human_review_checklist: if human review signals are provided, include one item
   for every bullet/signal from that section. This checklist measures whether
   this evaluator caught the human-review signal, not whether the translation
-  was correct. Mark "caught" when an incorrect rendering is explicitly reported
-  in bad_cases, or when a correct/strong rendering is explicitly reported in
-  gold_cases. Mark "missed" only when the source/translation contains the
-  signal but the main evaluation failed to mention it in bad_cases or
-  gold_cases. Do not mark a signal "missed" if linked_case points to a
-  bad_cases/gold_cases item; that is a caught evaluator signal. Mark "unclear"
-  only when the signal cannot be located or compared.
+  was correct. Decide caught/missed/unclear first by comparing the signal
+  against the source and translation; choose linked_case only after judgment.
+  Lack of a linked_case must never prevent "caught". Mark "caught" when an
+  incorrect rendering is explicitly reported in bad_cases, when a correct/strong
+  rendering is explicitly reported in gold_cases, or when the translation is an
+  exact/acceptable match that needs no bad_case or gold_case. Exact/acceptable
+  matches use linked_case null; do not use "missed" or "unclear" merely because
+  a match has no linked case or is not reusable gold. Mark "missed" only when
+  the source/translation contains the signal but the evaluator failed to account
+  for it at all. linked_case may point to bad_cases only when the checklist
+  signal is an actual failure reported in bad_cases; it may point to gold_cases
+  only when the signal is a reusable gold example. If judgment is "caught"
+  because the rendering is acceptable, linked_case must be null and the item
+  must not be listed in bad_cases. Mark "unclear" only when the signal cannot
+  be located or compared.
   If no human review is provided, return an empty array.
 - Return ONLY the JSON object. No prose, no markdown fences.
 """
@@ -158,17 +185,44 @@ def build_human_review_block(content: str) -> str:
         "otherwise seem too small. Prioritize these human-review divergences "
         "in bad_cases before ordinary non-calibration issues. If the translation "
         "differs from the expected correction, do not praise that rendering in "
-        "gold_cases merely because it is fluent or close in spirit. If it "
-        "matches well, report it in gold_cases when it is one of the strongest "
-        "examples. You must also complete "
+        "gold_cases merely because it is fluent or close in spirit; any span "
+        "listed in bad_cases is ineligible for gold_cases. If it matches well, "
+        "mark the signal caught in the checklist with linked_case null; report "
+        "it in gold_cases only when it is independently one of the strongest "
+        "reusable examples. Do not over-flag exact or acceptable matches for "
+        "minor punctuation, capitalization, comma placement, or wording changes "
+        "that preserve the expected meaning and register. A correct term without "
+        "an explanatory gloss, or a correct kinship/legal relation followed by "
+        "an appositive name, is an acceptable match: mark caught with linked_case "
+        "null, not a bad_case. For rare body/diagnostic technical terms such as "
+        "泪堂, a rendering like \"Tear Hall beneath her eyes\" is an acceptable "
+        "term-with-location match for \"Tear Hall, the area beneath the eyes\"; "
+        "mark caught with linked_case null and do not create a bad_case. "
+        "Calibrate severity: "
+        "critical for truncation, repetition/merge artifacts, or meaning failure "
+        "that breaks the passage; major for human-review divergences that change "
+        "title meaning, relationship/address, terminology, dialogue force, or "
+        "narrative stance; minor only for local polish issues with meaning "
+        "intact. If bad_cases is near the limit, keep critical/major "
+        "human-review divergences and drop minor polish complaints first. "
+        "You must also complete "
         "human_review_checklist with one caught/missed/unclear judgment per "
         "signal and brief evidence; do not silently skip any signal. In the "
         "checklist, caught/missed/unclear describes evaluator coverage, not "
-        "translation correctness: a wrong translation is caught when you list "
-        "it in bad_cases, and a good translation is caught when you list it in "
-        "gold_cases. Missed means the signal appears in the source/translation "
-        "but was not handled in bad_cases or gold_cases. Never mark a checklist "
-        "item missed when linked_case refers to a bad_cases or gold_cases item.\n\n"
+        "translation correctness. Decide caught/missed/unclear first by "
+        "comparing the signal against the source and translation; choose "
+        "linked_case only after judgment. Lack of a linked_case must never "
+        "prevent caught. A wrong translation is caught when you list it in "
+        "bad_cases; a good reusable translation is caught when you list it in "
+        "gold_cases; an exact or acceptable match is also caught with "
+        "linked_case null when it needs no bad_case or gold_case. Do not mark "
+        "a match missed or unclear merely because it has no linked case or is "
+        "not reusable gold. Missed means the signal appears in the "
+        "source/translation but was not accounted for at all. linked_case may "
+        "point to bad_cases only for actual failures reported in bad_cases, "
+        "and to gold_cases only for reusable gold examples. If judgment is "
+        "caught because the rendering is acceptable, linked_case must be null "
+        "and the item must not be listed in bad_cases.\n\n"
         f"{content}"
     )
 
