@@ -108,12 +108,85 @@ def load_assets(assets_dir: Path) -> str:
     return "\n\n".join(parts) if parts else "(no assets loaded)"
 
 
+# JSON Schema mirrors the prompt template above. Constrains the CLI response
+# to a parseable, length-bounded shape — without this, long explanations
+# truncated at the default text-output budget produced unparseable JSON
+# (failure mode observed on round_011/ch010, 2026-05-06).
+EVAL_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "score": {"type": "number", "minimum": 0, "maximum": 10},
+        "score_breakdown": {
+            "type": "object",
+            "properties": {
+                "accuracy": {"type": "number", "minimum": 0, "maximum": 10},
+                "fluency": {"type": "number", "minimum": 0, "maximum": 10},
+                "elegance": {"type": "number", "minimum": 0, "maximum": 10},
+            },
+            "required": ["accuracy", "fluency", "elegance"],
+        },
+        "bad_cases": {
+            "type": "array",
+            "maxItems": 10,
+            "items": {
+                "type": "object",
+                "properties": {
+                    "type": {"type": "string"},
+                    "chinese_original": {"type": "string"},
+                    "bad_translation": {"type": "string"},
+                    "explanation": {"type": "string", "maxLength": 600},
+                    "suggested_fix": {"type": "string", "maxLength": 600},
+                    "severity": {"type": "string"},
+                },
+                "required": ["type", "chinese_original", "bad_translation", "explanation"],
+            },
+        },
+        "gold_cases": {
+            "type": "array",
+            "maxItems": 5,
+            "items": {
+                "type": "object",
+                "properties": {
+                    "chinese_original": {"type": "string"},
+                    "excellent_translation": {"type": "string"},
+                    "why_good": {"type": "string", "maxLength": 400},
+                },
+                "required": ["chinese_original", "excellent_translation", "why_good"],
+            },
+        },
+        "proposed_asset_updates": {
+            "type": "array",
+            "maxItems": 5,
+            "items": {
+                "type": "object",
+                "properties": {
+                    "target_file": {"type": "string"},
+                    "action": {"type": "string"},
+                    "content": {"type": "string"},
+                    "reason": {"type": "string", "maxLength": 400},
+                    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+                },
+                "required": ["target_file", "action", "content", "confidence"],
+            },
+        },
+        "summary": {"type": "string", "maxLength": 800},
+    },
+    "required": ["score", "bad_cases", "gold_cases", "proposed_asset_updates"],
+}
+
+
 def call_claude(system: str, user: str, model: str = "claude-opus-4-7") -> str:
+    # --json-schema requires --output-format json; structured response lives
+    # under .structured_output inside the result envelope. Without
+    # --output-format json the schema validates internally but stdout is
+    # empty in text mode (observed on round_011/ch010, 2026-05-06).
     result = subprocess.run(
         [
             "claude", "-p",
             "--model", model,
             "--system-prompt", system,
+            "--json-schema", json.dumps(EVAL_SCHEMA),
+            "--output-format", "json",
             "--tools", "",
             "--no-session-persistence",
         ],
@@ -126,7 +199,17 @@ def call_claude(system: str, user: str, model: str = "claude-opus-4-7") -> str:
         raise RuntimeError(
             f"claude CLI exited {result.returncode}:\n{result.stderr[:500]}"
         )
-    return result.stdout.strip()
+    envelope = json.loads(result.stdout.strip())
+    if envelope.get("is_error"):
+        raise RuntimeError(
+            f"claude returned error: {str(envelope.get('result', ''))[:500]}"
+        )
+    structured = envelope.get("structured_output")
+    if structured is None:
+        raise RuntimeError(
+            f"claude returned no structured_output. envelope keys: {list(envelope)}"
+        )
+    return json.dumps(structured, ensure_ascii=False)
 
 
 def main() -> int:
