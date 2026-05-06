@@ -59,6 +59,14 @@ The translation framework has been migrated to a reusable, direction-agnostic sk
 
 ---
 
+## ch010 Evaluator Calibration Smoke (2026-05-06)
+
+- **Status:** Calibration path validated structurally. The live DeepSeek evaluator smoke produced `human_review_checklist` accounting for the ch010 human-review file.
+- **Evidence:** `data/quality_loop/ch010_calibration_smoke.json` at HEAD `7fe43b2` records 13 checklist items: 4 caught, 8 missed, 1 unclear.
+- **Interpretation:** The evaluator now exposes per-signal calibration accounting instead of silently skipping known human targets. Semantic catch rate still needs improvement: important targets such as title rendering, `子身残`, `宋医馆`, `你会不会治的`, and `反噬` remained missed in the round_012 translation and require future calibration/translation work.
+
+---
+
 
 ## Current Capabilities
 
