@@ -1,0 +1,208 @@
+{
+  "score": 7.0,
+  "score_breakdown": {
+    "accuracy": 6.5,
+    "fluency": 7.5,
+    "elegance": 7.0
+  },
+  "bad_cases": [
+    {
+      "type": "other",
+      "chinese_original": "首断亲人吉凶",
+      "bad_translation": "Chapter Ten: First Judgment of Family Fortune",
+      "explanation": "Chapter title misrenders '吉凶' (fortune and misfortune) as just 'fortune,' losing the balance of good and ill. 'Judgment' is too formal; 'reading' better captures the divinatory register. Human review specifies: 'Her First Reading of a Relative's Fortune and Misfortune.'",
+      "suggested_fix": "Chapter Ten: First Reading of a Relative's Fortune and Misfortune",
+      "severity": "major"
+    },
+    {
+      "type": "other",
+      "chinese_original": "太素脉法",
+      "bad_translation": "the the Taisu pulse method pulse method",
+      "explanation": "Critical phrase-level duplication artifact: 'the the' and 'pulse method pulse method' appear back to back due to a revision/segmentation glitch. This is a mechanical defect that breaks readabilty entirely at that point.",
+      "suggested_fix": "the Taisu pulse method",
+      "severity": "critical"
+    },
+    {
+      "type": "literal_translation",
+      "chinese_original": "子身残",
+      "bad_translation": "her sons would be broken",
+      "explanation": "'子身残' is a divinatory fate-pattern judgment about 'damage in the line of her children,' not a literal prediction about sons ('子' here refers to children/descendants in general) or bodily brokenness ('残'). The translation narrows gender unsupportedly and reads as physical injury rather than karmic/lineage damage. The glossary entry already specifies 'damage in the line of her children' as the preferred rendering.",
+      "suggested_fix": "damage in the line of her children",
+      "severity": "major"
+    },
+    {
+      "type": "address_drift",
+      "chinese_original": "你三婶那边",
+      "bad_translation": "over at Lady Gu's",
+      "explanation": "Although the kinship-address policy normally resolves to character names, the human review signal specifies '你三婶那边' should be rendered as 'your third aunt' because in this context Lady Wang is speaking directly to Liuxi Qin and the kinship term establishes the family relationship. Over-resolving to 'Lady Gu' loses the relational register of the original address.",
+      "suggested_fix": "over at your third aunt's",
+      "severity": "major"
+    },
+    {
+      "type": "chinese_residual",
+      "chiinese_original": "竟然质疑她的本事",
+      "bad_translation": "How dare they doubt her skill.",
+      "explanation": "The source is third-person narrative reported thought, not first-person internal monologue. The human review specifies: 'To think someone was questioning her ability.' The translation adds 'How dare they' which amplifies indignation beyond what the source supports and changes the narrative stance.",
+      "suggested_fix": "To think someone was questioning her ability.",
+      "severity": "minor"
+    },
+    {
+      "type": "narrative_misread",
+      "chinese_original": "反噬",
+      "bad_translation": "suffer a backlash",
+      "explanation": "反噬 is a medical/metaphorical term meaning the body's recoil or 'taking its toll,' not a violent 'backlash' which carries more aggressive or retaliatory connotations. Human review specifies: 'take its toll.'",
+      "suggested_fix": "take its toll",
+      "severity": "minor"
+    },
+    {
+      "type": "address_drift",
+      "chinese_original": "宋医馆",
+      "bad_translation": "Song Clinic",
+      "explanation": "Rendered as 'Song Clinic' but the titles_and_terms.md specifies 'Song Medical Hall' as the canonical form. 'Clinic' has a modern medical-office register that breaks the historical-fantasy setting.",
+      "suggested_fix": "Song Medical Hall",
+      "severity": "minor"
+    },
+    {
+      "type": "literal_translation",
+      "chinese_original": "你会不会治的？",
+      "bad_translation": "can you even treat her?",
+      "explanation": "The rhetorical force of the original question is partly lost. The human review specifies: 'No—do you actually know how to treat this?' The translation should preserve the skeptical, loaded pause and the implication of incompetence.",
+      "suggested_fix": "No—do you actually know how to treat this?",
+      "severity": "minor"
+    }
+  ],
+  "gold_cases": [
+    {
+      "chinese_original": "五十五啊，时日无多呢！",
+      "excellent_translation": "Fifty-five. Not much time left.",
+      "why_good": "Perfectly captures the compressed, clipped rhythm of the internal thought. Two sentence fragments instead of one compound sentence mirrors the source's terse fate-pattern register. No softening or elaboration — trusts the reader to do the math."
+    },
+    {
+      "chinese_original": "她讨厌睡觉的时候被打扰。",
+      "excellent_translation": "She hated being disturbed while she was sleeping.",
+      "why_good": "Short declarative that perfectly matches Liuxi Qin's blunt inner-voice register. 'Hated' preserves the irritated edge without over-dramatizing. Single sentence on its own line lands as a thought-beat, exactly matching the source's rhythm."
+    },
+    {
+      "chinese_original": "不高兴",
+      "excellent_translation": "*Unhappy.*",
+      "why_good": "Matches the blunt one-word internal reaction exactly. Italicization signals inner thought. No literary paraphrase ('She was displeased'), which would flatten the character's authentic inner voice."
+    },
+    {
+      "chinese_original": "随便你们",
+      "excellent_translation": "As you wish.",
+      "why_good": "Renders the dismissive, nonchalant register of the source without being overly modern. 'As you wish' is natural English polite dismissal that carries the wry edge of Liuxi Qin's voice — she doesn't care but is being slightly formal with her legal mother."
+    }
+  ],
+  "proposed_asset_updates": [
+    {
+      "target_file": "style_notes.md",
+      "action": "add",
+      "content": "## Paragraph duplication prevention (strict)\nDuring translation, ensure no phrase-level mechanical duplication occurs. Adjacent repeated function words ('the the', 'and and') or repeated noun phrases ('pulse method pulse method') are critical defects. After any revision or glossary insertion, scan the output for duplicated spans caused by segmentation glitches or revision artifacts.",
+      "reason": "The duplication 'the the Taisu pulse method pulse method' is a severe production defect that would break the reader's immersion. A direct rule prevents this specific failure mode at the output stage.",
+      "confidence": 0.95
+    },
+    {
+      "target_file": "titles_and_terms.md",
+      "action": "modify",
+      "content": "### 宋医馆\n- Chinese: 宋医馆\n- Working English rendering: Song Medical Hall\n- Notes: The Song family's medical establishment. Canonical rendering is 'Song Medical Hall.' Do NOT use 'Song Clinic' — 'clinic' has a modern medical-office register that breaks the historical-fantasy setting. The resident physician is Doctor Song (宋大夫).",
+      "reason": "The translation used 'Song Clinic' in violation of the existing glossary entry 'Song Medical Hall.' Strengthen the notes to explicitly reject the banned form.",
+      "confidence": 0.9
+    },
+    {
+      "target_file": "titles_and_terms.md",
+      "action": "add",
+      "content": "### 三婶 (kinship address)\n- Chinese: 三婶 / 你三婶那边\n- English rendering: your third aunt\n- Notes: When a character uses 三婶 in direct address to a younger family member, the kinship term should be preserved as 'your third aunt' rather than resolved to 'Lady Gu.' The relational register is the point of the address. This overrides the general kinship-resolution policy in contexts where the speaker is identifying the relationship to the listener.",
+      "reason": "The translation over-resolved '你三婶那边' to 'Lady Gu's,' losing the relational address register. The human review confirms kinship preservation is required in this context.",
+      "confidence": 0.85
+    },
+    {
+      "target_file": "gold_examples.md",
+      "action": "add",
+      "content": "### 53. Compressed fate beat — `五十五啊，时日无多呢！`\n\n- **Source:** `五十五啊，时日无多呢！`\n- **Preferred rendering:** *Fifty-five. Not much time left.*\n- **Why it works:** Two clipped fragments mirror the source's rhythm and let the implication sit. The terse register keeps the divinatory weight without spelling it out — the reader does the math. The exclamation mark in the source does not carry over; the beat structure replaces it.\n- **Weak rendering avoided:** *She was fifty-five, and there was not much time remaining* — explanatory, kills the rhythm; *Fifty-five years old. There isn't much time.* — slightly verbose, the contracted 'isn't' breaks register.",
+      "reason": "The rendering 'Fifty-five. Not much time left.' is a strong taste anchor for compressed fate-pattern internal beats, performing the same function as the source's terse register. Adds to the growing list of inner-voice anchors.",
+      "confidence": 0.9
+    }
+  ],
+  "human_review_checklist": [
+    {
+      "signal": "Title: '首断亲人吉凶' → 'Her First Reading of a Relative's Fortune and Misfortune'",
+      "judgment": "missed",
+      "evidence": "Translation renders as 'First Judgment of Family Fortune,' which drops the 'misfortune' half, uses 'Judgment' instead of 'Reading' (wrong divinatory register), and doesn't match the human-reviewed canonical form.",
+      "linked_case": 0
+    },
+    {
+      "signal": "太素脉法 → Taisu pulse method / Taisu pulse diagnosis",
+      "judgment": "missed",
+      "evidence": "Translation contains the duplication artifact 'the the Taisu pulse method pulse method' — the core rendering is correct but the mechanical duplication means the passage as delivered is critically defective.",
+      "linked_case": 1
+    },
+    {
+      "signal": "泪堂 → Tear Hall, the area beneath the eyes",
+      "judgment": "caught",
+      "evidence": "Translation renders as 'Tear Hall beneath her eyes' — follows the glossary specification with an appropriate contextual gloss. No error.",
+      "linked_case": null
+    },
+    {
+      "signal": "命格 → fate pattern",
+      "judgment": "caught",
+      "evidence": "Translation uses 'fate pattern' exactly per glossary specification. No error.",
+      "linked_case": null
+    },
+    {
+      "signal": "寿不过甲 → would not live past sixty / would not pass her sixtieth year",
+      "judgment": "caught",
+      "evidence": "Translation uses 'would not live past sixty' exactly per glossary specification. No error.",
+      "linked_case": null
+    },
+    {
+      "signal": "人伢子 → servant broker",
+      "judgment": "unclear",
+      "evidence": "Signal is 'servant broker' in human review, but the translation ends with 'servant broker matter' (the last line is truncated, the full rendering is not visible in the output). Cannot fully verify whether the term is correctly used mid-sentence.",
+      "linked_case": null
+    },
+    {
+      "signal": "子身残 → damage in the line of her children",
+      "judgment": "missed",
+      "evidence": "Translation renders as 'her sons would be broken,' which narrows gender unsupportedly and misreads the divinatory register as physical injury rather than karmic lineage damage.",
+      "linked_case": 2
+    },
+    {
+      "signal": "嫡母 → legal mother",
+      "judgment": "caught",
+      "evidence": "Translation uses 'legal mother' exactly per resolved titles entry. No error.",
+      "linked_case": null
+    },
+    {
+      "signal": "宋医馆 → Song Medical Hall",
+      "judgment": "missed",
+      "evidence": "Translation renders as 'Song Clinic,' which violates the canonical form 'Song Medical Hall' specified in titles_and_terms.md.",
+      "linked_case": 6
+    },
+    {
+      "signal": "你三婶那边 → your third aunt",
+      "judgment": "missed",
+      "evidence": "Translation renders as 'over at Lady Gu's,' which over-resolves the kinship term and loses the relational address register.",
+      "linked_case": 3
+    },
+    {
+      "signal": "'你会不会治的' → 'No—do you actually know how to treat this?'",
+      "judgment": "missed",
+      "evidence": "Translation renders as 'can you even treat her?' which loses the rhetorical force and skeptical pause of the source.",
+      "linked_case": 7
+    },
+    {
+      "signal": "'竟然质疑她的本事' → 'To think someone was questioning her ability.'",
+      "judgment": "missed",
+      "evidence": "Translation renders as 'How dare they doubt her skill' — changes narrative stance from reported thought to internal monologue, and amplifies indignation beyond what the source supports.",
+      "linked_case": 4
+    },
+    {
+      "signal": "反噬 → take its toll",
+      "judgment": "missed",
+      "evidence": "Translation renders as 'suffer a backlash,' which carries more aggressive/retaliatory connotations than the source's medical/metaphorical recoil sense.",
+      "linked_case": 5
+    }
+  ],
+  "summary": "This translation is functional but contains one critical mechanical defect (phrase-level duplication of 'the the Taisu pulse method pulse method') that would break reader immersion in the delivered passage. Several accuracy issues remain: the chapter title drops 'misfortune,' '子身残' is misread as a gender-narrowed physical injury, and the kinship address '你三婶那边' is over-resolved to a name rather than preserved as a relational term. The inner-voice beats ('Fifty-five. Not much time left.', '*Unhappy.*') are strong gold examples. The primary improvements needed are mechanical output quality and stricter adherence to glossary canonical forms for medical/divinatory terms.",
+  "backend": "deepseek-explicit"
+}
