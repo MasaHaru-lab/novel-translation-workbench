@@ -106,11 +106,19 @@ Rules:
 - gold_cases: only genuinely excellent translations worth reusing. Max 5.
 - proposed_asset_updates: only rules that would PREVENT RECURRING bad cases. Max 5.
 - confidence > 0.8 = safe to auto-apply. confidence < 0.8 = needs human review.
+- When human review signals are provided, prioritize diverging human-review
+  signals in bad_cases before ordinary non-calibration issues. Do not praise a
+  rendering in gold_cases if it diverges from the expected human correction.
 - human_review_checklist: if human review signals are provided, include one item
-  for every bullet/signal from that section. Mark "caught" only when the signal
-  is explicitly handled in bad_cases or gold_cases. Mark "missed" when the
-  source/translation contains the signal but the main evaluation did not handle
-  it. Mark "unclear" only when the signal cannot be located or compared.
+  for every bullet/signal from that section. This checklist measures whether
+  this evaluator caught the human-review signal, not whether the translation
+  was correct. Mark "caught" when an incorrect rendering is explicitly reported
+  in bad_cases, or when a correct/strong rendering is explicitly reported in
+  gold_cases. Mark "missed" only when the source/translation contains the
+  signal but the main evaluation failed to mention it in bad_cases or
+  gold_cases. Do not mark a signal "missed" if linked_case points to a
+  bad_cases/gold_cases item; that is a caught evaluator signal. Mark "unclear"
+  only when the signal cannot be located or compared.
   If no human review is provided, return an empty array.
 - Return ONLY the JSON object. No prose, no markdown fences.
 """
@@ -145,10 +153,22 @@ def build_human_review_block(content: str) -> str:
         "Treat each bullet or line-level correction as its own signal. For "
         "every signal, compare the Chinese source, English translation, and "
         "the expected human correction. If the translation diverges, report "
-        "the issue in bad_cases. If it matches well, report it in gold_cases "
-        "when it is one of the strongest examples. You must also complete "
+        "the issue in bad_cases, even for phrase-level terminology, title, "
+        "dialogue, kinship-address, and narrative-stance signals that might "
+        "otherwise seem too small. Prioritize these human-review divergences "
+        "in bad_cases before ordinary non-calibration issues. If the translation "
+        "differs from the expected correction, do not praise that rendering in "
+        "gold_cases merely because it is fluent or close in spirit. If it "
+        "matches well, report it in gold_cases when it is one of the strongest "
+        "examples. You must also complete "
         "human_review_checklist with one caught/missed/unclear judgment per "
-        "signal and brief evidence; do not silently skip any signal.\n\n"
+        "signal and brief evidence; do not silently skip any signal. In the "
+        "checklist, caught/missed/unclear describes evaluator coverage, not "
+        "translation correctness: a wrong translation is caught when you list "
+        "it in bad_cases, and a good translation is caught when you list it in "
+        "gold_cases. Missed means the signal appears in the source/translation "
+        "but was not handled in bad_cases or gold_cases. Never mark a checklist "
+        "item missed when linked_case refers to a bad_cases or gold_cases item.\n\n"
         f"{content}"
     )
 

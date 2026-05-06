@@ -24,6 +24,10 @@ def test_human_review_block_requires_per_signal_checklist():
     assert "Treat each bullet or line-level correction as its own signal" in block
     assert "human_review_checklist" in block
     assert "caught/missed/unclear judgment per signal" in block
+    assert "caught/missed/unclear describes evaluator coverage" in block
+    assert "a wrong translation is caught when you list it in bad_cases" in block
+    assert "do not praise that rendering in gold_cases" in block
+    assert "Never mark a checklist item missed when linked_case refers" in block
     assert "do not silently skip any signal" in block
     assert content in block
 
@@ -56,5 +60,10 @@ def test_prompt_template_documents_checklist_contract():
     assert '"human_review_checklist"' in prompt
     assert "include one item" in prompt
     assert "for every bullet/signal" in prompt
+    assert "This checklist measures whether" in prompt
+    assert "this evaluator caught the human-review signal" in prompt
+    assert "prioritize diverging human-review" in prompt
+    assert "Do not praise a" in prompt
+    assert 'Do not mark a signal "missed" if linked_case points' in prompt
     assert 'Mark "missed"' in prompt
     assert "If no human review is provided, return an empty array" in prompt
