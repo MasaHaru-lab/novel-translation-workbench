@@ -261,6 +261,10 @@ def main() -> int:
                     help="Forwarded to evaluate_translation.py. 'auto' (default) "
                          "tries Claude and falls back to DeepSeek on confirmed "
                          "rate-limit; 'claude' / 'deepseek' lock to one backend.")
+    ap.add_argument("--human-review", type=Path,
+                    help="Optional markdown file forwarded to "
+                         "evaluate_translation.py as must-check calibration "
+                         "signals.")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
@@ -297,6 +301,8 @@ def main() -> int:
 
     if not args.source.exists():
         sys.exit(f"quality_loop: source not found: {args.source}")
+    if args.human_review and not args.human_review.exists():
+        sys.exit(f"quality_loop: human review not found: {args.human_review}")
 
     python = PROJECT_ROOT / "venv" / "bin" / "python"
     if not python.exists():
@@ -337,6 +343,8 @@ def main() -> int:
             "--output", str(eval_path),
             "--evaluator", args.evaluator,
         ]
+        if args.human_review:
+            eval_cmd += ["--human-review", str(args.human_review)]
         if args.dry_run:
             eval_cmd.append("--dry-run")
 

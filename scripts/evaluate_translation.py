@@ -48,6 +48,8 @@ EVAL_PROMPT_TEMPLATE = """\
 ## English Translation to Evaluate
 {translation_text}
 
+{human_review_block}
+
 ---
 
 Evaluate this translation. Return ONLY valid JSON matching this exact schema:
@@ -107,6 +109,31 @@ def load_assets(assets_dir: Path) -> str:
         if content:
             parts.append(f"### {f.name}\n{content}")
     return "\n\n".join(parts) if parts else "(no assets loaded)"
+
+
+def load_human_review(path: Path | None) -> str:
+    if path is None:
+        return ""
+    if not path.exists():
+        sys.exit(f"evaluate_translation: human review not found: {path}")
+    content = path.read_text(encoding="utf-8").strip()
+    if not content:
+        sys.exit(f"evaluate_translation: human review is empty: {path}")
+    return content
+
+
+def build_human_review_block(content: str) -> str:
+    if not content:
+        return ""
+    return (
+        "## Human Review Calibration Signals (must-check)\n"
+        "The following human-reviewed notes are explicit calibration signals. "
+        "When a signal appears in the source or translation, check whether the "
+        "translation matches it. If the translation diverges, report the issue "
+        "in bad_cases. If it matches well, report it in gold_cases when it is "
+        "one of the strongest examples.\n\n"
+        f"{content}"
+    )
 
 
 # JSON Schema mirrors the prompt template above. Constrains the CLI response
@@ -344,20 +371,28 @@ def main() -> int:
                          "fall back to DeepSeek on confirmed rate-limit. "
                          "'claude': Claude only, fail on rate-limit. "
                          "'deepseek': DeepSeek only, no Claude call.")
+    ap.add_argument("--human-review", type=Path,
+                    help="Optional markdown file with human-reviewed "
+                         "must-check calibration signals.")
     ap.add_argument("--dry-run", action="store_true",
                     help="Print prompt only, don't call API")
     args = ap.parse_args()
 
     if not args.source.exists():
         sys.exit(f"evaluate_translation: not found: {args.source}")
+    human_review = load_human_review(args.human_review)
+    human_review_block = build_human_review_block(human_review)
 
     if args.dry_run:
         print(f"[dry-run] source={args.source} translation={args.translation}")
+        if args.human_review:
+            print(f"[dry-run] human_review={args.human_review}")
         assets_block = load_assets(args.assets_dir)
         dummy_prompt = EVAL_PROMPT_TEMPLATE.format(
             assets_block=assets_block,
             source_text=args.source.read_text(encoding="utf-8").strip(),
             translation_text="(translation not yet generated — dry-run)",
+            human_review_block=human_review_block,
         )
         print(f"[dry-run] ~{len(dummy_prompt) // 4} input tokens estimated")
         return 0
@@ -373,6 +408,7 @@ def main() -> int:
         assets_block=assets_block,
         source_text=source_text,
         translation_text=translation_text,
+        human_review_block=human_review_block,
     )
 
     print(f"evaluate_translation: evaluator={args.evaluator}", file=sys.stderr)
