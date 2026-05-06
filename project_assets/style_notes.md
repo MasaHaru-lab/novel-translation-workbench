@@ -262,6 +262,10 @@ Avoid importing modern Western idioms (e.g., 'curiosity killed the cat') into hi
 
 Verify that the translation does not contain near-identical repeated passages within the same output. If the source paragraph appears once, the English must also appear once — not accidentally duplicated due to a revision artifact or segmentation boundary. During review, check for accidental paragraph repetition especially near chapter or passage breaks. A repeated paragraph is a critical error that breaks narrative flow.
 
+## Phrase-level duplication artifact check
+
+During final review, scan for mechanically duplicated phrase fragments caused by revision or segmentation glitches, especially around glossary terms inserted into an already-rendered span. Adjacent repeated function words ("the the", "and and") or repeated noun phrases ("pulse method pulse method") are critical defects, even if the surrounding paragraph is otherwise complete. Remove the duplicated span before delivery.
+
 ## Scene completeness and truncation
 
 Ensure the translation covers all paragraphs of the source passage. Do not skip introductory paragraphs that establish mood, character voice, or scene context. A truncated translation loses narrative flow, character-establishing beats, and the source's full register. This applies especially to short inner-voice lines, lazy or informal character beats (e.g., wiping drool, picking up a snack), and the narrator's explicit address-system annotations — these are the passages most frequently dropped when a model silently compresses content.

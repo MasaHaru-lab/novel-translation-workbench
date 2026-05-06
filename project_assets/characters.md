@@ -151,6 +151,11 @@ Family-status forms (姓 + 氏 / 姓 + 老太太, e.g. 王氏 → "Lady Wang", �
 - Name type: full social/legal personal name (class 1) — Western order.
 - Notes: Meiniang Qin's daughter, Song family surname (宋). Do NOT render as "Qin Yuqing" or "Song Yuqing" (deprecated source order). Family name is Song (宋), NOT Qin (秦).
 
+### Doctor Song
+- Chinese: 宋大夫
+- English rendering: Doctor Song
+- Notes: Resident physician at Song Medical Hall (宋医馆) in Li City. Canonical rendering follows the 大夫 system: "Doctor Song," not "Dr. Song" or "Song Dafu."
+
 ### Qi Qian
 - Chinese: 齐骞
 - English rendering: Qi Qian

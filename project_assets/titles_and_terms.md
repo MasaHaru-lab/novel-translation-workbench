@@ -152,6 +152,11 @@
 - Pattern (instantiate, do not emit verbatim): Doctor + surname (e.g. Doctor Zhang, Doctor Gao, Doctor Yang)
 - Notes: Render the physician title as "Doctor" followed by the actual surname — Doctor Zhang, Doctor Gao, Doctor Yang. Never "Dr." (abbreviation), never "Zhang Dafu" (transliteration), and never the literal pattern with brackets. The existing project convention for household roles uses functional English titles (Lady Wang, Ding Momo, Aunt Li); matching "Doctor + surname" keeps the system consistent. This is a working choice — see unresolved_decisions for the ongoing discussion of the 大夫 address system.
 
+### 宋医馆
+- Chinese: 宋医馆
+- Working English rendering: Song Medical Hall
+- Notes: The Song family's medical establishment. Render as "Song Medical Hall" — do NOT use "Song Clinic," which has a modern medical-office register and breaks the historical-fantasy setting. Doctor Song (宋大夫) is the resident physician.
+
 ### 血光之灾
 - Chinese: 血光之灾
 - English rendering: a calamity involving bloodshed / an omen of bloodshed

@@ -402,3 +402,10 @@ If a candidate rendering reaches the same effect through a different surface for
 - **Preferred rendering:** *Fifty-five. Not much time left.*
 - **Why it works:** Two clipped fragments mirror the source's rhythm and let the implication sit. The terse register keeps the divinatory weight without spelling it out — the reader does the math.
 - **Weak rendering avoided:** *She was fifty-five, and there was not much time remaining* — explanatory, kills the rhythm; *Fifty-five years old. There isn't much time.* — slightly verbose, the contracted 'isn't' breaks register.
+
+### 53. Divinatory fate-pattern judgment — `子身残`
+
+- **Source:** `她的脉象更预示晚景凄凉，子身残，她自己更是寿不过甲。`
+- **Preferred rendering:** *Her pulse foretold a desolate old age — damage in the line of her children, and she herself would not live past sixty.*
+- **Why it works:** Treats the phrase as a divinatory fate-pattern judgment, not a literal medical or physical prediction. `子身残` lands as "damage in the line of her children," preserving the source's judgment register without narrowing `子` to sons or turning `残` into bodily injury.
+- **Weak rendering avoided:** *her sons would be broken* — unsupported gender narrowing and a literal-physical misread; *her children would be crippled* — too physical; *her descendants would be cut off* — over-strong.
