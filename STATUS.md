@@ -83,6 +83,15 @@ The translation framework has been migrated to a reusable, direction-agnostic sk
 - **Follow-up:** `f9562fc7e42873ed0d87c795b6bd75cc8870c06a` validates `bad_cases` required fields such as `chinese_original`; the regression was derived from the tracked ch010 smoke artifact typo `chiinese_original`. `venv/bin/python -m pytest app/tests/test_evaluate_translation.py` now reports 9 passed, with no model/API or quality-loop run.
 - **Checklist follow-up:** `f6f2552cf205fe93d6367c455fe232259a6abff0` validates `human_review_checklist` required fields, requires integer `linked_case` references to be in range, and uses the existing `caught` / `missed` / `unclear` judgment enum. `venv/bin/python -m pytest app/tests/test_evaluate_translation.py` now reports 12 passed, with no model/API or quality-loop run.
 
+### ch010 evaluator calibration stop point
+
+- **Status:** Stop expanding per-chapter evaluator contract guards after the ch010 calibration pass. The human-review evaluator calibration path exists and produces `human_review_checklist` accounting against the human-review file.
+- **Contract coverage:** Local report validation now catches contradictory `missed` checklist items that coexist with `gold_cases` praising the same disputed source span. `caught` checklist items can also be linked, or corrected, when exactly one matching `bad_cases` or `gold_cases` evidence span exists.
+- **Tests:** `venv/bin/python -m pytest app/tests/test_evaluate_translation.py` — 20 passed.
+- **DeepSeek result:** DeepSeek continued to produce rejected artifacts because the generated reports had unstable or missing evidence-case structure, including wrong links with no unique safe replacement.
+- **Decision:** Do not keep expanding contract guards for one-off evaluator instability in ch010. Treat the evaluator as a high-risk alarm rather than a fully reliable adjudicator.
+- **Next direction:** Move toward sampled chapter validation across chapters instead of manual case expansion per chapter.
+
 ---
 
 
