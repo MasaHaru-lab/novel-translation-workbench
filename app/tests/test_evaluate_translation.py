@@ -559,8 +559,11 @@ def test_link_caught_checklist_items_keeps_wrong_link_without_unique_match():
     evaluate_translation.link_caught_checklist_items(report)
 
     assert report["human_review_checklist"][0]["linked_case"] == "bad_cases[0]"
-    with pytest.raises(ValueError, match="linked_case"):
+    with pytest.raises(ValueError) as error:
         evaluate_translation.validate_report_contract(report)
+    message = str(error.value)
+    assert "linked_case='bad_cases[0]'" in message
+    assert "matching_refs=[]" in message
 
 
 def test_caught_acceptable_no_case_signal_uses_null_link():

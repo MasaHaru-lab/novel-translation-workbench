@@ -551,10 +551,15 @@ def validate_report_contract(report: dict) -> None:
             and linked_index in matching_gold
         )
         if not (valid_bad_link or valid_gold_link):
+            matching_refs = [
+                *(f"bad_cases[{i}]" for i in matching_bad),
+                *(f"gold_cases[{i}]" for i in matching_gold),
+            ]
             raise ValueError(
                 "caught checklist item linked_case does not point to a "
                 f"matching bad_cases/gold_cases item: "
-                f"human_review_checklist[{index}]"
+                f"human_review_checklist[{index}] linked_case={linked_case!r} "
+                f"matching_refs={matching_refs!r}"
             )
 
 
