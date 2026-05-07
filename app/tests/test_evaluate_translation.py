@@ -86,6 +86,8 @@ def test_prompt_template_documents_checklist_contract():
     assert "prioritize diverging human-review" in prompt
     assert "Do not praise a" in prompt
     assert "Never list the same Chinese span or English rendering in both" in prompt
+    assert "audit every gold_cases item against bad_cases" in prompt
+    assert "Do not keep a gold case with a" in prompt
     assert "Exact or acceptable matches" in prompt
     assert "harmless formatting differences" in prompt
     assert "Severity calibration" in prompt
@@ -129,8 +131,11 @@ def test_report_contract_rejects_same_source_in_bad_and_gold_cases():
         "human_review_checklist": [],
     }
 
-    with pytest.raises(ValueError, match="same chinese_original"):
+    with pytest.raises(ValueError, match="same chinese_original") as exc_info:
         evaluate_translation.validate_report_contract(report)
+    message = str(exc_info.value)
+    assert "bad_cases[0].chinese_original" in message
+    assert "gold_cases[0].chinese_original" in message
 
 
 def test_report_contract_requires_gold_case_schema():

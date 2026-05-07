@@ -110,8 +110,13 @@ Rules:
   signals in bad_cases before ordinary non-calibration issues. Do not praise a
   rendering in gold_cases if it diverges from the expected human correction.
   Never list the same Chinese span or English rendering in both bad_cases and
-  gold_cases; if any part of a rendering is called wrong, it is not reusable
-  gold for this report. Exact or acceptable matches to human-review signals
+  gold_cases; before finalizing, audit every gold_cases item against bad_cases.
+  If a gold candidate has the same chinese_original, same English rendering, or
+  a containing source span as a bad_case, remove it from gold_cases or narrow it
+  to only the independently correct sub-span. Do not keep a gold case with a
+  caveat that part of the same source span is wrong. If any part of a rendering
+  is called wrong, it is not reusable gold for this report.
+  Exact or acceptable matches to human-review signals
   should be marked caught in human_review_checklist with linked_case null
   unless they are independently excellent, reusable examples. Do not turn
   harmless formatting differences, capitalization, comma placement, or wording
@@ -331,21 +336,23 @@ def validate_report_contract(report: dict) -> None:
     bad_cases = report.get("bad_cases") or []
     gold_cases = report.get("gold_cases") or []
 
-    bad_sources = {
-        case.get("chinese_original")
-        for case in bad_cases
-        if case.get("chinese_original")
-    }
-    gold_sources = {
-        case.get("chinese_original")
-        for case in gold_cases
-        if case.get("chinese_original")
-    }
-    overlap = bad_sources & gold_sources
-    if overlap:
+    duplicate_sources = []
+    for bad_index, bad_case in enumerate(bad_cases):
+        bad_source = bad_case.get("chinese_original")
+        if not bad_source:
+            continue
+        for gold_index, gold_case in enumerate(gold_cases):
+            if bad_source == gold_case.get("chinese_original"):
+                duplicate_sources.append(
+                    f"bad_cases[{bad_index}].chinese_original == "
+                    f"gold_cases[{gold_index}].chinese_original: "
+                    f"{bad_source!r}"
+                )
+    if duplicate_sources:
         raise ValueError(
             "evaluator report lists the same chinese_original in "
-            f"bad_cases and gold_cases: {sorted(overlap)!r}"
+            "bad_cases and gold_cases: "
+            + "; ".join(duplicate_sources)
         )
 
     for index, case in enumerate(bad_cases):
