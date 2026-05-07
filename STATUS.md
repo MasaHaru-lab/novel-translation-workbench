@@ -81,6 +81,7 @@ The translation framework has been migrated to a reusable, direction-agnostic sk
 - **Coverage:** Focused deterministic tests cover bad/gold same-span conflicts, required `gold_cases` schema shape (`excellent_translation` + `why_good`), and `human_review_checklist.linked_case` correctness for bad-case links, reusable-good links, and acceptable/no-case null links.
 - **Validation:** `venv/bin/python -m pytest app/tests/test_evaluate_translation.py` — 8 passed. No model/API or quality-loop run was needed.
 - **Follow-up:** `f9562fc7e42873ed0d87c795b6bd75cc8870c06a` validates `bad_cases` required fields such as `chinese_original`; the regression was derived from the tracked ch010 smoke artifact typo `chiinese_original`. `venv/bin/python -m pytest app/tests/test_evaluate_translation.py` now reports 9 passed, with no model/API or quality-loop run.
+- **Checklist follow-up:** `f6f2552cf205fe93d6367c455fe232259a6abff0` validates `human_review_checklist` required fields, requires integer `linked_case` references to be in range, and uses the existing `caught` / `missed` / `unclear` judgment enum. `venv/bin/python -m pytest app/tests/test_evaluate_translation.py` now reports 12 passed, with no model/API or quality-loop run.
 
 ---
 
