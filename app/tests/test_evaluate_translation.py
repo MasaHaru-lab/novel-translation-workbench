@@ -47,6 +47,7 @@ def test_human_review_block_requires_per_signal_checklist():
     assert "not a bad_case" in block
     assert "linked_case may point to bad_cases only for actual failures" in block
     assert "linked_case must be null and the item must not be listed in bad_cases" in block
+    assert "missed checklist item must never coexist with a gold_cases item" in block
     assert "Decide caught/missed/unclear first" in block
     assert "choose linked_case only after judgment" in block
     assert "Lack of a linked_case must never" in block
@@ -104,6 +105,7 @@ def test_prompt_template_documents_checklist_contract():
     assert '"Tear Hall beneath her eyes" is an acceptable' in prompt
     assert "linked_case may point to bad_cases only when" in prompt
     assert "linked_case must be null" in prompt
+    assert "A \"missed\" checklist item must never" in prompt
     assert "Decide caught/missed/unclear first" in prompt
     assert "choose linked_case only after judgment" in prompt
     assert "Lack of a linked_case must never" in prompt
@@ -458,4 +460,31 @@ def test_caught_acceptable_no_case_signal_uses_null_link():
 
     report["human_review_checklist"][0]["linked_case"] = 0
     with pytest.raises(ValueError, match="linked_case"):
+        evaluate_translation.validate_report_contract(report)
+
+
+def test_report_contract_rejects_missed_checklist_item_praised_in_gold_case():
+    report = {
+        "bad_cases": [],
+        "gold_cases": [
+            {
+                "chinese_original": "嫡母",
+                "excellent_translation": "principal mother",
+                "why_good": "Claims the kinship/legal term is well handled.",
+            }
+        ],
+        "human_review_checklist": [
+            {
+                "signal": "嫡母 -> legal mother",
+                "judgment": "missed",
+                "evidence": (
+                    "The evaluator did not report that the translation used "
+                    "principal mother instead of legal mother."
+                ),
+                "linked_case": None,
+            }
+        ],
+    }
+
+    with pytest.raises(ValueError, match="missed checklist item"):
         evaluate_translation.validate_report_contract(report)

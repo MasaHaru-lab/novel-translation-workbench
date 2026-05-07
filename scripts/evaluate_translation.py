@@ -151,8 +151,9 @@ Rules:
   signal is an actual failure reported in bad_cases; it may point to gold_cases
   only when the signal is a reusable gold example. If judgment is "caught"
   because the rendering is acceptable, linked_case must be null and the item
-  must not be listed in bad_cases. Mark "unclear" only when the signal cannot
-  be located or compared.
+  must not be listed in bad_cases. A "missed" checklist item must never
+  coexist with a gold_cases item praising the same disputed source span. Mark
+  "unclear" only when the signal cannot be located or compared.
   If no human review is provided, return an empty array.
 - Return ONLY the JSON object. No prose, no markdown fences.
 """
@@ -232,7 +233,9 @@ def build_human_review_block(content: str) -> str:
         "point to bad_cases only for actual failures reported in bad_cases, "
         "and to gold_cases only for reusable gold examples. If judgment is "
         "caught because the rendering is acceptable, linked_case must be null "
-        "and the item must not be listed in bad_cases.\n\n"
+        "and the item must not be listed in bad_cases. A missed checklist item "
+        "must never coexist with a gold_cases item praising the same disputed "
+        "source span.\n\n"
         f"{content}"
     )
 
@@ -343,6 +346,20 @@ def parse_linked_case_ref(linked_case) -> tuple[str | None, int | None]:
     return None, None
 
 
+def source_span_overlaps_signal(source_span: str, signal: str) -> bool:
+    """Return whether a case source span and checklist signal refer to the same text."""
+    if not source_span:
+        return False
+    source_span = str(source_span)
+    signal = str(signal)
+    signal_source = re.split(r"\s*(?:->|→)\s*", signal, maxsplit=1)[0].strip()
+    return (
+        source_span in signal
+        or source_span in signal_source
+        or signal_source in source_span
+    )
+
+
 def validate_report_contract(report: dict) -> None:
     """Validate deterministic evaluator JSON contracts.
 
@@ -444,6 +461,23 @@ def validate_report_contract(report: dict) -> None:
                 f"human_review_checklist[{index}] linked_case out of range: "
                 f"{linked_case!r}"
             )
+
+        if item["judgment"] == "missed":
+            matching_gold = [
+                i
+                for i, case in enumerate(gold_cases)
+                if source_span_overlaps_signal(
+                    str(case.get("chinese_original") or ""),
+                    str(item["signal"]),
+                )
+            ]
+            if matching_gold:
+                raise ValueError(
+                    "missed checklist item cannot coexist with matching "
+                    "gold_cases item: "
+                    f"human_review_checklist[{index}] matches "
+                    + ", ".join(f"gold_cases[{i}]" for i in matching_gold)
+                )
 
         if item["judgment"] != "caught":
             continue
