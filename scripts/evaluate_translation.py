@@ -459,6 +459,20 @@ def write_raw_response_debug(raw: str, output_path: Path) -> Path:
     return debug_path
 
 
+def contract_rejected_debug_path(output_path: Path) -> Path:
+    return output_path.with_suffix(".contract_rejected.json")
+
+
+def write_contract_rejected_debug(report: dict, output_path: Path) -> Path:
+    debug_path = contract_rejected_debug_path(output_path)
+    debug_path.parent.mkdir(parents=True, exist_ok=True)
+    debug_path.write_text(
+        json.dumps(report, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    return debug_path
+
+
 # Confirmed Claude rate/quota/time-window limit signals (case-insensitive).
 # Matched against api_error_status, the result text in the envelope, and
 # stderr. Anything that does NOT match here is treated as an unrelated
@@ -695,7 +709,14 @@ def main() -> int:
     try:
         validate_report_contract(report)
     except ValueError as e:
-        sys.exit(f"evaluate_translation: invalid report contract: {e}")
+        debug_note = ""
+        if args.output:
+            debug_path = write_contract_rejected_debug(report, args.output)
+            debug_note = f"\nContract-rejected report saved to: {debug_path}"
+        sys.exit(
+            f"evaluate_translation: invalid report contract: {e}"
+            f"{debug_note}"
+        )
 
     print(f"evaluate_translation: backend={backend}", file=sys.stderr)
 

@@ -1,5 +1,6 @@
 """Tests for the standalone evaluate_translation script."""
 import importlib.util
+import json
 import sys
 from pathlib import Path
 
@@ -298,6 +299,64 @@ def test_parse_failure_writes_raw_response_debug_artifact(tmp_path, monkeypatch)
     assert str(debug_path) in str(exc.value)
     assert not output.exists()
     assert debug_path.read_text(encoding="utf-8") == malformed
+
+
+def test_contract_failure_writes_rejected_report_debug_artifact(tmp_path, monkeypatch):
+    source = tmp_path / "source.txt"
+    source.write_text("第十章\n\n秦流西。", encoding="utf-8")
+    translation = tmp_path / "translation.md"
+    translation.write_text("Chapter Ten\n\nLiuxi Qin.", encoding="utf-8")
+    assets_dir = tmp_path / "assets"
+    assets_dir.mkdir()
+    output = tmp_path / "ch010_contract_gate_validation.json"
+    invalid_report = {
+        "score": 8.8,
+        "bad_cases": [],
+        "gold_cases": [],
+        "proposed_asset_updates": [],
+        "human_review_checklist": [
+            {
+                "signal": "小小血光 -> minor blood calamity",
+                "judgment": "accepted",
+                "evidence": "Invalid judgment enum.",
+                "linked_case": None,
+            }
+        ],
+    }
+
+    monkeypatch.setattr(
+        evaluate_translation,
+        "evaluate",
+        lambda *_args: (json.dumps(invalid_report), "deepseek-explicit"),
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "evaluate_translation.py",
+            "--source",
+            str(source),
+            "--translation",
+            str(translation),
+            "--assets-dir",
+            str(assets_dir),
+            "--output",
+            str(output),
+            "--evaluator",
+            "deepseek",
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exc:
+        evaluate_translation.main()
+
+    rejected_path = output.with_suffix(".contract_rejected.json")
+    assert "invalid report contract" in str(exc.value)
+    assert str(rejected_path) in str(exc.value)
+    assert not output.exists()
+    rejected = json.loads(rejected_path.read_text(encoding="utf-8"))
+    assert rejected["backend"] == "deepseek-explicit"
+    assert rejected["human_review_checklist"][0]["judgment"] == "accepted"
 
 
 def test_caught_reusable_good_signal_links_to_matching_gold_case():
