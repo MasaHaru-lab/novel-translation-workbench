@@ -100,6 +100,15 @@ The translation framework has been migrated to a reusable, direction-agnostic sk
 - **Watch candidates:** `吵死了` → `Too noisy.` may flatten Liuxi Qin's blunt inner-voice tone; `符化在了温水里` / `符水` compressed to "talisman water" may lose the dissolve-in-warm-water action.
 - **Decision:** Do not add assets, gold examples, bad cases, prompt rules, or evaluator guards from this single sample. Revisit only if the watch candidates repeat or appear in a high-risk passage.
 
+### ch011 sampled evaluator result
+
+- **Run:** Fresh output `data/exports/ch011_en.md` evaluated against `data/source/ch011.txt` with DeepSeek; artifact accepted at `data/quality_loop/ch011_sample_eval.json`.
+- **Result:** Score `8.1/10`; counts `bad=11`, `gold=5`, `proposed_updates=5`.
+- **Human spot-check:** Only one real local fix was accepted: Liuxi Qin's direct-address `二婶` should render as `Lady Xie`, not `Second Aunt`, because Liuxi does not preserve affectionate or respectful kinship address toward Xie.
+- **Local export:** The ignored local export `data/exports/ch011_en.md` was updated for that direct-address fix, so the tracked repo tree is unchanged.
+- **Accepted evaluator flags:** Keep `Hand over the money!`, `Even the servants wouldn't eat this`, and `That's not true` for now; do not treat them as bad cases from this single sample.
+- **Decision:** Do not promote assets, gold examples, or bad cases yet. Watch for repeated direct-address kinship drift in later sampled chapters.
+
 ---
 
 
