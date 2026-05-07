@@ -322,6 +322,86 @@ EVAL_SCHEMA = {
 }
 
 
+def validate_report_contract(report: dict) -> None:
+    """Validate deterministic evaluator JSON contracts.
+
+    This is intentionally small and backend-agnostic: it checks only report
+    shape/linking invariants that can be verified without re-running a model.
+    """
+    bad_cases = report.get("bad_cases") or []
+    gold_cases = report.get("gold_cases") or []
+
+    bad_sources = {
+        case.get("chinese_original")
+        for case in bad_cases
+        if case.get("chinese_original")
+    }
+    gold_sources = {
+        case.get("chinese_original")
+        for case in gold_cases
+        if case.get("chinese_original")
+    }
+    overlap = bad_sources & gold_sources
+    if overlap:
+        raise ValueError(
+            "evaluator report lists the same chinese_original in "
+            f"bad_cases and gold_cases: {sorted(overlap)!r}"
+        )
+
+    for index, case in enumerate(gold_cases):
+        missing = [
+            key
+            for key in ("excellent_translation", "why_good")
+            if not case.get(key)
+        ]
+        if missing:
+            raise ValueError(
+                f"gold_cases[{index}] missing gold schema fields: {missing!r}"
+            )
+
+    for index, item in enumerate(report.get("human_review_checklist") or []):
+        if item.get("judgment") != "caught":
+            continue
+
+        signal = str(item.get("signal") or "")
+        linked_case = item.get("linked_case")
+        matching_bad = [
+            i
+            for i, case in enumerate(bad_cases)
+            if case.get("chinese_original")
+            and str(case["chinese_original"]) in signal
+        ]
+        matching_gold = [
+            i
+            for i, case in enumerate(gold_cases)
+            if case.get("chinese_original")
+            and str(case["chinese_original"]) in signal
+        ]
+
+        if linked_case is None:
+            if matching_bad or matching_gold:
+                raise ValueError(
+                    "caught checklist item with matching case must link to "
+                    f"that case: human_review_checklist[{index}]"
+                )
+            continue
+
+        valid_bad_link = (
+            isinstance(linked_case, int)
+            and linked_case in matching_bad
+        )
+        valid_gold_link = (
+            isinstance(linked_case, int)
+            and linked_case in matching_gold
+        )
+        if not (valid_bad_link or valid_gold_link):
+            raise ValueError(
+                "caught checklist item linked_case does not point to a "
+                f"matching bad_cases/gold_cases item: "
+                f"human_review_checklist[{index}]"
+            )
+
+
 # Confirmed Claude rate/quota/time-window limit signals (case-insensitive).
 # Matched against api_error_status, the result text in the envelope, and
 # stderr. Anything that does NOT match here is treated as an unrelated
@@ -548,6 +628,10 @@ def main() -> int:
     # Tag the report with which backend produced it so downstream consumers
     # (quality_loop state.json, staging.md header) can record provenance.
     report["backend"] = backend
+    try:
+        validate_report_contract(report)
+    except ValueError as e:
+        sys.exit(f"evaluate_translation: invalid report contract: {e}")
 
     print(f"evaluate_translation: backend={backend}", file=sys.stderr)
 

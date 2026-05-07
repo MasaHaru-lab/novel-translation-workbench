@@ -2,6 +2,8 @@
 import importlib.util
 from pathlib import Path
 
+import pytest
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 MODULE_PATH = PROJECT_ROOT / "scripts" / "evaluate_translation.py"
@@ -99,3 +101,131 @@ def test_prompt_template_documents_checklist_contract():
     assert "Lack of a linked_case must never" in prompt
     assert 'Mark "missed"' in prompt
     assert "If no human review is provided, return an empty array" in prompt
+
+
+def test_report_contract_rejects_same_source_in_bad_and_gold_cases():
+    report = {
+        "bad_cases": [
+            {
+                "chinese_original": "是福不是祸，是祸躲不过",
+                "bad_translation": (
+                    "If it's good fortune, you can't avoid it. "
+                    "If it's disaster, you can't run from it either."
+                ),
+            }
+        ],
+        "gold_cases": [
+            {
+                "chinese_original": "是福不是祸，是祸躲不过",
+                "excellent_translation": (
+                    "Blessings and calamities come as they will -- "
+                    "you can't dodge what's meant to happen."
+                ),
+                "why_good": "Preserves the fatalistic register.",
+            }
+        ],
+        "human_review_checklist": [],
+    }
+
+    with pytest.raises(ValueError, match="same chinese_original"):
+        evaluate_translation.validate_report_contract(report)
+
+
+def test_report_contract_requires_gold_case_schema():
+    report = {
+        "bad_cases": [],
+        "gold_cases": [
+            {
+                "chinese_original": "凶多吉少",
+                "bad_translation": "There was little hope for them, it seemed.",
+                "explanation": "Accurate but too explanatory.",
+            }
+        ],
+        "human_review_checklist": [],
+    }
+
+    with pytest.raises(ValueError, match="gold_cases\\[0\\]"):
+        evaluate_translation.validate_report_contract(report)
+
+
+def test_caught_incorrect_signal_links_to_matching_bad_case():
+    report = {
+        "bad_cases": [
+            {
+                "chinese_original": "血光之灾",
+                "bad_translation": "a minor blood accident",
+                "explanation": "Morpheme-calque for Daoist omen language.",
+                "suggested_fix": "an omen of bloodshed",
+                "severity": "major",
+            }
+        ],
+        "gold_cases": [],
+        "human_review_checklist": [
+            {
+                "signal": "血光之灾 -> an omen of bloodshed",
+                "judgment": "caught",
+                "evidence": "Reported in bad_cases[0].",
+                "linked_case": 0,
+            }
+        ],
+    }
+
+    evaluate_translation.validate_report_contract(report)
+
+    report["human_review_checklist"][0]["linked_case"] = None
+    with pytest.raises(ValueError, match="must link"):
+        evaluate_translation.validate_report_contract(report)
+
+
+def test_caught_reusable_good_signal_links_to_matching_gold_case():
+    report = {
+        "bad_cases": [],
+        "gold_cases": [
+            {
+                "chinese_original": "是福不是祸，是祸躲不过啊",
+                "excellent_translation": (
+                    "Blessings and calamities come as they will -- "
+                    "you can't dodge what's meant to happen."
+                ),
+                "why_good": "Natural idiomatic equivalent for the proverb.",
+            }
+        ],
+        "human_review_checklist": [
+            {
+                "signal": (
+                    "是福不是祸，是祸躲不过啊 -> Blessings and "
+                    "calamities come as they will"
+                ),
+                "judgment": "caught",
+                "evidence": "Reported in gold_cases[0].",
+                "linked_case": 0,
+            }
+        ],
+    }
+
+    evaluate_translation.validate_report_contract(report)
+
+    report["human_review_checklist"][0]["linked_case"] = 1
+    with pytest.raises(ValueError, match="linked_case does not point"):
+        evaluate_translation.validate_report_contract(report)
+
+
+def test_caught_acceptable_no_case_signal_uses_null_link():
+    report = {
+        "bad_cases": [],
+        "gold_cases": [],
+        "human_review_checklist": [
+            {
+                "signal": "小小血光 -> minor blood calamity",
+                "judgment": "caught",
+                "evidence": "Acceptable match; no case needed.",
+                "linked_case": None,
+            }
+        ],
+    }
+
+    evaluate_translation.validate_report_contract(report)
+
+    report["human_review_checklist"][0]["linked_case"] = 0
+    with pytest.raises(ValueError, match="linked_case does not point"):
+        evaluate_translation.validate_report_contract(report)
