@@ -109,6 +109,15 @@ The translation framework has been migrated to a reusable, direction-agnostic sk
 - **Accepted evaluator flags:** Keep `Hand over the money!`, `Even the servants wouldn't eat this`, and `That's not true` for now; do not treat them as bad cases from this single sample.
 - **Decision:** Do not promote assets, gold examples, or bad cases yet. Watch for repeated direct-address kinship drift in later sampled chapters.
 
+### ch008/ch011 sampled evaluator mini-batch close
+
+- **Scope:** Two independent sampled evaluator runs completed: ch008 and ch011.
+- **Artifacts:** Both evaluator artifacts were accepted and documented.
+- **Human review outcome:** No evidence yet supports immediate promotion to assets, gold examples, bad cases, or prompt rules. ch008 mostly showed evaluator false positives and minor watch candidates. ch011 human spot-check confirmed only one real local export fix: Liuxi Qin direct-address `二婶` → `Lady Xie`.
+- **Accepted evaluator flags:** ch011 lines `Hand over the money!`, `Even the servants wouldn't eat this`, and `That's not true` are accepted as good or acceptable functional renderings for now.
+- **Watch direction:** Repeat-check direct-address kinship drift when Liuxi addresses disliked or unrespected elders; also watch evaluator false positives on correct canonical or functional renderings.
+- **Next validation step:** When model runs are allowed, run a third independent sample, preferably ch013 or another high-risk chapter, before promoting any new rule.
+
 ---
 
 
