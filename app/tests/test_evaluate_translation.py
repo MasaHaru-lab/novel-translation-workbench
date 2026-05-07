@@ -196,6 +196,66 @@ def test_caught_incorrect_signal_links_to_matching_bad_case():
         evaluate_translation.validate_report_contract(report)
 
 
+def test_report_contract_rejects_checklist_link_out_of_range():
+    report = {
+        "bad_cases": [
+            {
+                "type": "other",
+                "chinese_original": "血光之灾",
+                "bad_translation": "a minor blood accident",
+                "explanation": "Morpheme-calque for Daoist omen language.",
+            }
+        ],
+        "gold_cases": [],
+        "human_review_checklist": [
+            {
+                "signal": "血光之灾 -> an omen of bloodshed",
+                "judgment": "caught",
+                "evidence": "Claims a bad-case link.",
+                "linked_case": 1,
+            }
+        ],
+    }
+
+    with pytest.raises(ValueError, match="linked_case out of range"):
+        evaluate_translation.validate_report_contract(report)
+
+
+def test_report_contract_requires_checklist_schema():
+    report = {
+        "bad_cases": [],
+        "gold_cases": [],
+        "human_review_checklist": [
+            {
+                "signal": "小小血光 -> minor blood calamity",
+                "judgment": "caught",
+                "linked_case": None,
+            }
+        ],
+    }
+
+    with pytest.raises(ValueError, match="human_review_checklist\\[0\\].*evidence"):
+        evaluate_translation.validate_report_contract(report)
+
+
+def test_report_contract_rejects_invalid_checklist_judgment():
+    report = {
+        "bad_cases": [],
+        "gold_cases": [],
+        "human_review_checklist": [
+            {
+                "signal": "小小血光 -> minor blood calamity",
+                "judgment": "accepted",
+                "evidence": "Not one of the schema enum values.",
+                "linked_case": None,
+            }
+        ],
+    }
+
+    with pytest.raises(ValueError, match="invalid judgment"):
+        evaluate_translation.validate_report_contract(report)
+
+
 def test_caught_reusable_good_signal_links_to_matching_gold_case():
     report = {
         "bad_cases": [],
@@ -225,7 +285,7 @@ def test_caught_reusable_good_signal_links_to_matching_gold_case():
     evaluate_translation.validate_report_contract(report)
 
     report["human_review_checklist"][0]["linked_case"] = 1
-    with pytest.raises(ValueError, match="linked_case does not point"):
+    with pytest.raises(ValueError, match="linked_case"):
         evaluate_translation.validate_report_contract(report)
 
 
@@ -246,5 +306,5 @@ def test_caught_acceptable_no_case_signal_uses_null_link():
     evaluate_translation.validate_report_contract(report)
 
     report["human_review_checklist"][0]["linked_case"] = 0
-    with pytest.raises(ValueError, match="linked_case does not point"):
+    with pytest.raises(ValueError, match="linked_case"):
         evaluate_translation.validate_report_contract(report)

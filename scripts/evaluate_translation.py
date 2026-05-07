@@ -370,12 +370,47 @@ def validate_report_contract(report: dict) -> None:
                 f"gold_cases[{index}] missing gold schema fields: {missing!r}"
             )
 
+    checklist_schema = EVAL_SCHEMA["properties"]["human_review_checklist"]["items"]
+    checklist_required = checklist_schema["required"]
+    allowed_judgments = set(
+        checklist_schema["properties"]["judgment"]["enum"]
+    )
+
     for index, item in enumerate(report.get("human_review_checklist") or []):
-        if item.get("judgment") != "caught":
+        missing = [
+            key
+            for key in checklist_required
+            if key not in item or (key != "linked_case" and not item.get(key))
+        ]
+        if missing:
+            raise ValueError(
+                f"human_review_checklist[{index}] missing checklist "
+                f"schema fields: {missing!r}"
+            )
+
+        if item["judgment"] not in allowed_judgments:
+            raise ValueError(
+                f"human_review_checklist[{index}] invalid judgment: "
+                f"{item['judgment']!r}"
+            )
+
+        linked_case = item["linked_case"]
+        if isinstance(linked_case, int) and (
+            linked_case < 0
+            or (
+                linked_case >= len(bad_cases)
+                and linked_case >= len(gold_cases)
+            )
+        ):
+            raise ValueError(
+                f"human_review_checklist[{index}] linked_case out of range: "
+                f"{linked_case!r}"
+            )
+
+        if item["judgment"] != "caught":
             continue
 
-        signal = str(item.get("signal") or "")
-        linked_case = item.get("linked_case")
+        signal = str(item["signal"])
         matching_bad = [
             i
             for i, case in enumerate(bad_cases)
