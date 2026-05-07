@@ -74,6 +74,13 @@ The translation framework has been migrated to a reusable, direction-agnostic sk
 - **Artifact:** `data/quality_loop/ch010_calibration_smoke_day3.json` is ignored and was not committed.
 - **Residual risk:** DeepSeek output is stochastic; checklist coverage improved, but severity calibration is not perfect.
 
+### Evaluator report contract invariants
+
+- **Commit:** `d85446d159e22cc390b14f8993a689c65d5c095d` (`Enforce evaluator report contract invariants`)
+- **Status:** The evaluator now validates completed report JSON locally and rejects malformed contract output before writing/printing downstream results.
+- **Coverage:** Focused deterministic tests cover bad/gold same-span conflicts, required `gold_cases` schema shape (`excellent_translation` + `why_good`), and `human_review_checklist.linked_case` correctness for bad-case links, reusable-good links, and acceptable/no-case null links.
+- **Validation:** `venv/bin/python -m pytest app/tests/test_evaluate_translation.py` — 8 passed. No model/API or quality-loop run was needed.
+
 ---
 
 
