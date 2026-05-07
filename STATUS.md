@@ -92,6 +92,14 @@ The translation framework has been migrated to a reusable, direction-agnostic sk
 - **Decision:** Do not keep expanding contract guards for one-off evaluator instability in ch010. Treat the evaluator as a high-risk alarm rather than a fully reliable adjudicator.
 - **Next direction:** Move toward sampled chapter validation across chapters instead of manual case expansion per chapter.
 
+### ch008 sampled evaluator result
+
+- **Run:** Existing output `data/exports/ch008_flash_en.md` evaluated against `data/source/ch008.txt` with DeepSeek; artifact accepted at `data/quality_loop/ch008_sample_eval.json`.
+- **Result:** Score `8.5/10`; counts `bad=3`, `gold=5`, `proposed_updates=2`.
+- **Interpretation:** Two `bad_cases` were evaluator false positives: `秦三太太` → `Lady Gu` and `秦梅娘` → `Meiniang Qin` were both described by the evaluator itself as consistent/correct.
+- **Watch candidates:** `吵死了` → `Too noisy.` may flatten Liuxi Qin's blunt inner-voice tone; `符化在了温水里` / `符水` compressed to "talisman water" may lose the dissolve-in-warm-water action.
+- **Decision:** Do not add assets, gold examples, bad cases, prompt rules, or evaluator guards from this single sample. Revisit only if the watch candidates repeat or appear in a high-risk passage.
+
 ---
 
 
