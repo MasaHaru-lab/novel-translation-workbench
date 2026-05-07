@@ -348,6 +348,17 @@ def validate_report_contract(report: dict) -> None:
             f"bad_cases and gold_cases: {sorted(overlap)!r}"
         )
 
+    for index, case in enumerate(bad_cases):
+        missing = [
+            key
+            for key in ("type", "chinese_original", "bad_translation", "explanation")
+            if not case.get(key)
+        ]
+        if missing:
+            raise ValueError(
+                f"bad_cases[{index}] missing bad-case schema fields: {missing!r}"
+            )
+
     for index, case in enumerate(gold_cases):
         missing = [
             key

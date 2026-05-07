@@ -148,10 +148,29 @@ def test_report_contract_requires_gold_case_schema():
         evaluate_translation.validate_report_contract(report)
 
 
+def test_report_contract_requires_bad_case_schema():
+    report = {
+        "bad_cases": [
+            {
+                "type": "chinese_residual",
+                "chiinese_original": "竟然质疑她的本事",
+                "bad_translation": "How dare they doubt her skill.",
+                "explanation": "Typo key mirrors the tracked ch010 smoke artifact.",
+            }
+        ],
+        "gold_cases": [],
+        "human_review_checklist": [],
+    }
+
+    with pytest.raises(ValueError, match="bad_cases\\[0\\].*chinese_original"):
+        evaluate_translation.validate_report_contract(report)
+
+
 def test_caught_incorrect_signal_links_to_matching_bad_case():
     report = {
         "bad_cases": [
             {
+                "type": "other",
                 "chinese_original": "血光之灾",
                 "bad_translation": "a minor blood accident",
                 "explanation": "Morpheme-calque for Daoist omen language.",
