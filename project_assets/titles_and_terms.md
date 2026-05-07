@@ -50,7 +50,7 @@
 ### 三婶 / 三弟妹 → Lady Gu
 - Chinese: 三婶 / 三弟妹
 - Working English rendering: Lady Gu
-- Notes: Use Lady Gu throughout. Do not render the kinship label literally ("Third Aunt," "Third Sister-in-Law"). Chinese generational hierarchy terms are too structurally complex to carry over; all such terms resolve to the character's name. See style notes §"Kinship address terms."
+- Notes: Use Lady Gu throughout as the general canon. Do not render the kinship label literally ("Third Aunt," "Third Sister-in-Law") unless the contextual exception in style notes §"Kinship address terms" applies: when an elder speaks to a younger person about another elder and the kinship rank carries family-status pressure, preserve the rank (e.g. "your third aunt's side"). Human-review calibration/local context takes priority over this general canon.
 
 ### 老太后
 - Chinese: 老太后

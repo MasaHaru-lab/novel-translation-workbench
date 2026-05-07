@@ -112,6 +112,8 @@ Policy: resolve all kinship address terms to the character's established name.
 
 This applies in both address and narration. Do not preserve the generational label even as a secondary gloss.
 
+Contextual exception: when an elder speaks to a younger person about another elder, preserve the other elder's kinship/generational rank in English if it carries family-status pressure. In that context, `你三婶那边` may need "your third aunt's side" even though the character is otherwise canonized as Lady Gu. If this contextual kinship rule conflicts with a term asset, human-review calibration and the local family-status context take priority.
+
 ## Game-rank and internet-culture idioms
 
 Chinese terms from gaming, internet slang, or modern competitive culture (e.g. 青铜 meaning "low rank/novice," 王者 meaning "top-tier/ace," 青铜/王者 as a contrast between amateur and expert) must be translated by cultural function, not by surface literal meaning:

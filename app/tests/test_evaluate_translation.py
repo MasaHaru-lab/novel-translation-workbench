@@ -36,6 +36,8 @@ def test_human_review_block_requires_per_signal_checklist():
     assert "Do not over-flag exact or acceptable matches" in block
     assert "Calibrate severity" in block
     assert "drop minor polish complaints first" in block
+    assert "human review calibration conflicts with project assets" in block
+    assert "validation ground truth" in block
     assert "an exact or acceptable match is also caught" in block
     assert "Do not mark a match missed or unclear" in block
     assert "correct term without an explanatory gloss" in block
@@ -92,6 +94,8 @@ def test_prompt_template_documents_checklist_contract():
     assert "harmless formatting differences" in prompt
     assert "Severity calibration" in prompt
     assert "drop minor" in prompt
+    assert "human review calibration conflicts with project assets" in prompt
+    assert "validation ground truth" in prompt
     assert "Exact/acceptable\n  matches use linked_case null" in prompt
     assert "do not use \"missed\" or \"unclear\" merely because" in prompt
     assert "correct term\n  without an explanatory gloss" in prompt
@@ -201,6 +205,45 @@ def test_caught_incorrect_signal_links_to_matching_bad_case():
     report["human_review_checklist"][0]["linked_case"] = None
     with pytest.raises(ValueError, match="must link"):
         evaluate_translation.validate_report_contract(report)
+
+
+def test_caught_signal_accepts_string_link_to_matching_bad_case():
+    report = {
+        "bad_cases": [
+            {
+                "type": "other",
+                "chinese_original": "脸色有几分难看",
+                "bad_translation": "her expression dark",
+                "explanation": "Too dark for the local context.",
+            },
+            {
+                "type": "other",
+                "chinese_original": "嫡母",
+                "bad_translation": "principal mother",
+                "explanation": "Human review expects legal mother.",
+            },
+            {
+                "type": "address_drift",
+                "chinese_original": "你三婶那边",
+                "bad_translation": "Lady Gu's side",
+                "explanation": (
+                    "Human review expects preserving family-status pressure: "
+                    "your third aunt's side."
+                ),
+            },
+        ],
+        "gold_cases": [],
+        "human_review_checklist": [
+            {
+                "signal": "你三婶那边 -> your third aunt's side",
+                "judgment": "caught",
+                "evidence": "Reported in bad_cases[2].",
+                "linked_case": "bad_cases[2]",
+            }
+        ],
+    }
+
+    evaluate_translation.validate_report_contract(report)
 
 
 def test_report_contract_rejects_checklist_link_out_of_range():

@@ -109,6 +109,8 @@ Rules:
 - When human review signals are provided, prioritize diverging human-review
   signals in bad_cases before ordinary non-calibration issues. Do not praise a
   rendering in gold_cases if it diverges from the expected human correction.
+  If human review calibration conflicts with project assets, treat the human
+  review signal as validation ground truth for checklist and case judgments.
   Never list the same Chinese span or English rendering in both bad_cases and
   gold_cases; before finalizing, audit every gold_cases item against bad_cases.
   If a gold candidate has the same chinese_original, same English rendering, or
@@ -188,7 +190,10 @@ def build_human_review_block(content: str) -> str:
         "the issue in bad_cases, even for phrase-level terminology, title, "
         "dialogue, kinship-address, and narrative-stance signals that might "
         "otherwise seem too small. Prioritize these human-review divergences "
-        "in bad_cases before ordinary non-calibration issues. If the translation "
+        "in bad_cases before ordinary non-calibration issues. If human review "
+        "calibration conflicts with project assets, treat the human review "
+        "signal as validation ground truth for checklist and case judgments. "
+        "If the translation "
         "differs from the expected correction, do not praise that rendering in "
         "gold_cases merely because it is fluent or close in spirit; any span "
         "listed in bad_cases is ineligible for gold_cases. If it matches well, "
@@ -327,6 +332,17 @@ EVAL_SCHEMA = {
 }
 
 
+def parse_linked_case_ref(linked_case) -> tuple[str | None, int | None]:
+    """Return (case_collection, index) for linked_case values."""
+    if isinstance(linked_case, int):
+        return None, linked_case
+    if isinstance(linked_case, str):
+        match = re.fullmatch(r"\s*(bad_cases|gold_cases)\[(\d+)\]\s*", linked_case)
+        if match:
+            return match.group(1), int(match.group(2))
+    return None, None
+
+
 def validate_report_contract(report: dict) -> None:
     """Validate deterministic evaluator JSON contracts.
 
@@ -402,11 +418,26 @@ def validate_report_contract(report: dict) -> None:
             )
 
         linked_case = item["linked_case"]
-        if isinstance(linked_case, int) and (
-            linked_case < 0
+        linked_collection, linked_index = parse_linked_case_ref(linked_case)
+        if linked_case is not None and linked_index is None:
+            raise ValueError(
+                f"human_review_checklist[{index}] invalid linked_case "
+                f"reference: {linked_case!r}"
+            )
+        if linked_index is not None and (
+            linked_index < 0
             or (
-                linked_case >= len(bad_cases)
-                and linked_case >= len(gold_cases)
+                linked_collection == "bad_cases"
+                and linked_index >= len(bad_cases)
+            )
+            or (
+                linked_collection == "gold_cases"
+                and linked_index >= len(gold_cases)
+            )
+            or (
+                linked_collection is None
+                and linked_index >= len(bad_cases)
+                and linked_index >= len(gold_cases)
             )
         ):
             raise ValueError(
@@ -440,12 +471,14 @@ def validate_report_contract(report: dict) -> None:
             continue
 
         valid_bad_link = (
-            isinstance(linked_case, int)
-            and linked_case in matching_bad
+            linked_index is not None
+            and linked_collection in (None, "bad_cases")
+            and linked_index in matching_bad
         )
         valid_gold_link = (
-            isinstance(linked_case, int)
-            and linked_case in matching_gold
+            linked_index is not None
+            and linked_collection in (None, "gold_cases")
+            and linked_index in matching_gold
         )
         if not (valid_bad_link or valid_gold_link):
             raise ValueError(
