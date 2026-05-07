@@ -220,6 +220,43 @@ separate from `bad_cases` and `gold_cases`: the checklist exists so known human
 targets cannot be silently skipped when the evaluator chooses not to promote a
 signal into the main findings.
 
+### Sampled chapter validation strategy
+
+The evaluator is a high-risk alarm, not the final literary judge. Treat its
+findings as triage signals that point to passages requiring human attention;
+do not promote every evaluator complaint into memory, assets, or contract code.
+
+Human review should calibrate representative and risky samples, not all 1200
+chapters. Use it to anchor terminology, title/address decisions, recurring
+style behavior, and evaluator blind spots. It is not a line-by-line approval
+process for the full book.
+
+Add an item to `project_assets/` or `gold_examples` only when it is stable and
+reusable: repeated across chapters, confirmed by human review, or clearly
+canonical for a name, title, kinship term, technical term, register rule, or
+excellent reusable rendering. Add a `bad_case` only when the failure is real,
+source-grounded, and likely to recur or represent high risk.
+
+Do not add case memory for one-off DeepSeek instability, self-contradictory
+evaluator output, harmless acceptable variants, local line polish, duplicate
+case noise, placeholder cases, or a rendering the evaluator itself describes as
+correct/no issue. These should be ignored, sampled again later, or handled by
+human review if they appear in a high-risk passage.
+
+Suggested cadence:
+
+- Early chapters: high-touch review while names, titles, kinship rules, and
+  narrative register settle.
+- Middle production: sampled review at regular intervals, plus spot checks
+  around major cast/location changes.
+- Exceptions: always review high-risk chapters with new family hierarchy,
+  legal/medical/divination terms, title changes, deaths, major relationship
+  shifts, or known model-failure patterns.
+
+After ch010, stop manual case expansion for that chapter. Run sampled chapter
+validation on the next selected chapters, use the evaluator to flag high-risk
+passages, and only promote findings that meet the inclusion rules above.
+
 ## Finding classification and resolution
 
 ### Type A — Glossary/lexical entries
