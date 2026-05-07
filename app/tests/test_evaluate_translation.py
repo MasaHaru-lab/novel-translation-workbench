@@ -442,6 +442,66 @@ def test_caught_reusable_good_signal_links_to_matching_gold_case():
         evaluate_translation.validate_report_contract(report)
 
 
+def test_link_caught_checklist_items_fills_unambiguous_gold_case_link():
+    report = {
+        "bad_cases": [],
+        "gold_cases": [
+            {
+                "chinese_original": "人伢子",
+                "excellent_translation": "servant broker",
+                "why_good": "Matches the glossary entry exactly.",
+            }
+        ],
+        "human_review_checklist": [
+            {
+                "signal": "人伢子 -> servant broker",
+                "judgment": "caught",
+                "evidence": "Translation uses servant broker.",
+                "linked_case": None,
+            }
+        ],
+    }
+
+    evaluate_translation.link_caught_checklist_items(report)
+
+    assert report["human_review_checklist"][0]["linked_case"] == "gold_cases[0]"
+    evaluate_translation.validate_report_contract(report)
+
+
+def test_link_caught_checklist_items_leaves_ambiguous_matches_for_contract():
+    report = {
+        "bad_cases": [
+            {
+                "type": "other",
+                "chinese_original": "人伢子",
+                "bad_translation": "servant dealer",
+                "explanation": "Wrong term.",
+            }
+        ],
+        "gold_cases": [
+            {
+                "chinese_original": "人伢子",
+                "excellent_translation": "servant broker",
+                "why_good": "Matches the glossary entry exactly.",
+            }
+        ],
+        "human_review_checklist": [
+            {
+                "signal": "人伢子 -> servant broker",
+                "judgment": "caught",
+                "evidence": "Ambiguous generated report.",
+                "linked_case": None,
+            }
+        ],
+    }
+
+    evaluate_translation.link_caught_checklist_items(report)
+
+    assert report["human_review_checklist"][0]["linked_case"] is None
+    with pytest.raises(ValueError, match="same chinese_original"):
+        evaluate_translation.validate_report_contract(report)
+
+
 def test_caught_acceptable_no_case_signal_uses_null_link():
     report = {
         "bad_cases": [],

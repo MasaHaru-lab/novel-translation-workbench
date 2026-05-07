@@ -360,6 +360,35 @@ def source_span_overlaps_signal(source_span: str, signal: str) -> bool:
     )
 
 
+def matching_case_refs_for_signal(report: dict, signal: str) -> list[str]:
+    """Return exact bad/gold case refs whose Chinese source appears in signal."""
+    matches: list[str] = []
+    for collection in ("bad_cases", "gold_cases"):
+        for index in matching_case_indices(report, collection, signal):
+            matches.append(f"{collection}[{index}]")
+    return matches
+
+
+def matching_case_indices(report: dict, collection: str, signal: str) -> list[int]:
+    """Return case indexes in one collection whose Chinese source appears in signal."""
+    matches: list[int] = []
+    for index, case in enumerate(report.get(collection) or []):
+        source = case.get("chinese_original")
+        if source and str(source) in signal:
+            matches.append(index)
+    return matches
+
+
+def link_caught_checklist_items(report: dict) -> None:
+    """Fill unambiguous linked_case refs for caught human-review checklist items."""
+    for item in report.get("human_review_checklist") or []:
+        if item.get("judgment") != "caught" or item.get("linked_case") is not None:
+            continue
+        matches = matching_case_refs_for_signal(report, str(item.get("signal") or ""))
+        if len(matches) == 1:
+            item["linked_case"] = matches[0]
+
+
 def validate_report_contract(report: dict) -> None:
     """Validate deterministic evaluator JSON contracts.
 
@@ -483,18 +512,8 @@ def validate_report_contract(report: dict) -> None:
             continue
 
         signal = str(item["signal"])
-        matching_bad = [
-            i
-            for i, case in enumerate(bad_cases)
-            if case.get("chinese_original")
-            and str(case["chinese_original"]) in signal
-        ]
-        matching_gold = [
-            i
-            for i, case in enumerate(gold_cases)
-            if case.get("chinese_original")
-            and str(case["chinese_original"]) in signal
-        ]
+        matching_bad = matching_case_indices(report, "bad_cases", signal)
+        matching_gold = matching_case_indices(report, "gold_cases", signal)
 
         if linked_case is None:
             if matching_bad or matching_gold:
@@ -780,6 +799,7 @@ def main() -> int:
     # Tag the report with which backend produced it so downstream consumers
     # (quality_loop state.json, staging.md header) can record provenance.
     report["backend"] = backend
+    link_caught_checklist_items(report)
     try:
         validate_report_contract(report)
     except ValueError as e:
