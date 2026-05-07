@@ -448,6 +448,17 @@ def validate_report_contract(report: dict) -> None:
             )
 
 
+def raw_response_debug_path(output_path: Path) -> Path:
+    return output_path.with_suffix(".raw_response.txt")
+
+
+def write_raw_response_debug(raw: str, output_path: Path) -> Path:
+    debug_path = raw_response_debug_path(output_path)
+    debug_path.parent.mkdir(parents=True, exist_ok=True)
+    debug_path.write_text(raw, encoding="utf-8")
+    return debug_path
+
+
 # Confirmed Claude rate/quota/time-window limit signals (case-insensitive).
 # Matched against api_error_status, the result text in the envelope, and
 # stderr. Anything that does NOT match here is treated as an unrelated
@@ -669,7 +680,14 @@ def main() -> int:
     try:
         report = json.loads(raw)
     except json.JSONDecodeError as e:
-        sys.exit(f"evaluate_translation: could not parse JSON response: {e}\nRaw:\n{raw[:500]}")
+        debug_note = ""
+        if args.output:
+            debug_path = write_raw_response_debug(raw, args.output)
+            debug_note = f"\nRaw response saved to: {debug_path}"
+        sys.exit(
+            f"evaluate_translation: could not parse JSON response: {e}"
+            f"{debug_note}\nRaw:\n{raw[:500]}"
+        )
 
     # Tag the report with which backend produced it so downstream consumers
     # (quality_loop state.json, staging.md header) can record provenance.

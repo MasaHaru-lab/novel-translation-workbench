@@ -1,5 +1,6 @@
 """Tests for the standalone evaluate_translation script."""
 import importlib.util
+import sys
 from pathlib import Path
 
 import pytest
@@ -254,6 +255,49 @@ def test_report_contract_rejects_invalid_checklist_judgment():
 
     with pytest.raises(ValueError, match="invalid judgment"):
         evaluate_translation.validate_report_contract(report)
+
+
+def test_parse_failure_writes_raw_response_debug_artifact(tmp_path, monkeypatch):
+    source = tmp_path / "source.txt"
+    source.write_text("第十章\n\n秦流西。", encoding="utf-8")
+    translation = tmp_path / "translation.md"
+    translation.write_text("Chapter Ten\n\nLiuxi Qin.", encoding="utf-8")
+    assets_dir = tmp_path / "assets"
+    assets_dir.mkdir()
+    output = tmp_path / "ch010_contract_gate_validation.json"
+    malformed = '{"score": 8.8, "bad_cases": ['
+
+    monkeypatch.setattr(
+        evaluate_translation,
+        "evaluate",
+        lambda *_args: (malformed, "deepseek-explicit"),
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "evaluate_translation.py",
+            "--source",
+            str(source),
+            "--translation",
+            str(translation),
+            "--assets-dir",
+            str(assets_dir),
+            "--output",
+            str(output),
+            "--evaluator",
+            "deepseek",
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exc:
+        evaluate_translation.main()
+
+    debug_path = output.with_suffix(".raw_response.txt")
+    assert "could not parse JSON response" in str(exc.value)
+    assert str(debug_path) in str(exc.value)
+    assert not output.exists()
+    assert debug_path.read_text(encoding="utf-8") == malformed
 
 
 def test_caught_reusable_good_signal_links_to_matching_gold_case():
