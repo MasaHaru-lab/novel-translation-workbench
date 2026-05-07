@@ -100,6 +100,14 @@ This pattern applies to all XX家的 / X房的 constructions that function as th
 
 This restriction applies to both adult and minor characters. Descriptors like "三房的秦明宝" must be recast as "Mingbao Qin, the youngest granddaughter" or simply "Mingbao Qin" — never as "the third branch's young daughter." The branch label must not survive in its literal nominal form.
 
+For 房-based Qin family references, avoid mechanical "branch." Use relationship-based English such as "the second son's family" for household context. Use "senior line" / "second line" only when the sentence is about inheritance line or clan/inheritance structure.
+
+Examples:
+- 二房的秦明亓 → Mingqi Qin, from the second son's family
+- 大房的嫡长孙 → the eldest legitimate grandson of the eldest son's family
+  - If 大房 is already clear: the eldest legitimate grandson of the senior line
+- 二房的庶长子 → the eldest concubine-born son of the second son's family
+
 ## Kinship address terms (三婶, 二嫂, 大伯, etc.)
 
 This rule extends the household-address policy above to all generational kinship labels. Chinese family hierarchy is structurally too complex to map cleanly onto English — "Third Aunt," "Second Sister-in-Law," "Eldest Uncle" produce unnatural fiction and require readers to track a clan structure they have no way to visualize.
