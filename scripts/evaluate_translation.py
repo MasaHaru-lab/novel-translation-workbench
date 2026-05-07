@@ -380,13 +380,30 @@ def matching_case_indices(report: dict, collection: str, signal: str) -> list[in
 
 
 def link_caught_checklist_items(report: dict) -> None:
-    """Fill unambiguous linked_case refs for caught human-review checklist items."""
+    """Fill or repair unambiguous linked_case refs for caught checklist items."""
     for item in report.get("human_review_checklist") or []:
-        if item.get("judgment") != "caught" or item.get("linked_case") is not None:
+        if item.get("judgment") != "caught":
             continue
-        matches = matching_case_refs_for_signal(report, str(item.get("signal") or ""))
+        signal = str(item.get("signal") or "")
+        if linked_case_matches_signal(report, item.get("linked_case"), signal):
+            continue
+        matches = matching_case_refs_for_signal(report, signal)
         if len(matches) == 1:
             item["linked_case"] = matches[0]
+
+
+def linked_case_matches_signal(report: dict, linked_case, signal: str) -> bool:
+    """Return whether linked_case points to a case whose source matches signal."""
+    linked_collection, linked_index = parse_linked_case_ref(linked_case)
+    if linked_index is None:
+        return linked_case is None and not matching_case_refs_for_signal(report, signal)
+
+    if linked_collection is None:
+        bad_match = linked_index in matching_case_indices(report, "bad_cases", signal)
+        gold_match = linked_index in matching_case_indices(report, "gold_cases", signal)
+        return bad_match or gold_match
+
+    return linked_index in matching_case_indices(report, linked_collection, signal)
 
 
 def validate_report_contract(report: dict) -> None:

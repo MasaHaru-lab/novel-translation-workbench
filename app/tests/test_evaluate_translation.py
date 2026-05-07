@@ -502,6 +502,67 @@ def test_link_caught_checklist_items_leaves_ambiguous_matches_for_contract():
         evaluate_translation.validate_report_contract(report)
 
 
+def test_link_caught_checklist_items_repairs_wrong_link_with_unique_match():
+    report = {
+        "bad_cases": [
+            {
+                "type": "address_drift",
+                "chinese_original": "你三婶那边",
+                "bad_translation": "your third aunt's side",
+                "explanation": "Wrong signal for this checklist row.",
+            },
+            {
+                "type": "relationship_misread",
+                "chinese_original": "嫡母",
+                "bad_translation": "principal mother",
+                "explanation": "Human review expects legal mother.",
+            },
+        ],
+        "gold_cases": [],
+        "human_review_checklist": [
+            {
+                "signal": "嫡母 -> legal mother",
+                "judgment": "caught",
+                "evidence": "Reported in bad_cases.",
+                "linked_case": "bad_cases[0]",
+            }
+        ],
+    }
+
+    evaluate_translation.link_caught_checklist_items(report)
+
+    assert report["human_review_checklist"][0]["linked_case"] == "bad_cases[1]"
+    evaluate_translation.validate_report_contract(report)
+
+
+def test_link_caught_checklist_items_keeps_wrong_link_without_unique_match():
+    report = {
+        "bad_cases": [
+            {
+                "type": "address_drift",
+                "chinese_original": "你三婶那边",
+                "bad_translation": "your third aunt's side",
+                "explanation": "Wrong signal for this checklist row.",
+            }
+        ],
+        "gold_cases": [],
+        "human_review_checklist": [
+            {
+                "signal": "嫡母 -> legal mother",
+                "judgment": "caught",
+                "evidence": "Claims wrong linked case.",
+                "linked_case": "bad_cases[0]",
+            }
+        ],
+    }
+
+    evaluate_translation.link_caught_checklist_items(report)
+
+    assert report["human_review_checklist"][0]["linked_case"] == "bad_cases[0]"
+    with pytest.raises(ValueError, match="linked_case"):
+        evaluate_translation.validate_report_contract(report)
+
+
 def test_caught_acceptable_no_case_signal_uses_null_link():
     report = {
         "bad_cases": [],
