@@ -150,6 +150,7 @@ def test_health_endpoint():
     assert data["status"] == "healthy"
 
 
+@patch.dict(os.environ, {"CHAPTER_API_MODE": ""})
 @patch('app.translate.backend_adapter.call_model_backend')
 def test_api_chapters_product_endpoint_smoke_no_backend_call(mock_backend_call):
     """Product endpoint returns the minimal contract without model/API calls."""
@@ -172,6 +173,64 @@ def test_api_chapters_product_endpoint_smoke_no_backend_call(mock_backend_call):
     assert data["segments"]
     assert data["error"] is None
     mock_backend_call.assert_not_called()
+
+
+@patch.dict(os.environ, {"CHAPTER_API_MODE": "real"})
+@patch('app.translate.model_profiles.get_profile')
+@patch('app.config_loader.load_env_local')
+@patch('app.service.draft_service.translate_draft_with_profile')
+@patch('app.service.draft_service.ChapterOrchestrator')
+def test_api_chapters_product_endpoint_real_mode_uses_deepseek_profile(
+    mock_orchestrator_class,
+    mock_translate_with_profile,
+    mock_load_env,
+    mock_get_profile,
+):
+    """Real product mode routes through the existing DeepSeek profile path."""
+    mock_profile = MagicMock(name="deepseek-profile")
+    mock_get_profile.return_value = mock_profile
+
+    seg = TranslationOutput(
+        segment_id="1",
+        draft_translation="Draft",
+        polished_translation="Real translated text.",
+    )
+    mock_result = ChapterResult(
+        chapter_title="Real Mode",
+        source_text="你好。",
+        segment_results=[seg],
+        aggregated_translation="Real translated text.",
+        chapter_status=ChapterStatus.COMPLETED,
+    )
+    mock_orchestrator = MagicMock()
+    mock_orchestrator.run_with_manifest.return_value = mock_result
+    mock_orchestrator_class.return_value = mock_orchestrator
+
+    response = client.post("/api/chapters", json={
+        "title": "Real Mode",
+        "source_text": "你好。",
+    })
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "completed"
+    assert data["title"] == "Real Mode"
+    assert data["final_text"] == "Real translated text."
+    assert data["segments"] == [{"segment_id": "1", "final_text": "Real translated text."}]
+
+    mock_load_env.assert_called_once()
+    mock_get_profile.assert_called_once_with("deepseek-v4-flash")
+    mock_orchestrator.run_with_manifest.assert_called_once()
+    kwargs = mock_orchestrator.run_with_manifest.call_args.kwargs
+    assert kwargs["source_text"] == "你好。"
+    assert kwargs["smoke_test"] is False
+    assert kwargs["model_profile"] is mock_profile
+    assert callable(kwargs["translate_draft_fn"])
+
+    inp = TranslationInput(segment_id="1", source_text="你好。")
+    mock_translate_with_profile.return_value = seg
+    assert kwargs["translate_draft_fn"](inp) is seg
+    mock_translate_with_profile.assert_called_once_with(inp, mock_profile)
 
 
 def test_api_chapters_product_endpoint_empty_source():

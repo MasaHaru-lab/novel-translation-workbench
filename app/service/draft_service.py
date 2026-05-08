@@ -8,10 +8,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 from threading import Lock
+import os
 import uvicorn
 
 from app.translate.schema import TranslationInput, TranslationOutput, GlossaryTerm
-from app.translate.backend_adapter import translate_draft_with_backend
+from app.translate.backend_adapter import (
+    translate_draft_with_backend,
+    translate_draft_with_profile,
+)
 from app.translate.translator import set_smoke_mode
 from app.config import config
 from app.chapter.orchestrator import ChapterOrchestrator
@@ -38,6 +42,8 @@ app.add_middleware(
 )
 
 _smoke_run_lock = Lock()
+CHAPTER_API_MODE_ENV = "CHAPTER_API_MODE"
+PRODUCT_CHAPTER_MODEL_PROFILE = "deepseek-v4-flash"
 
 
 # We need Pydantic models that mirror the dataclasses for FastAPI request/response
@@ -192,12 +198,37 @@ def _run_product_chapter_smoke(source_text: str) -> ChapterResult:
             config.MODEL_BACKEND_URL = original_backend_url
 
 
+def _product_chapter_real_mode_enabled() -> bool:
+    """Return whether the product chapter API should call the real model path."""
+    return os.environ.get(CHAPTER_API_MODE_ENV, "").strip().lower() == "real"
+
+
+def _run_product_chapter_real(source_text: str) -> ChapterResult:
+    """Run the product chapter endpoint through the existing DeepSeek profile."""
+    from app.config_loader import load_env_local
+    from app.translate.model_profiles import get_profile
+
+    load_env_local()
+    profile = get_profile(PRODUCT_CHAPTER_MODEL_PROFILE)
+
+    def translate_fn(inp: TranslationInput) -> TranslationOutput:
+        return translate_draft_with_profile(inp, profile)
+
+    set_smoke_mode(False)
+    return ChapterOrchestrator().run_with_manifest(
+        source_text=source_text,
+        translate_draft_fn=translate_fn,
+        smoke_test=False,
+        model_profile=profile,
+    )
+
+
 @app.post("/api/chapters", response_model=ProductChapterResponseModel)
 async def post_api_chapters(request: ProductChapterRequestModel) -> ProductChapterResponseModel:
     """Minimal synchronous endpoint for the deployed product frontend.
 
-    This endpoint intentionally runs only the orchestrator smoke path. It does
-    not call a real model backend or persist a manifest.
+    By default this endpoint runs the orchestrator smoke path. Set
+    ``CHAPTER_API_MODE=real`` to opt in to the existing DeepSeek profile path.
     """
     if not request.source_text.strip():
         raise HTTPException(status_code=400, detail="source_text cannot be empty")
@@ -205,7 +236,10 @@ async def post_api_chapters(request: ProductChapterRequestModel) -> ProductChapt
     title = request.title.strip() if request.title and request.title.strip() else None
 
     try:
-        result = _run_product_chapter_smoke(request.source_text)
+        if _product_chapter_real_mode_enabled():
+            result = _run_product_chapter_real(request.source_text)
+        else:
+            result = _run_product_chapter_smoke(request.source_text)
     except Exception:
         return ProductChapterResponseModel(
             status="error",
