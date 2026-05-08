@@ -4,12 +4,15 @@ FastAPI service for draft translation.
 Exposes a single endpoint POST /translate/draft that calls a local model backend.
 """
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
+from threading import Lock
 import uvicorn
 
 from app.translate.schema import TranslationInput, TranslationOutput, GlossaryTerm
 from app.translate.backend_adapter import translate_draft_with_backend
+from app.translate.translator import set_smoke_mode
 from app.config import config
 from app.chapter.orchestrator import ChapterOrchestrator
 from app.chapter.models import ChapterResult
@@ -21,6 +24,20 @@ app = FastAPI(
     description="Minimal HTTP service for draft translation using local model backend",
     version="0.1.0"
 )
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://novel-translation-workbench-ui.vercel.app",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+_smoke_run_lock = Lock()
 
 
 # We need Pydantic models that mirror the dataclasses for FastAPI request/response
@@ -98,6 +115,27 @@ class ChapterResponseModel(BaseModel):
         from_attributes = True
 
 
+class ProductChapterRequestModel(BaseModel):
+    """Minimal product-facing chapter request."""
+    title: Optional[str] = None
+    source_text: str
+    mode: str = "default"
+
+
+class ProductSegmentModel(BaseModel):
+    segment_id: str
+    final_text: str
+
+
+class ProductChapterResponseModel(BaseModel):
+    """Minimal product-facing chapter response."""
+    status: str
+    title: Optional[str] = None
+    final_text: str = ""
+    segments: Optional[List[ProductSegmentModel]] = None
+    error: Optional[str] = None
+
+
 @app.post("/translate/draft", response_model=TranslationOutputModel)
 async def post_translate_draft(input: TranslationInputModel) -> TranslationOutputModel:
     """Return a draft translation using the configured model backend."""
@@ -135,6 +173,59 @@ async def post_translate_draft(input: TranslationInputModel) -> TranslationOutpu
         draft_translation=output.draft_translation,
         polished_translation=output.polished_translation,
         notes=output.notes
+    )
+
+
+def _run_product_chapter_smoke(source_text: str) -> ChapterResult:
+    """Run the chapter orchestrator without allowing real backend calls."""
+    with _smoke_run_lock:
+        original_backend_url = config.MODEL_BACKEND_URL
+        config.MODEL_BACKEND_URL = ""
+        set_smoke_mode(True)
+        try:
+            return ChapterOrchestrator().run_with_manifest(
+                source_text=source_text,
+                smoke_test=True,
+            )
+        finally:
+            set_smoke_mode(False)
+            config.MODEL_BACKEND_URL = original_backend_url
+
+
+@app.post("/api/chapters", response_model=ProductChapterResponseModel)
+async def post_api_chapters(request: ProductChapterRequestModel) -> ProductChapterResponseModel:
+    """Minimal synchronous endpoint for the deployed product frontend.
+
+    This endpoint intentionally runs only the orchestrator smoke path. It does
+    not call a real model backend or persist a manifest.
+    """
+    if not request.source_text.strip():
+        raise HTTPException(status_code=400, detail="source_text cannot be empty")
+
+    title = request.title.strip() if request.title and request.title.strip() else None
+
+    try:
+        result = _run_product_chapter_smoke(request.source_text)
+    except Exception:
+        return ProductChapterResponseModel(
+            status="error",
+            title=title,
+            final_text="",
+            error="Chapter translation failed before producing output.",
+        )
+
+    segments = [
+        ProductSegmentModel(
+            segment_id=segment.segment_id,
+            final_text=segment.polished_translation,
+        )
+        for segment in result.segment_results
+    ]
+    return ProductChapterResponseModel(
+        status=result.chapter_status.value,
+        title=title or result.chapter_title,
+        final_text=result.final_translation,
+        segments=segments or None,
     )
 
 

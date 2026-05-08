@@ -150,6 +150,67 @@ def test_health_endpoint():
     assert data["status"] == "healthy"
 
 
+@patch('app.translate.backend_adapter.call_model_backend')
+def test_api_chapters_product_endpoint_smoke_no_backend_call(mock_backend_call):
+    """Product endpoint returns the minimal contract without model/API calls."""
+    mock_backend_call.side_effect = AssertionError("backend should not be called")
+    original_backend_url = config.MODEL_BACKEND_URL
+    config.MODEL_BACKEND_URL = "http://real-backend.invalid"
+    try:
+        response = client.post("/api/chapters", json={
+            "title": "Display Title",
+            "source_text": "第一章\n\n测试内容",
+        })
+    finally:
+        config.MODEL_BACKEND_URL = original_backend_url
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "completed"
+    assert data["title"] == "Display Title"
+    assert "[SMOKE TEST" in data["final_text"]
+    assert data["segments"]
+    assert data["error"] is None
+    mock_backend_call.assert_not_called()
+
+
+def test_api_chapters_product_endpoint_empty_source():
+    """Product endpoint rejects empty source text."""
+    response = client.post("/api/chapters", json={"source_text": "   "})
+    assert response.status_code == 400
+    assert "source_text cannot be empty" in response.json()["detail"]
+
+
+def test_api_chapters_cors_allows_vercel_frontend():
+    """CORS preflight allows the deployed Vercel frontend origin."""
+    response = client.options(
+        "/api/chapters",
+        headers={
+            "Origin": "https://novel-translation-workbench-ui.vercel.app",
+            "Access-Control-Request-Method": "POST",
+        },
+    )
+    assert response.status_code == 200
+    assert (
+        response.headers["access-control-allow-origin"]
+        == "https://novel-translation-workbench-ui.vercel.app"
+    )
+
+
+def test_api_chapters_cors_allows_local_frontend_dev_origins():
+    """CORS preflight allows local frontend development origins."""
+    for origin in ("http://localhost:3000", "http://127.0.0.1:3000"):
+        response = client.options(
+            "/api/chapters",
+            headers={
+                "Origin": origin,
+                "Access-Control-Request-Method": "POST",
+            },
+        )
+        assert response.status_code == 200
+        assert response.headers["access-control-allow-origin"] == origin
+
+
 @patch('app.service.draft_service.ChapterOrchestrator')
 def test_translate_chapter_endpoint_basic(mock_orchestrator_class):
     """Test the /translate/chapter endpoint with minimal input."""
