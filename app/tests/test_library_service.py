@@ -164,6 +164,8 @@ def test_get_chapter_returns_full_source(isolated_library):
     assert "乙段" in body["source_text"]
     # Must not bleed into chapter 3.
     assert "第三章" not in body["source_text"]
+    # Untranslated chapter → translation field is null.
+    assert body["translation"] is None
 
 
 def test_get_chapter_404_for_missing_index(isolated_library):

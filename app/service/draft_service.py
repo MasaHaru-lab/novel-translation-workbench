@@ -570,11 +570,25 @@ class BookDetailModel(BaseModel):
     chapters: List[ChapterListEntryModel]
 
 
+class ChapterTranslationModel(BaseModel):
+    """Translated chapter payload, present on ChapterContentModel only
+    when a translation file exists at the expected workspace path.
+
+    The runner writes ``.md`` only on a successful chapter run, so the
+    presence of this object is itself the "translation is final"
+    signal — partial/failed runs leave the manifest behind but no
+    ``.md``."""
+
+    text: str
+    output_filename: str
+
+
 class ChapterContentModel(BaseModel):
     book_id: str
     index: int
     heading: str
     source_text: str
+    translation: Optional[ChapterTranslationModel] = None
 
 
 def _book_to_model(book: Book) -> BookSummaryModel:
@@ -618,13 +632,43 @@ def _chapter_listing(book_id: str) -> List[ChapterListEntryModel]:
     return listing
 
 
+def _read_translation_for_chapter(
+    book_id: str, index: int,
+) -> Optional[ChapterTranslationModel]:
+    """Find the ``translations/NNNN_*_en.md`` file for ``index``.
+
+    Slug-agnostic — matches any filename starting with the padded
+    index and ending with ``_en.md``. Returns None when no file
+    matches; this is the normal case for chapters that have not yet
+    been translated."""
+    target_dir = book_dir(book_id) / "translations"
+    if not target_dir.exists():
+        return None
+    prefix = f"{index:04d}_"
+    for path in sorted(target_dir.iterdir()):
+        if not path.is_file():
+            continue
+        if path.name.startswith(prefix) and path.name.endswith("_en.md"):
+            try:
+                rel = str(path.relative_to(book_dir(book_id)))
+            except ValueError:
+                rel = str(path)
+            return ChapterTranslationModel(
+                text=path.read_text(encoding="utf-8"),
+                output_filename=rel,
+            )
+    return None
+
+
 def _read_chapter_content(book_id: str, index: int) -> Optional[ChapterContentModel]:
     """Locate the chapter file for ``index`` and return its content.
 
     Returns None when no file matches the index. Slug is resolved by
     listing the chapters directory rather than recomputed, so a book
     written under one slugger and read under a different one still
-    works."""
+    works. Attaches the translated text when a corresponding file
+    exists under ``translations/``; otherwise ``translation`` is None.
+    """
     for path in list_chapter_files(book_id):
         idx = _chapter_index_from_filename(path)
         if idx == index:
@@ -640,6 +684,7 @@ def _read_chapter_content(book_id: str, index: int) -> Optional[ChapterContentMo
                 index=index,
                 heading=heading,
                 source_text=text,
+                translation=_read_translation_for_chapter(book_id, index),
             )
     return None
 

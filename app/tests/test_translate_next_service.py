@@ -152,6 +152,50 @@ def test_translate_next_failure_is_200_with_controlled_body(monkeypatch, smoke_w
     assert job["error_message"] is not None
 
 
+def test_get_chapter_attaches_translation_after_translate_next(smoke_workspace):
+    """After translate-next runs chapter 1, GET on chapter 1 returns
+    the translated text under ``translation``; chapters that have
+    not yet been translated still report ``translation: null``."""
+    book_id = _import_three_chapter_book()
+    posted = client.post(f"/api/books/{book_id}/translate-next").json()
+    expected_filename = posted["output_filename"]
+    assert expected_filename is not None
+
+    # Translated chapter: translation field populated.
+    response = client.get(f"/api/books/{book_id}/chapters/1")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["index"] == 1
+    assert body["translation"] is not None
+    translation = body["translation"]
+    assert translation["output_filename"] == expected_filename
+    assert translation["output_filename"].startswith("translations/0001_")
+    # Translation text matches the on-disk file verbatim.
+    on_disk = (smoke_workspace / book_id / translation["output_filename"]).read_text(
+        encoding="utf-8",
+    )
+    assert translation["text"] == on_disk
+    assert translation["text"].strip() != ""
+
+    # Sibling chapter still untranslated.
+    sibling = client.get(f"/api/books/{book_id}/chapters/2").json()
+    assert sibling["translation"] is None
+
+
+def test_get_chapter_translation_path_is_workspace_relative(smoke_workspace):
+    """The translation.output_filename is rooted at the book workspace
+    so the frontend can construct future read URLs without an absolute
+    server path."""
+    book_id = _import_three_chapter_book()
+    client.post(f"/api/books/{book_id}/translate-next")
+    body = client.get(f"/api/books/{book_id}/chapters/1").json()
+    rel = body["translation"]["output_filename"]
+    # Relative — does not contain the absolute LIBRARY_ROOT prefix.
+    assert not rel.startswith("/")
+    assert str(smoke_workspace) not in rel
+    assert rel.startswith("translations/")
+
+
 def test_existing_endpoints_still_registered():
     paths = {r.path for r in app.routes}
     for required in {
