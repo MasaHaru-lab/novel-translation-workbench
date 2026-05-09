@@ -58,7 +58,7 @@ def test_post_books_happy_path(isolated_library):
     assert response.status_code == 200, response.text
     body = response.json()
 
-    assert body["book"]["chapter_count"] == 3
+    assert body["book"]["detected_chapter_count"] == 3
     assert body["book"]["title"] == "某某传"
     assert body["book"]["source_filename"] == "某某传.txt"
     assert body["book"]["has_preamble"] is False
@@ -66,7 +66,7 @@ def test_post_books_happy_path(isolated_library):
 
     job = body["job"]
     assert job["status"] == "pending"
-    assert job["total_chapters"] == 3
+    assert job["detected_chapter_count"] == 3
     assert job["completed_chapter_indexes"] == []
     assert job["failed_chapter_indexes"] == []
 
@@ -87,7 +87,7 @@ def test_post_books_records_preamble_flag(isolated_library):
     text = "封面：某某传\n作者：佚名\n\n" + THREE_CHAPTER_TEXT
     body = _upload("c.txt", text.encode("utf-8")).json()
     assert body["book"]["has_preamble"] is True
-    assert body["book"]["chapter_count"] == 3
+    assert body["book"]["detected_chapter_count"] == 3
 
 
 def test_post_books_rejects_empty_file(isolated_library):

@@ -507,18 +507,30 @@ MAX_BOOK_BYTES = 25 * 1024 * 1024
 
 
 class BookSummaryModel(BaseModel):
+    """Book record exposed to the frontend.
+
+    ``detected_chapter_count`` is what the splitter found at import
+    time. The translation contract is sequential — translate the next
+    chapter until no next chapter remains — so the frontend should
+    treat this as display information, not as a hard upper bound."""
+
     book_id: str
     title: str
     source_filename: str
     source_hash: str
-    chapter_count: int
+    detected_chapter_count: int
     has_preamble: bool
     created_at: str
 
 
 class BookJobModel(BaseModel):
+    """Job state exposed to the frontend.
+
+    Mirrors ``detected_chapter_count`` from the Book record; same
+    caveat about it being a snapshot rather than an absolute total."""
+
     book_id: str
-    total_chapters: int
+    detected_chapter_count: int
     status: str
     completed_chapter_indexes: List[int]
     failed_chapter_indexes: List[int]

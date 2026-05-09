@@ -40,7 +40,7 @@ def test_import_writes_book_workspace(tmp_path):
         library_root=tmp_path,
     )
     assert book.book_id.startswith("bk_")
-    assert book.chapter_count == 3
+    assert book.detected_chapter_count == 3
     assert book.title == "某某传"
     assert book.source_filename == "某某传.txt"
     assert book.has_preamble is False
@@ -74,7 +74,7 @@ def test_import_persists_initial_pending_job(tmp_path):
     job = load_job(book.book_id, root=tmp_path)
     assert job is not None
     assert job.status is BookJobStatus.PENDING
-    assert job.total_chapters == 3
+    assert job.detected_chapter_count == 3
     assert job.completed_chapter_indexes == []
     assert job.failed_chapter_indexes == []
 
@@ -132,7 +132,7 @@ def test_import_different_content_produces_different_book_ids(tmp_path):
         library_root=tmp_path,
     )
     assert first.book_id != second.book_id
-    assert second.chapter_count == 4
+    assert second.detected_chapter_count == 4
 
 
 def test_import_records_preamble_flag(tmp_path):
@@ -182,7 +182,7 @@ def test_import_with_real_concatenated_fixture(tmp_path):
         original_filename="real_concat.txt",
         library_root=tmp_path,
     )
-    assert book.chapter_count == 2
+    assert book.detected_chapter_count == 2
     files = list_chapter_files(book.book_id, root=tmp_path)
     assert len(files) == 2
     for f in files:

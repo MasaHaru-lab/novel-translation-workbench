@@ -31,7 +31,7 @@ def _make_book(book_id: str = "bk_testaaaaaaaaaa") -> Book:
         title="某某传",
         source_filename="某某传.txt",
         source_hash="a" * 64,
-        chapter_count=3,
+        detected_chapter_count=3,
         has_preamble=True,
     )
 
@@ -39,7 +39,7 @@ def _make_book(book_id: str = "bk_testaaaaaaaaaa") -> Book:
 def _make_job(book_id: str = "bk_testaaaaaaaaaa") -> BookJob:
     return BookJob(
         book_id=book_id,
-        total_chapters=3,
+        detected_chapter_count=3,
         status=BookJobStatus.PENDING,
     )
 

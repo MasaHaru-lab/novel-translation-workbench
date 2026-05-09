@@ -29,15 +29,19 @@ def _utc_now_iso() -> str:
 class Book:
     """Descriptive metadata about an imported novel.
 
-    Carries no translation runtime state. The companion ``BookJob``
-    record carries enactment.
+    ``detected_chapter_count`` is the number of chapters the splitter
+    found at import time. It is a snapshot, not an absolute truth: a
+    later re-split with a different heading rule could revise it.
+    Treat it as user-facing display information, not as a hard upper
+    bound on translation. The translation contract is sequential —
+    translate the next chapter until no next chapter remains.
     """
 
     book_id: str
     title: str
     source_filename: str
     source_hash: str
-    chapter_count: int
+    detected_chapter_count: int
     has_preamble: bool = False
     created_at: str = field(default_factory=_utc_now_iso)
 
@@ -47,7 +51,7 @@ class Book:
             "title": self.title,
             "source_filename": self.source_filename,
             "source_hash": self.source_hash,
-            "chapter_count": self.chapter_count,
+            "detected_chapter_count": self.detected_chapter_count,
             "has_preamble": self.has_preamble,
             "created_at": self.created_at,
         }
@@ -59,7 +63,7 @@ class Book:
             title=data["title"],
             source_filename=data["source_filename"],
             source_hash=data["source_hash"],
-            chapter_count=int(data["chapter_count"]),
+            detected_chapter_count=int(data["detected_chapter_count"]),
             has_preamble=bool(data.get("has_preamble", False)),
             created_at=data.get("created_at") or _utc_now_iso(),
         )
@@ -72,10 +76,16 @@ class BookJob:
     A book has exactly one current job record. Per-chapter manifests
     live alongside the chapter files when translation actually runs;
     this record is the book-level summary.
+
+    ``detected_chapter_count`` mirrors the same value on ``Book`` — a
+    snapshot of what the splitter saw at import. The translation
+    contract is sequential: keep translating the next chapter until
+    no next chapter remains. The frontend can display "completed N"
+    or "translating chapter K" with or without an absolute total.
     """
 
     book_id: str
-    total_chapters: int
+    detected_chapter_count: int
     status: BookJobStatus = BookJobStatus.PENDING
     completed_chapter_indexes: List[int] = field(default_factory=list)
     failed_chapter_indexes: List[int] = field(default_factory=list)
@@ -89,7 +99,7 @@ class BookJob:
     def to_dict(self) -> Dict[str, Any]:
         return {
             "book_id": self.book_id,
-            "total_chapters": self.total_chapters,
+            "detected_chapter_count": self.detected_chapter_count,
             "status": self.status.value,
             "completed_chapter_indexes": list(self.completed_chapter_indexes),
             "failed_chapter_indexes": list(self.failed_chapter_indexes),
@@ -102,7 +112,7 @@ class BookJob:
     def from_dict(cls, data: Dict[str, Any]) -> "BookJob":
         return cls(
             book_id=data["book_id"],
-            total_chapters=int(data["total_chapters"]),
+            detected_chapter_count=int(data["detected_chapter_count"]),
             status=BookJobStatus(data.get("status", BookJobStatus.PENDING.value)),
             completed_chapter_indexes=list(data.get("completed_chapter_indexes", [])),
             failed_chapter_indexes=list(data.get("failed_chapter_indexes", [])),

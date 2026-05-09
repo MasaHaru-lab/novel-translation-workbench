@@ -113,7 +113,7 @@ def import_novel(
         title=_title_from_filename(original_filename),
         source_filename=original_filename,
         source_hash=source_hash,
-        chapter_count=len(split.chapters),
+        detected_chapter_count=len(split.chapters),
         has_preamble=split.preamble is not None,
     )
     save_book(book, library_root)
@@ -124,7 +124,7 @@ def import_novel(
     if load_job(book_id, library_root) is None:
         job = BookJob(
             book_id=book_id,
-            total_chapters=len(split.chapters),
+            detected_chapter_count=len(split.chapters),
             status=BookJobStatus.PENDING,
         )
         save_job(job, library_root)
