@@ -3,7 +3,7 @@ FastAPI service for draft translation.
 
 Exposes a single endpoint POST /translate/draft that calls a local model backend.
 """
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
@@ -21,6 +21,15 @@ from app.config import config
 from app.chapter.orchestrator import ChapterOrchestrator
 from app.chapter.models import ChapterResult
 from app.chapter.manifest import ResumeConfig
+from app.library.intake import BookImportError, import_novel
+from app.library.models import Book, BookJob
+from app.library.store import (
+    book_exists,
+    chapter_path,
+    list_chapter_files,
+    load_book,
+    load_job,
+)
 
 
 app = FastAPI(
@@ -482,6 +491,219 @@ async def post_translate_chapter(request: ChapterRequestModel) -> ChapterRespons
 async def health():
     """Health check endpoint."""
     return {"status": "healthy"}
+
+
+# ── Library / book-import endpoints ──────────────────────────────────
+#
+# These wrap app.library and provide the upload + listing surface for
+# a frontend that imports a full novel before translating it. They do
+# NOT trigger translation — that stays on /translate/chapter and
+# /api/chapters until a later batch.
+
+
+# 25 MB cap on novel uploads. Plain UTF-8 text; ~12.5M Chinese
+# characters at the upper bound, generous for any realistic novel.
+MAX_BOOK_BYTES = 25 * 1024 * 1024
+
+
+class BookSummaryModel(BaseModel):
+    book_id: str
+    title: str
+    source_filename: str
+    source_hash: str
+    chapter_count: int
+    has_preamble: bool
+    created_at: str
+
+
+class BookJobModel(BaseModel):
+    book_id: str
+    total_chapters: int
+    status: str
+    completed_chapter_indexes: List[int]
+    failed_chapter_indexes: List[int]
+    error_message: Optional[str] = None
+    created_at: str
+    updated_at: str
+
+
+class ChapterListEntryModel(BaseModel):
+    index: int
+    heading: str
+
+
+class BookDetailModel(BaseModel):
+    book: BookSummaryModel
+    job: BookJobModel
+    chapters: List[ChapterListEntryModel]
+
+
+class ChapterContentModel(BaseModel):
+    book_id: str
+    index: int
+    heading: str
+    source_text: str
+
+
+def _book_to_model(book: Book) -> BookSummaryModel:
+    return BookSummaryModel(**book.to_dict())
+
+
+def _job_to_model(job: BookJob) -> BookJobModel:
+    return BookJobModel(**job.to_dict())
+
+
+def _chapter_index_from_filename(path) -> Optional[int]:
+    """Extract the leading 4-digit index from a chapter filename.
+
+    Filenames are written as ``NNNN_<slug>.txt`` by the kernel.
+    Returns None when the filename doesn't match.
+    """
+    stem = path.stem  # "NNNN_slug"
+    head = stem.split("_", 1)[0]
+    if head.isdigit():
+        return int(head)
+    return None
+
+
+def _chapter_listing(book_id: str) -> List[ChapterListEntryModel]:
+    """Build the chapter listing by reading just the first non-empty
+    line of each chapter file. Cheap on local disk for any realistic
+    chapter count."""
+    listing: List[ChapterListEntryModel] = []
+    for path in list_chapter_files(book_id):
+        idx = _chapter_index_from_filename(path)
+        if idx is None:
+            continue
+        heading = ""
+        with path.open("r", encoding="utf-8") as f:
+            for line in f:
+                stripped = line.strip()
+                if stripped:
+                    heading = stripped
+                    break
+        listing.append(ChapterListEntryModel(index=idx, heading=heading))
+    return listing
+
+
+def _read_chapter_content(book_id: str, index: int) -> Optional[ChapterContentModel]:
+    """Locate the chapter file for ``index`` and return its content.
+
+    Returns None when no file matches the index. Slug is resolved by
+    listing the chapters directory rather than recomputed, so a book
+    written under one slugger and read under a different one still
+    works."""
+    for path in list_chapter_files(book_id):
+        idx = _chapter_index_from_filename(path)
+        if idx == index:
+            text = path.read_text(encoding="utf-8")
+            heading = ""
+            for line in text.splitlines():
+                stripped = line.strip()
+                if stripped:
+                    heading = stripped
+                    break
+            return ChapterContentModel(
+                book_id=book_id,
+                index=index,
+                heading=heading,
+                source_text=text,
+            )
+    return None
+
+
+def _build_book_detail(book_id: str) -> Optional[BookDetailModel]:
+    """Compose a BookDetailModel by reading Book + Job + chapter listing.
+
+    Returns None when ``book.json`` is missing for ``book_id``."""
+    book = load_book(book_id)
+    if book is None:
+        return None
+    job = load_job(book_id)
+    if job is None:
+        # Book exists but job record is missing — shouldn't happen via the
+        # kernel, but surface the partial state rather than hide it.
+        raise HTTPException(
+            status_code=500,
+            detail=f"Book {book_id} has no job record on disk",
+        )
+    return BookDetailModel(
+        book=_book_to_model(book),
+        job=_job_to_model(job),
+        chapters=_chapter_listing(book_id),
+    )
+
+
+@app.post("/api/books", response_model=BookDetailModel)
+async def post_api_books(file: UploadFile = File(...)) -> BookDetailModel:
+    """Import a full novel from an uploaded .txt or .md file.
+
+    Returns the freshly created Book + initial pending BookJob plus
+    the parsed chapter listing. Re-uploading identical content
+    returns the existing book unchanged (idempotent on source hash)."""
+    contents = await file.read()
+    if len(contents) == 0:
+        raise HTTPException(status_code=400, detail="uploaded file is empty")
+    if len(contents) > MAX_BOOK_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"file exceeds {MAX_BOOK_BYTES} byte limit",
+        )
+    try:
+        text = contents.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"file is not valid UTF-8: {exc}",
+        )
+
+    original_filename = (file.filename or "").strip() or "upload.txt"
+    try:
+        book = import_novel(text, original_filename=original_filename)
+    except BookImportError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    detail = _build_book_detail(book.book_id)
+    if detail is None:
+        # import_novel succeeded but the workspace can't be read back.
+        raise HTTPException(
+            status_code=500,
+            detail="book imported but workspace cannot be read",
+        )
+    return detail
+
+
+@app.get("/api/books/{book_id}", response_model=BookDetailModel)
+async def get_api_books_detail(book_id: str) -> BookDetailModel:
+    """Return Book metadata, current Job state, and chapter listing."""
+    if not book_exists(book_id):
+        raise HTTPException(status_code=404, detail=f"book {book_id} not found")
+    detail = _build_book_detail(book_id)
+    if detail is None:
+        raise HTTPException(status_code=404, detail=f"book {book_id} not found")
+    return detail
+
+
+@app.get(
+    "/api/books/{book_id}/chapters/{index}",
+    response_model=ChapterContentModel,
+)
+async def get_api_books_chapter(book_id: str, index: int) -> ChapterContentModel:
+    """Return one chapter's index, original heading, and full source text."""
+    if not book_exists(book_id):
+        raise HTTPException(status_code=404, detail=f"book {book_id} not found")
+    if index < 1:
+        raise HTTPException(
+            status_code=404,
+            detail=f"chapter index must be >= 1, got {index}",
+        )
+    content = _read_chapter_content(book_id, index)
+    if content is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"chapter {index} not found in book {book_id}",
+        )
+    return content
 
 
 if __name__ == "__main__":
