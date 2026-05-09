@@ -198,9 +198,14 @@ def _run_product_chapter_smoke(source_text: str) -> ChapterResult:
             config.MODEL_BACKEND_URL = original_backend_url
 
 
-def _product_chapter_real_mode_enabled() -> bool:
-    """Return whether the product chapter API should call the real model path."""
-    return os.environ.get(CHAPTER_API_MODE_ENV, "").strip().lower() == "real"
+def _product_chapter_mode() -> str:
+    """Return the product chapter API mode: 'real' or 'smoke'.
+
+    - ``CHAPTER_API_MODE=real`` → real
+    - ``CHAPTER_API_MODE=smoke`` → smoke (mock output, no real model calls)
+    - unset / any other value → real (default)
+    """
+    return os.environ.get(CHAPTER_API_MODE_ENV, "real").strip().lower()
 
 
 def _run_product_chapter_real(source_text: str) -> ChapterResult:
@@ -227,8 +232,8 @@ def _run_product_chapter_real(source_text: str) -> ChapterResult:
 async def post_api_chapters(request: ProductChapterRequestModel) -> ProductChapterResponseModel:
     """Minimal synchronous endpoint for the deployed product frontend.
 
-    By default this endpoint runs the orchestrator smoke path. Set
-    ``CHAPTER_API_MODE=real`` to opt in to the existing DeepSeek profile path.
+    Routes through the existing DeepSeek profile path by default.
+    Set ``CHAPTER_API_MODE=smoke`` to use mock output without real model calls.
     """
     if not request.source_text.strip():
         raise HTTPException(status_code=400, detail="source_text cannot be empty")
@@ -236,10 +241,10 @@ async def post_api_chapters(request: ProductChapterRequestModel) -> ProductChapt
     title = request.title.strip() if request.title and request.title.strip() else None
 
     try:
-        if _product_chapter_real_mode_enabled():
-            result = _run_product_chapter_real(request.source_text)
-        else:
+        if _product_chapter_mode() == "smoke":
             result = _run_product_chapter_smoke(request.source_text)
+        else:
+            result = _run_product_chapter_real(request.source_text)
     except Exception:
         return ProductChapterResponseModel(
             status="error",

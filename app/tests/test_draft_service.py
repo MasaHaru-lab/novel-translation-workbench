@@ -150,10 +150,10 @@ def test_health_endpoint():
     assert data["status"] == "healthy"
 
 
-@patch.dict(os.environ, {"CHAPTER_API_MODE": ""})
+@patch.dict(os.environ, {"CHAPTER_API_MODE": "smoke"})
 @patch('app.translate.backend_adapter.call_model_backend')
 def test_api_chapters_product_endpoint_smoke_no_backend_call(mock_backend_call):
-    """Product endpoint returns the minimal contract without model/API calls."""
+    """Product endpoint returns smoke output when CHAPTER_API_MODE=smoke."""
     mock_backend_call.side_effect = AssertionError("backend should not be called")
     original_backend_url = config.MODEL_BACKEND_URL
     config.MODEL_BACKEND_URL = "http://real-backend.invalid"
