@@ -23,7 +23,9 @@ from app.chapter.models import ChapterResult
 from app.chapter.manifest import ResumeConfig
 from app.library.intake import BookImportError, import_novel
 from app.library.models import Book, BookJob
+from app.library.runner import BookRunnerError, run_next_chapter
 from app.library.store import (
+    book_dir,
     book_exists,
     chapter_path,
     list_chapter_files,
@@ -191,8 +193,16 @@ async def post_translate_draft(input: TranslationInputModel) -> TranslationOutpu
     )
 
 
-def _run_product_chapter_smoke(source_text: str) -> ChapterResult:
-    """Run the chapter orchestrator without allowing real backend calls."""
+def _run_product_chapter_smoke(
+    source_text: str,
+    manifest_path: Optional[str] = None,
+) -> ChapterResult:
+    """Run the chapter orchestrator without allowing real backend calls.
+
+    ``manifest_path`` is forwarded to ``run_with_manifest`` so callers
+    that own a workspace path (the book runner) can persist the per-
+    chapter manifest where they want it. Existing callers that omit
+    the kwarg get the previous in-memory behavior."""
     with _smoke_run_lock:
         original_backend_url = config.MODEL_BACKEND_URL
         config.MODEL_BACKEND_URL = ""
@@ -200,6 +210,7 @@ def _run_product_chapter_smoke(source_text: str) -> ChapterResult:
         try:
             return ChapterOrchestrator().run_with_manifest(
                 source_text=source_text,
+                manifest_path=manifest_path,
                 smoke_test=True,
             )
         finally:
@@ -217,8 +228,16 @@ def _product_chapter_mode() -> str:
     return os.environ.get(CHAPTER_API_MODE_ENV, "real").strip().lower()
 
 
-def _run_product_chapter_real(source_text: str) -> ChapterResult:
-    """Run the product chapter endpoint through the existing DeepSeek profile."""
+def _run_product_chapter_real(
+    source_text: str,
+    manifest_path: Optional[str] = None,
+) -> ChapterResult:
+    """Run the product chapter endpoint through the existing DeepSeek profile.
+
+    ``manifest_path`` is forwarded to ``run_with_manifest`` so the
+    book runner can persist per-chapter manifests under the book
+    workspace. Existing callers that omit the kwarg keep the previous
+    in-memory behavior."""
     from app.config_loader import load_env_local
     from app.translate.model_profiles import get_profile
 
@@ -232,6 +251,7 @@ def _run_product_chapter_real(source_text: str) -> ChapterResult:
     return ChapterOrchestrator().run_with_manifest(
         source_text=source_text,
         translate_draft_fn=translate_fn,
+        manifest_path=manifest_path,
         smoke_test=False,
         model_profile=profile,
     )
@@ -716,6 +736,109 @@ async def get_api_books_chapter(book_id: str, index: int) -> ChapterContentModel
             detail=f"chapter {index} not found in book {book_id}",
         )
     return content
+
+
+# ── Translate-next endpoint ──────────────────────────────────────────
+#
+# The smallest execution primitive for long-book translation: one
+# request translates one next unfinished chapter. The frontend or an
+# operator can call it repeatedly to advance the book. Reuses the
+# CHAPTER_API_MODE env var ("real" / "smoke") used by /api/chapters
+# so a single switch toggles the whole product surface.
+
+
+class TranslateNextResponseModel(BaseModel):
+    """Outcome of a single ``POST /api/books/{book_id}/translate-next``.
+
+    ``ran_index`` is None when no unfinished chapter remained — that
+    case is a clean no-op (HTTP 200), not a failure. ``success``
+    reflects only whether the chapter actually completed; check
+    ``ran_index`` first to distinguish "nothing to do" from "failed".
+    """
+
+    book_id: str
+    ran_index: Optional[int] = None
+    success: bool = False
+    chapter_status: Optional[str] = None
+    error_message: Optional[str] = None
+    output_filename: Optional[str] = None
+    book: BookDetailModel
+
+
+def _translate_chapter_via_product_mode(
+    source_text: str,
+    manifest_path: str,
+) -> ChapterResult:
+    """Adapter matching ``ChapterTranslateFn`` for the runner.
+
+    Routes between the existing smoke and real product helpers based
+    on ``CHAPTER_API_MODE`` — the same env switch ``/api/chapters``
+    uses, so behaviour is consistent across both endpoints.
+    """
+    if _product_chapter_mode() == "smoke":
+        return _run_product_chapter_smoke(source_text, manifest_path=manifest_path)
+    return _run_product_chapter_real(source_text, manifest_path=manifest_path)
+
+
+@app.post(
+    "/api/books/{book_id}/translate-next",
+    response_model=TranslateNextResponseModel,
+)
+async def post_api_books_translate_next(
+    book_id: str,
+) -> TranslateNextResponseModel:
+    """Translate the next unfinished chapter of an imported book.
+
+    Synchronous: one HTTP request → one chapter attempt. The runner
+    decides which chapter to translate (lowest-indexed on-disk
+    chapter that is neither completed nor previously failed) and
+    persists job state. A failed chapter attempt returns HTTP 200
+    with ``success=false`` and ``error_message`` populated — failures
+    are not surfaced as 5xx because the operation itself completed.
+    """
+    if not book_exists(book_id):
+        raise HTTPException(status_code=404, detail=f"book {book_id} not found")
+
+    try:
+        result = run_next_chapter(
+            book_id,
+            _translate_chapter_via_product_mode,
+        )
+    except BookRunnerError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+    detail = _build_book_detail(book_id)
+    if detail is None:
+        raise HTTPException(
+            status_code=500,
+            detail=f"book {book_id} workspace cannot be read after translate-next",
+        )
+
+    chapter_status = (
+        result.chapter_result.chapter_status.value
+        if result.chapter_result is not None
+        else None
+    )
+
+    output_filename: Optional[str] = None
+    if result.success and result.output_path is not None:
+        try:
+            output_filename = str(
+                result.output_path.relative_to(book_dir(book_id))
+            )
+        except ValueError:
+            # Output path is not under the book workspace — surface as-is.
+            output_filename = str(result.output_path)
+
+    return TranslateNextResponseModel(
+        book_id=result.book_id,
+        ran_index=result.ran_index,
+        success=result.success,
+        chapter_status=chapter_status,
+        error_message=result.error_message,
+        output_filename=output_filename,
+        book=detail,
+    )
 
 
 if __name__ == "__main__":
