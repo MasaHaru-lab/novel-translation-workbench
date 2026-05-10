@@ -258,7 +258,12 @@ def test_api_chapters_cors_allows_vercel_frontend():
 
 def test_api_chapters_cors_allows_local_frontend_dev_origins():
     """CORS preflight allows local frontend development origins."""
-    for origin in ("http://localhost:3000", "http://127.0.0.1:3000"):
+    for origin in (
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ):
         response = client.options(
             "/api/chapters",
             headers={
