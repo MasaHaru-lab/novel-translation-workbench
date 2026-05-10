@@ -3,7 +3,7 @@ FastAPI service for draft translation.
 
 Exposes a single endpoint POST /translate/draft that calls a local model backend.
 """
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
@@ -21,6 +21,17 @@ from app.config import config
 from app.chapter.orchestrator import ChapterOrchestrator
 from app.chapter.models import ChapterResult
 from app.chapter.manifest import ResumeConfig
+from app.library.intake import BookImportError, import_novel
+from app.library.models import Book, BookJob
+from app.library.runner import BookRunnerError, run_next_chapter
+from app.library.store import (
+    book_dir,
+    book_exists,
+    chapter_path,
+    list_chapter_files,
+    load_book,
+    load_job,
+)
 
 
 app = FastAPI(
@@ -182,8 +193,16 @@ async def post_translate_draft(input: TranslationInputModel) -> TranslationOutpu
     )
 
 
-def _run_product_chapter_smoke(source_text: str) -> ChapterResult:
-    """Run the chapter orchestrator without allowing real backend calls."""
+def _run_product_chapter_smoke(
+    source_text: str,
+    manifest_path: Optional[str] = None,
+) -> ChapterResult:
+    """Run the chapter orchestrator without allowing real backend calls.
+
+    ``manifest_path`` is forwarded to ``run_with_manifest`` so callers
+    that own a workspace path (the book runner) can persist the per-
+    chapter manifest where they want it. Existing callers that omit
+    the kwarg get the previous in-memory behavior."""
     with _smoke_run_lock:
         original_backend_url = config.MODEL_BACKEND_URL
         config.MODEL_BACKEND_URL = ""
@@ -191,6 +210,7 @@ def _run_product_chapter_smoke(source_text: str) -> ChapterResult:
         try:
             return ChapterOrchestrator().run_with_manifest(
                 source_text=source_text,
+                manifest_path=manifest_path,
                 smoke_test=True,
             )
         finally:
@@ -208,8 +228,16 @@ def _product_chapter_mode() -> str:
     return os.environ.get(CHAPTER_API_MODE_ENV, "real").strip().lower()
 
 
-def _run_product_chapter_real(source_text: str) -> ChapterResult:
-    """Run the product chapter endpoint through the existing DeepSeek profile."""
+def _run_product_chapter_real(
+    source_text: str,
+    manifest_path: Optional[str] = None,
+) -> ChapterResult:
+    """Run the product chapter endpoint through the existing DeepSeek profile.
+
+    ``manifest_path`` is forwarded to ``run_with_manifest`` so the
+    book runner can persist per-chapter manifests under the book
+    workspace. Existing callers that omit the kwarg keep the previous
+    in-memory behavior."""
     from app.config_loader import load_env_local
     from app.translate.model_profiles import get_profile
 
@@ -223,6 +251,7 @@ def _run_product_chapter_real(source_text: str) -> ChapterResult:
     return ChapterOrchestrator().run_with_manifest(
         source_text=source_text,
         translate_draft_fn=translate_fn,
+        manifest_path=manifest_path,
         smoke_test=False,
         model_profile=profile,
     )
@@ -482,6 +511,379 @@ async def post_translate_chapter(request: ChapterRequestModel) -> ChapterRespons
 async def health():
     """Health check endpoint."""
     return {"status": "healthy"}
+
+
+# ── Library / book-import endpoints ──────────────────────────────────
+#
+# These wrap app.library and provide the upload + listing surface for
+# a frontend that imports a full novel before translating it. They do
+# NOT trigger translation — that stays on /translate/chapter and
+# /api/chapters until a later batch.
+
+
+# 25 MB cap on novel uploads. Plain UTF-8 text; ~12.5M Chinese
+# characters at the upper bound, generous for any realistic novel.
+MAX_BOOK_BYTES = 25 * 1024 * 1024
+
+
+class BookSummaryModel(BaseModel):
+    """Book record exposed to the frontend.
+
+    ``detected_chapter_count`` is what the splitter found at import
+    time. The translation contract is sequential — translate the next
+    chapter until no next chapter remains — so the frontend should
+    treat this as display information, not as a hard upper bound."""
+
+    book_id: str
+    title: str
+    source_filename: str
+    source_hash: str
+    detected_chapter_count: int
+    has_preamble: bool
+    created_at: str
+
+
+class BookJobModel(BaseModel):
+    """Job state exposed to the frontend.
+
+    Mirrors ``detected_chapter_count`` from the Book record; same
+    caveat about it being a snapshot rather than an absolute total."""
+
+    book_id: str
+    detected_chapter_count: int
+    status: str
+    completed_chapter_indexes: List[int]
+    failed_chapter_indexes: List[int]
+    error_message: Optional[str] = None
+    created_at: str
+    updated_at: str
+
+
+class ChapterListEntryModel(BaseModel):
+    index: int
+    heading: str
+
+
+class BookDetailModel(BaseModel):
+    book: BookSummaryModel
+    job: BookJobModel
+    chapters: List[ChapterListEntryModel]
+
+
+class ChapterTranslationModel(BaseModel):
+    """Translated chapter payload, present on ChapterContentModel only
+    when a translation file exists at the expected workspace path.
+
+    The runner writes ``.md`` only on a successful chapter run, so the
+    presence of this object is itself the "translation is final"
+    signal — partial/failed runs leave the manifest behind but no
+    ``.md``."""
+
+    text: str
+    output_filename: str
+
+
+class ChapterContentModel(BaseModel):
+    book_id: str
+    index: int
+    heading: str
+    source_text: str
+    translation: Optional[ChapterTranslationModel] = None
+
+
+def _book_to_model(book: Book) -> BookSummaryModel:
+    return BookSummaryModel(**book.to_dict())
+
+
+def _job_to_model(job: BookJob) -> BookJobModel:
+    return BookJobModel(**job.to_dict())
+
+
+def _chapter_index_from_filename(path) -> Optional[int]:
+    """Extract the leading 4-digit index from a chapter filename.
+
+    Filenames are written as ``NNNN_<slug>.txt`` by the kernel.
+    Returns None when the filename doesn't match.
+    """
+    stem = path.stem  # "NNNN_slug"
+    head = stem.split("_", 1)[0]
+    if head.isdigit():
+        return int(head)
+    return None
+
+
+def _chapter_listing(book_id: str) -> List[ChapterListEntryModel]:
+    """Build the chapter listing by reading just the first non-empty
+    line of each chapter file. Cheap on local disk for any realistic
+    chapter count."""
+    listing: List[ChapterListEntryModel] = []
+    for path in list_chapter_files(book_id):
+        idx = _chapter_index_from_filename(path)
+        if idx is None:
+            continue
+        heading = ""
+        with path.open("r", encoding="utf-8") as f:
+            for line in f:
+                stripped = line.strip()
+                if stripped:
+                    heading = stripped
+                    break
+        listing.append(ChapterListEntryModel(index=idx, heading=heading))
+    return listing
+
+
+def _read_translation_for_chapter(
+    book_id: str, index: int,
+) -> Optional[ChapterTranslationModel]:
+    """Find the ``translations/NNNN_*_en.md`` file for ``index``.
+
+    Slug-agnostic — matches any filename starting with the padded
+    index and ending with ``_en.md``. Returns None when no file
+    matches; this is the normal case for chapters that have not yet
+    been translated."""
+    target_dir = book_dir(book_id) / "translations"
+    if not target_dir.exists():
+        return None
+    prefix = f"{index:04d}_"
+    for path in sorted(target_dir.iterdir()):
+        if not path.is_file():
+            continue
+        if path.name.startswith(prefix) and path.name.endswith("_en.md"):
+            try:
+                rel = str(path.relative_to(book_dir(book_id)))
+            except ValueError:
+                rel = str(path)
+            return ChapterTranslationModel(
+                text=path.read_text(encoding="utf-8"),
+                output_filename=rel,
+            )
+    return None
+
+
+def _read_chapter_content(book_id: str, index: int) -> Optional[ChapterContentModel]:
+    """Locate the chapter file for ``index`` and return its content.
+
+    Returns None when no file matches the index. Slug is resolved by
+    listing the chapters directory rather than recomputed, so a book
+    written under one slugger and read under a different one still
+    works. Attaches the translated text when a corresponding file
+    exists under ``translations/``; otherwise ``translation`` is None.
+    """
+    for path in list_chapter_files(book_id):
+        idx = _chapter_index_from_filename(path)
+        if idx == index:
+            text = path.read_text(encoding="utf-8")
+            heading = ""
+            for line in text.splitlines():
+                stripped = line.strip()
+                if stripped:
+                    heading = stripped
+                    break
+            return ChapterContentModel(
+                book_id=book_id,
+                index=index,
+                heading=heading,
+                source_text=text,
+                translation=_read_translation_for_chapter(book_id, index),
+            )
+    return None
+
+
+def _build_book_detail(book_id: str) -> Optional[BookDetailModel]:
+    """Compose a BookDetailModel by reading Book + Job + chapter listing.
+
+    Returns None when ``book.json`` is missing for ``book_id``."""
+    book = load_book(book_id)
+    if book is None:
+        return None
+    job = load_job(book_id)
+    if job is None:
+        # Book exists but job record is missing — shouldn't happen via the
+        # kernel, but surface the partial state rather than hide it.
+        raise HTTPException(
+            status_code=500,
+            detail=f"Book {book_id} has no job record on disk",
+        )
+    return BookDetailModel(
+        book=_book_to_model(book),
+        job=_job_to_model(job),
+        chapters=_chapter_listing(book_id),
+    )
+
+
+@app.post("/api/books", response_model=BookDetailModel)
+async def post_api_books(file: UploadFile = File(...)) -> BookDetailModel:
+    """Import a full novel from an uploaded .txt or .md file.
+
+    Returns the freshly created Book + initial pending BookJob plus
+    the parsed chapter listing. Re-uploading identical content
+    returns the existing book unchanged (idempotent on source hash)."""
+    contents = await file.read()
+    if len(contents) == 0:
+        raise HTTPException(status_code=400, detail="uploaded file is empty")
+    if len(contents) > MAX_BOOK_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"file exceeds {MAX_BOOK_BYTES} byte limit",
+        )
+    try:
+        text = contents.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"file is not valid UTF-8: {exc}",
+        )
+
+    original_filename = (file.filename or "").strip() or "upload.txt"
+    try:
+        book = import_novel(text, original_filename=original_filename)
+    except BookImportError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    detail = _build_book_detail(book.book_id)
+    if detail is None:
+        # import_novel succeeded but the workspace can't be read back.
+        raise HTTPException(
+            status_code=500,
+            detail="book imported but workspace cannot be read",
+        )
+    return detail
+
+
+@app.get("/api/books/{book_id}", response_model=BookDetailModel)
+async def get_api_books_detail(book_id: str) -> BookDetailModel:
+    """Return Book metadata, current Job state, and chapter listing."""
+    if not book_exists(book_id):
+        raise HTTPException(status_code=404, detail=f"book {book_id} not found")
+    detail = _build_book_detail(book_id)
+    if detail is None:
+        raise HTTPException(status_code=404, detail=f"book {book_id} not found")
+    return detail
+
+
+@app.get(
+    "/api/books/{book_id}/chapters/{index}",
+    response_model=ChapterContentModel,
+)
+async def get_api_books_chapter(book_id: str, index: int) -> ChapterContentModel:
+    """Return one chapter's index, original heading, and full source text."""
+    if not book_exists(book_id):
+        raise HTTPException(status_code=404, detail=f"book {book_id} not found")
+    if index < 1:
+        raise HTTPException(
+            status_code=404,
+            detail=f"chapter index must be >= 1, got {index}",
+        )
+    content = _read_chapter_content(book_id, index)
+    if content is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"chapter {index} not found in book {book_id}",
+        )
+    return content
+
+
+# ── Translate-next endpoint ──────────────────────────────────────────
+#
+# The smallest execution primitive for long-book translation: one
+# request translates one next unfinished chapter. The frontend or an
+# operator can call it repeatedly to advance the book. Reuses the
+# CHAPTER_API_MODE env var ("real" / "smoke") used by /api/chapters
+# so a single switch toggles the whole product surface.
+
+
+class TranslateNextResponseModel(BaseModel):
+    """Outcome of a single ``POST /api/books/{book_id}/translate-next``.
+
+    ``ran_index`` is None when no unfinished chapter remained — that
+    case is a clean no-op (HTTP 200), not a failure. ``success``
+    reflects only whether the chapter actually completed; check
+    ``ran_index`` first to distinguish "nothing to do" from "failed".
+    """
+
+    book_id: str
+    ran_index: Optional[int] = None
+    success: bool = False
+    chapter_status: Optional[str] = None
+    error_message: Optional[str] = None
+    output_filename: Optional[str] = None
+    book: BookDetailModel
+
+
+def _translate_chapter_via_product_mode(
+    source_text: str,
+    manifest_path: str,
+) -> ChapterResult:
+    """Adapter matching ``ChapterTranslateFn`` for the runner.
+
+    Routes between the existing smoke and real product helpers based
+    on ``CHAPTER_API_MODE`` — the same env switch ``/api/chapters``
+    uses, so behaviour is consistent across both endpoints.
+    """
+    if _product_chapter_mode() == "smoke":
+        return _run_product_chapter_smoke(source_text, manifest_path=manifest_path)
+    return _run_product_chapter_real(source_text, manifest_path=manifest_path)
+
+
+@app.post(
+    "/api/books/{book_id}/translate-next",
+    response_model=TranslateNextResponseModel,
+)
+async def post_api_books_translate_next(
+    book_id: str,
+) -> TranslateNextResponseModel:
+    """Translate the next unfinished chapter of an imported book.
+
+    Synchronous: one HTTP request → one chapter attempt. The runner
+    decides which chapter to translate (lowest-indexed on-disk
+    chapter that is neither completed nor previously failed) and
+    persists job state. A failed chapter attempt returns HTTP 200
+    with ``success=false`` and ``error_message`` populated — failures
+    are not surfaced as 5xx because the operation itself completed.
+    """
+    if not book_exists(book_id):
+        raise HTTPException(status_code=404, detail=f"book {book_id} not found")
+
+    try:
+        result = run_next_chapter(
+            book_id,
+            _translate_chapter_via_product_mode,
+        )
+    except BookRunnerError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+    detail = _build_book_detail(book_id)
+    if detail is None:
+        raise HTTPException(
+            status_code=500,
+            detail=f"book {book_id} workspace cannot be read after translate-next",
+        )
+
+    chapter_status = (
+        result.chapter_result.chapter_status.value
+        if result.chapter_result is not None
+        else None
+    )
+
+    output_filename: Optional[str] = None
+    if result.success and result.output_path is not None:
+        try:
+            output_filename = str(
+                result.output_path.relative_to(book_dir(book_id))
+            )
+        except ValueError:
+            # Output path is not under the book workspace — surface as-is.
+            output_filename = str(result.output_path)
+
+    return TranslateNextResponseModel(
+        book_id=result.book_id,
+        ran_index=result.ran_index,
+        success=result.success,
+        chapter_status=chapter_status,
+        error_message=result.error_message,
+        output_filename=output_filename,
+        book=detail,
+    )
 
 
 if __name__ == "__main__":

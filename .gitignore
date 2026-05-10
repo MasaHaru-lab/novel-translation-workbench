@@ -52,6 +52,7 @@ data/exports/
 data/output/
 data/outputs/
 data/quality_loop/
+data/library/
 *.md.save
 # Root-level generated output artifacts (historical; removed from tracking)
 /chapter1_test_output.md
