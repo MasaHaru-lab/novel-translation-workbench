@@ -1,0 +1,10 @@
+{
+  "name": "Novel Translation Workbench",
+  "short_name": "NTWorkbench",
+  "description": "A polished AI-powered cockpit for literary translation projects.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FDFBF7",
+  "theme_color": "#2D2D2D",
+  "icons": []
+}
